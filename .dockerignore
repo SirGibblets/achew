@@ -1,0 +1,55 @@
+# Git
+.git
+.gitignore
+
+# Documentation and project files
+README.md
+LICENSE.txt
+
+# Scripts (not needed in container)
+*.sh
+*.bat
+dev.sh
+run.sh
+run.bat
+
+# IDE and editor files
+**/.vscode/
+**/.idea/
+**/*.swp
+**/*.swo
+
+# OS files
+**/.DS_Store
+**/._*
+**/Thumbs.db
+
+# Python venv and cache
+backend/.venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/**/*.pyc
+backend/**/*.pyo
+backend/**/*.pyd
+backend/.pytest_cache/
+backend/.coverage
+backend/app/config/
+backend/htmlcov/
+
+# Frontend development files not needed in production
+frontend/node_modules/
+frontend/dist/
+
+# Environment and config files
+.env
+.env.*
+
+# Temporary and log files
+**/*.log
+**/temp/
+**/tmp/
+**/*.tmp
+
+# Docker files
+Dockerfile*
+.dockerignore

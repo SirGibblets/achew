@@ -1,0 +1,21 @@
+## Application
+backend/app/config/
+frontend/dist/
+
+# Environments
+.venv
+
+# Python
+__pycache__/
+
+# Node
+node_modules/
+
+# OS Files
+.DS_Store
+.Spotlight-V100
+.Trashes
+
+# IDE
+.vscode/
+.idea/

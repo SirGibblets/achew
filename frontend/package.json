@@ -1,0 +1,20 @@
+{
+  "name": "achew",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "author": "Sir Gibblets",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^5.1.0",
+    "svelte": "^5.34.7",
+    "vite": "^6.3.5"
+  },
+  "dependencies": {
+    "@lucide/svelte": "^0.539.0"
+  }
+}

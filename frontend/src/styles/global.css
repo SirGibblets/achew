@@ -1,0 +1,624 @@
+/* Global Styles for achew */
+
+:root {
+    /* Light theme colors */
+    --bg-primary: #f8f9fa;
+    --bg-secondary: #fff;
+    --bg-tertiary: #e9ecef;
+    --bg-card: #fff;
+    --bg-header: #f8f9fa;
+    --text-primary: #212529;
+    --text-secondary: #6c757d;
+    --text-muted: #495057;
+    --border-color: #dee2e6;
+    --border-light: rgba(0, 0, 0, 0.125);
+    --shadow-color: rgba(0, 0, 0, 0.075);
+    --hover-bg: rgba(0, 0, 0, 0.075);
+    --focus-shadow: rgba(0, 123, 255, 0.25);
+    --segmented-button: rgb(217, 217, 217);
+    --segmented-button-active: #fff;
+    --edit-bar-bg: white;
+
+    /* Brand colors */
+    --primary: #6366F1;
+    --primary-hover: #4F46E5;
+    --primary-color: #6366F1;
+    --primary-contrast: #8B5CF6;
+
+    /* Accent colors */
+    --accent-1: #3B82F6;
+    --accent-2: #8B5CF6;
+    --accent-gradient-start: rgba(59, 130, 246, 0.95);
+    --accent-gradient-end: rgba(139, 92, 246, 0.75);
+    --verify-gradient-start: rgba(59, 130, 246, 1);
+    --verify-gradient-end: rgba(139, 92, 246, 1);
+    --verify-gradient-start-hover: rgba(54, 126, 241, 0.9);
+    --verify-gradient-end-hover: rgba(135, 87, 244, 0.85);
+    --secondary: #6c757d;
+    --secondary-hover: #545b62;
+    --success: #6366F1;
+    --danger: #dc3545;
+    --danger-hover: #c82333;
+    --warning: #deae04;
+    --info: #17a2b8;
+
+    --ai-accent: rgb(0, 202, 185);
+    --ai-gradient-start: rgb(1, 161, 224);
+    --ai-gradient-end: rgb(0, 178, 142);
+    --ai-gradient-start-hover: rgba(1, 161, 224, 0.9);
+    --ai-gradient-end-hover: rgba(0, 178, 142, 0.85);
+
+    /* Component Colors */
+    --slider-stop-outline: color-mix(in srgb, var(--text-primary) 25%, transparent);
+    --compare-accent: #01b3cb;
+    --bg-chapter-hover: #00000005;
+    --bg-chapter-disabled: var(--bg-tertiary);
+}
+
+[data-theme="dark"] {
+    /* Dark theme colors */
+    --bg-primary: #121212;
+    --bg-secondary: #1e1e1e;
+    --bg-tertiary: #2d2d2d;
+    --bg-card: #1e1e1e;
+    --bg-header: #2d2d2d;
+    --text-primary: #ffffff;
+    --text-secondary: #b3b3b3;
+    --text-muted: #888;
+    --border-color: #404040;
+    --border-light: rgba(255, 255, 255, 0.125);
+    --shadow-color: rgba(0, 0, 0, 0.3);
+    --hover-bg: rgba(255, 255, 255, 0.05);
+    --focus-shadow: rgba(0, 123, 255, 0.4);
+    --segmented-button: rgba(255, 255, 255, 0.05);
+    --segmented-button-active: rgba(255, 255, 255, 0.2);
+    --edit-bar-bg: #181818;
+
+    /* Brand colors for dark theme */
+    --primary: #0aa8ab;
+    --primary-hover: #178882;
+    --primary-color: #0aa8ab;
+    --primary-contrast: #21cac2;
+
+    /* Accent colors for dark theme */
+    --accent-1: #0dcaf0;
+    --accent-2: #0aa8ab;
+    --accent-gradient-start: rgba(10, 161, 221, 0.95);
+    --accent-gradient-end: rgba(21, 200, 164, 0.75);
+    --verify-gradient-start: rgba(10, 161, 221, 0.7);
+    --verify-gradient-end: rgba(1, 197, 158, 0.55);
+    --verify-gradient-start-hover: rgba(10, 161, 221, 0.8);
+    --verify-gradient-end-hover: rgba(21, 200, 164, 0.65);
+    --secondary: #6c757d;
+    --secondary-hover: #5c636a;
+    --success: #14d179;
+    --danger: #dc3545;
+    --danger-hover: #bb2d3b;
+    --warning: #ffc107;
+    --info: #0dcaf0;
+
+    --ai-accent: rgb(102, 126, 234);
+    --ai-gradient-end: rgba(106, 65, 144, 0.8);
+    --ai-gradient-start: rgba(90, 111, 216, 0.8);
+    --ai-gradient-end-hover: rgb(106, 65, 144);
+    --ai-gradient-start-hover: rgb(90, 111, 216);
+
+    /* Component Colors */
+    --slider-stop-outline: rgba(255, 255, 255, 0.85);
+    --compare-accent: var(--warning);
+    --bg-chapter-hover: #FFFFFF08;
+    --bg-chapter-disabled: black;
+}
+
+/* Prevent scrollbar from affecting page width */
+html {
+    overflow-y: scroll;
+    scrollbar-gutter: stable;
+}
+
+
+/* Alternative approach: always reserve space for scrollbar */
+body {
+    /* Calculate and reserve space for potential scrollbar */
+    margin-right: calc(100vw - 100%);
+    margin-left: 0;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    line-height: 1.6;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+#app {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Typography */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    margin-top: 0;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    line-height: 1.2;
+}
+
+h1 {
+    font-size: 2rem;
+}
+
+h2 {
+    font-size: 1.75rem;
+}
+
+h3 {
+    font-size: 1.5rem;
+}
+
+p {
+    margin-top: 0;
+    margin-bottom: 1rem;
+}
+
+/* Buttons */
+.btn {
+    display: inline-block;
+    padding: 0.375rem 0.75rem;
+    margin-bottom: 0;
+    font-size: 0.875rem;
+    font-weight: 400;
+    line-height: 1.5;
+    text-align: center;
+    text-decoration: none;
+    vertical-align: middle;
+    cursor: pointer;
+    border: 1px solid transparent;
+    border-radius: 0.375rem;
+    transition: all 0.15s ease-in-out;
+    white-space: nowrap;
+    user-select: none;
+}
+
+.btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    color: #fff;
+    background-color: var(--primary);
+    border-color: var(--primary);
+}
+
+.btn-primary:hover:not(:disabled) {
+    background-color: var(--primary-hover);
+    border-color: var(--primary-hover);
+}
+
+.btn-secondary {
+    color: #fff;
+    background-color: var(--secondary);
+    border-color: var(--secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background-color: var(--secondary-hover);
+    border-color: var(--secondary-hover);
+}
+
+.btn-danger {
+    color: #fff;
+    background-color: var(--danger);
+    border-color: var(--danger);
+}
+
+.btn-danger:hover:not(:disabled) {
+    background-color: var(--danger-hover);
+    border-color: var(--danger-hover);
+}
+
+.btn-outline {
+    color: var(--text-secondary);
+    background-color: transparent;
+    border-color: var(--border-color);
+}
+
+.btn-outline:hover:not(:disabled) {
+    color: var(--text-primary);
+    background-color: var(--hover-bg);
+    border-color: var(--border-color);
+}
+
+.btn-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    border-radius: 0.25rem;
+}
+
+.btn-lg {
+    padding: 0.5rem 1rem;
+    font-size: 1rem;
+    border-radius: 0.5rem;
+}
+
+/* Enhanced button variants for uniformity */
+
+/* Primary button with gradient (matches verify-button) */
+.btn-verify {
+    background: linear-gradient(135deg, var(--verify-gradient-start) 0%, var(--verify-gradient-end) 100%);
+    color: white;
+    border: 0.075rem solid transparent;
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 700;
+    transition: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.btn-verify:hover:not(:disabled) {
+    background: linear-gradient(135deg, var(--verify-gradient-start-hover), var(--verify-gradient-end-hover));
+    border: 0.075rem solid var(--primary-contrast);
+}
+
+/* Secondary button with border (matches cancel-button) */
+.btn-cancel {
+    background: transparent;
+    color: var(--text-primary);
+    border: 0.05rem solid var(--border-color);
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 500;
+    transition: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.btn-cancel:hover:not(:disabled) {
+    border-color: var(--text-secondary);
+}
+
+/* Consistent spinner for loading state inside buttons */
+.btn-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid transparent;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    flex-shrink: 0;
+    margin-right: 0.5rem;
+}
+
+/* Forms */
+.form-control {
+    display: block;
+    width: 100%;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 400;
+    line-height: 1.5;
+    color: var(--text-muted);
+    background-color: var(--bg-primary);
+    background-clip: padding-box;
+    border: 1px solid var(--border-color);
+    border-radius: 0.375rem;
+    transition: border-color 0.15s ease-in-out;
+}
+
+.form-control:focus {
+    color: var(--text-primary);
+    background-color: var(--bg-primary);
+    border-color: var(--primary);
+    outline: 0;
+}
+
+.form-control:disabled {
+    background-color: var(--bg-tertiary);
+    opacity: 1;
+}
+
+.form-group {
+    margin-bottom: 1rem;
+}
+
+.form-group input {
+    font-size: 1rem;
+    width: 100%;
+    display: block;
+    padding: 0.58rem 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    transition: border-color 0.2s ease;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+.form-group input:focus {
+    border-color: var(--primary);
+    outline: none;
+}
+
+.form-group input:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Tables */
+.table {
+    width: 100%;
+    color: var(--text-primary);
+    background-color: transparent;
+    border-collapse: collapse;
+}
+
+.table th,
+.table td {
+    padding: 0.75rem;
+    vertical-align: top;
+    border-top: 1px solid var(--border-color);
+}
+
+.table thead th {
+    vertical-align: bottom;
+    border-bottom: 2px solid var(--border-color);
+    background-color: var(--bg-header);
+    font-weight: 600;
+}
+
+.table tbody tr:hover {
+    background-color: var(--hover-bg);
+}
+
+.table-striped tbody tr:nth-of-type(odd) {
+    background-color: var(--hover-bg);
+}
+
+/* Cards */
+
+.card-body {
+    flex: 1 1 auto;
+    padding: 1.25rem;
+}
+
+/* Progress bars */
+.progress {
+    display: flex;
+    height: 1rem;
+    overflow: hidden;
+    font-size: 0.75rem;
+    background-color: var(--bg-tertiary);
+    border-radius: 0.375rem;
+}
+
+.progress-bar {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    color: #fff;
+    text-align: center;
+    white-space: nowrap;
+    background-color: var(--primary);
+}
+
+/* Alerts */
+.alert {
+    position: relative;
+    padding: 0.75rem 1.25rem;
+    margin-bottom: 1rem;
+    border: 1px solid transparent;
+    border-radius: 0.375rem;
+}
+
+.alert-danger {
+    color: var(--danger);
+    background-color: rgba(220, 53, 69, 0.1);
+    border-color: var(--danger);
+}
+
+.alert-warning {
+    color: var(--warning);
+    background-color: rgba(255, 193, 7, 0.1);
+    border-color: var(--warning);
+}
+
+/* Enhanced alert styles for AI cleanup errors */
+.alert .alert-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.alert .alert-content {
+    margin-left: 1.75rem;
+    /* Align with icon */
+}
+
+.alert .alert-content p {
+    margin: 0 0 0.5rem 0;
+}
+
+.alert .alert-content small {
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+/* Utilities */
+.text-center {
+    text-align: center;
+}
+
+.p-4 {
+    padding: 1.5rem;
+}
+
+/* Loading spinner */
+.spinner {
+    display: inline-block;
+    width: 1rem;
+    height: 1rem;
+    border: 0.125rem solid var(--border-color);
+    border-radius: 50%;
+    border-top-color: var(--primary);
+    animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Chapter editor specific styles */
+.chapter-row {
+    transition: opacity 0.1s ease;
+}
+
+.chapter-row.dimmed {
+    opacity: 0.5;
+}
+
+.chapter-row:hover {
+    background-color: var(--hover-bg);
+}
+
+.chapter-title-input {
+    border: none;
+    background: transparent;
+    padding: 0.25rem 0.5rem;
+    width: 100%;
+    color: var(--text-primary);
+    transition: background-color 0.2s ease;
+}
+
+.chapter-title-input:focus {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--primary);
+    border-radius: 0.25rem;
+    outline: none;
+}
+
+/* Connection status */
+.connection-status {
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    background-color: var(--danger);
+    color: white;
+    transition: background-color 0.1s ease;
+}
+
+/* Dark theme specific adjustments */
+[data-theme="dark"] .theme-toggle-icon {
+    color: #ffd700;
+}
+
+/* Text color utilities for dark theme */
+.text-success {
+    color: var(--success) !important;
+}
+
+.text-primary {
+    color: var(--primary) !important;
+}
+
+.text-secondary {
+    color: var(--text-secondary) !important;
+}
+
+.text-muted {
+    color: var(--text-muted) !important;
+}
+
+/* Dark theme scrollbar */
+[data-theme="dark"] ::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 4px;
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary);
+}
+
+input[type="checkbox"] {
+    accent-color: var(--primary-contrast);
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+
+    .table {
+        font-size: 0.875rem;
+    }
+
+    .table th,
+    .table td {
+        padding: 0.5rem;
+    }
+
+    .card-body {
+        padding: 1rem;
+    }
+}
+
+
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+    -webkit-text-fill-color: var(--text-primary) !important;
+    -webkit-box-shadow: 0 0 0 1000px var(--bg-primary) inset !important;
+    background-color: var(--bg-primary) !important;
+    caret-color: var(--text-primary) !important;
+    transition: background-color 5000s ease-in-out 0s;
+}
+
+input:-webkit-autofill {
+    border: 1px solid var(--border-color) !important;
+}
+
+input:-webkit-autofill:focus {
+    border-color: var(--primary) !important;
+    outline: none !important;
+}
+
+input:-webkit-autofill::first-line {
+    color: var(--text-primary) !important;
+    font-family: inherit !important;
+}
+
+input:-webkit-autofill::selection {
+    background-color: var(--primary) !important;
+    color: white !important;
+}

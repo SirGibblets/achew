@@ -1,0 +1,140 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "achew"
+version = "1.0.0"
+description = "Audiobook Chapter Extraction Wizard"
+license = {text = "MIT"}
+authors = [
+    {name = "Sir Gibblets"},
+]
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.104.1",
+    "uvicorn[standard]>=0.24.0",
+    "aiohttp>=3.9.0",
+    "httpx>=0.25.2",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "torch>=2.0.0",
+    "torchaudio>=2.0.0",
+    "transformers>=4.36.0",
+    "openai>=1.3.0",
+    "scikit-learn>=1.3.2",
+    "numpy>=1.24.4",
+    "librosa>=0.10.0",
+    "onnx-asr[cpu,hub]>=0.7.0",
+    "mlx-whisper>=0.4.2; sys_platform == 'darwin'",
+    "parakeet-mlx>=0.3.5; sys_platform == 'darwin'",
+    "ollama>=0.5.1",
+    "google-genai[aiohttp]>=1.27.0",
+    "anthropic>=0.60.0",
+    "silero-vad>=5.1.2",
+    "lmstudio==1.4.1",
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cpu" },
+]
+torchaudio = [
+  { index = "pytorch-cpu" },
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[project.optional-dependencies]
+dev = [
+    # Development and testing
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-httpx>=0.32.0",
+    
+    # Code formatting and linting
+    "black>=24.10.0",
+    "isort>=5.13.0",
+    "flake8>=7.1.0",
+    "mypy>=1.13.0",
+]
+
+[tool.black]
+line-length = 120
+target-version = ['py312']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = [
+    "ffmpeg.*",
+    "librosa.*",
+    "soundfile.*",
+    "transformers.*",
+    "torch.*",
+    "torchaudio.*",
+    "sklearn.*",
+    "pympler.*",
+    "mlx_whisper.*",
+    "parakeet_mlx.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--verbose",
+]
+filterwarnings = [
+    "error",
+    "ignore::UserWarning",
+    "ignore::DeprecationWarning",
+]
+asyncio_mode = "auto"

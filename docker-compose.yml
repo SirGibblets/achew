@@ -1,0 +1,30 @@
+# Docker Compose configuration for achew
+# Run with: docker-compose up -d
+# Stop with: docker-compose down
+# Update: docker-compose pull && docker-compose up -d
+
+version: '3.8'
+
+services:
+  achew:
+    # Official achew image
+    image: sirgibblets/achew
+    
+    # Port mapping: host:container
+    # achew runs on port 8000. Only change the host port.
+    ports:
+      - "8000:8000"
+    
+    volumes:
+      # Configuration files
+      - ./config:/achew/app/config
+      
+      # HuggingFace model cache (OPTIONAL but recommended)
+      # Prevents re-downloading large ASR models after image updates
+      - ./cache:/root/.cache/huggingface/hub
+      
+      # Temporary audio files used during processing (OPTIONAL) 
+      # Requires several GB of space and fast storage (SSD/RAM)
+      # - ./temp:/tmp/achew
+    
+    restart: unless-stopped
