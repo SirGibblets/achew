@@ -34,6 +34,7 @@
     let showRestartOptions = false;
     let showSettingsMenu = false;
     let checkingConfig = true;
+    let previousStep = null;
 
     // Theme management
     function toggleTheme() {
@@ -116,6 +117,16 @@
     // Handle global errors
     $: if ($session.error) {
         console.error("Session error:", $session.error);
+    }
+
+    // Reset scroll on step change
+    $: if (mounted && $session.step && previousStep !== null && $session.step !== previousStep) {
+        setTimeout(() => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }, 0);
+        previousStep = $session.step;
+    } else if (mounted && $session.step && previousStep === null) {
+        previousStep = $session.step;
     }
 
     onMount(async () => {
