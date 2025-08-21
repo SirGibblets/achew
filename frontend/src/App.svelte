@@ -823,9 +823,7 @@
         }
 
         .settings-dropdown {
-            right: 50%;
-            transform: translateX(50%);
-            min-width: 180px;
+            max-width: calc(100vw - 1rem);
         }
 
         .audiobook-info-pill {
@@ -849,9 +847,7 @@
         }
 
         .restart-dropdown {
-            left: 50%;
-            transform: translateX(-50%);
-            min-width: 200px;
+            max-width: calc(100vw - 1rem);
         }
     }
 
