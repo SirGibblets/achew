@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import time
+from datetime import datetime
 from typing import Optional, List, Dict, Tuple
 
 import aiohttp
@@ -10,6 +11,8 @@ from ..core.config import get_app_config
 from ..models.abs import Book, AudnexusChapterList
 
 logger = logging.getLogger(__name__)
+
+_library_cache: Dict[str, Dict] = {}
 
 
 class ABSService:
@@ -240,3 +243,56 @@ class ABSService:
         except Exception as e:
             logger.error(f"Error searching library {library_id}: {e}")
             return []
+
+    async def get_library_items(self, library_id: str, use_cache: bool = True) -> List[Book]:
+        """Fetch all items from the specified library"""
+        global _library_cache
+
+        if use_cache and library_id in _library_cache:
+            cache_entry = _library_cache[library_id]
+            logger.info(f"Using cached data for library {library_id}")
+            return cache_entry["books"]
+
+        try:
+            url = f"{self.config.url}/api/libraries/{library_id}/items"
+            params = {"sort": "addedAt", "desc": 1}
+
+            async with self.session.get(url, headers=self._get_headers(), params=params) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    books = []
+
+                    if "results" in data and isinstance(data["results"], list):
+                        for item in data["results"]:
+                            try:
+                                book = Book(**item)
+                                if book.media and book.media.coverPath:
+                                    book.media.coverPath = f"{self.config.url}/api/items/{book.id}/cover"
+                                books.append(book)
+                            except Exception as e:
+                                logger.warning(f"Failed to parse book data: {e}")
+                                continue
+
+                    _library_cache[library_id] = {"books": books, "timestamp": datetime.now()}
+
+                    logger.info(f"Fetched and cached {len(books)} books from library {library_id}")
+                    return books
+                else:
+                    logger.error(f"Failed to fetch library items from {library_id}: {resp.status}")
+                    return []
+        except Exception as e:
+            logger.error(f"Error fetching library items from {library_id}: {e}")
+            return []
+
+    @staticmethod
+    def clear_library_cache(library_id: str = None):
+        """Clear cache for a specific library or all libraries"""
+        global _library_cache
+
+        if library_id:
+            if library_id in _library_cache:
+                del _library_cache[library_id]
+                logger.info(f"Cleared cache for library {library_id}")
+        else:
+            _library_cache.clear()
+            logger.info("Cleared all library cache")

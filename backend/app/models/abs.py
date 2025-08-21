@@ -52,6 +52,8 @@ class BookMedia(BaseModel):
     duration: Optional[float] = None
     audioFiles: List[AudioFile] = []
     chapters: List[BookChapter] = []
+    numChapters: Optional[int] = None
+    numAudioFiles: Optional[int] = None
 
     model_config = ConfigDict(extra="ignore")
 
@@ -79,6 +81,8 @@ class Book(BaseModel):
     @property
     def duration(self) -> float:
         """Get the total duration across all audio files"""
+        if self.media.duration:
+            return self.media.duration
         if self._calculated_duration is None:
             self._calculated_duration = self.media.total_duration
         return self._calculated_duration

@@ -103,3 +103,52 @@ async def search_library(
             status_code=500,
             detail="Failed to search library",
         )
+
+
+@router.get("/libraries/{library_id}/items", response_model=List[Book])
+async def get_library_items(
+    library_id: str,
+    refresh: bool = Query(False, description="Clear cache and fetch fresh data"),
+):
+    """Get all items from a specific library"""
+    if not is_abs_configured():
+        raise HTTPException(
+            status_code=400,
+            detail="API configuration required. Please configure ABS API key first.",
+        )
+
+    try:
+        async with ABSService() as abs_service:
+            if not await abs_service.health_check():
+                raise HTTPException(
+                    status_code=503,
+                    detail="Unable to connect to Audiobookshelf server",
+                )
+
+            if refresh:
+                ABSService.clear_library_cache(library_id)
+
+            return await abs_service.get_library_items(library_id, use_cache=not refresh)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to fetch library items from {library_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to fetch library items",
+        )
+
+
+@router.post("/cache/clear")
+async def clear_all_cache():
+    """Clear all library caches"""
+    try:
+        ABSService.clear_library_cache()
+        return {"message": "All library caches cleared"}
+    except Exception as e:
+        logger.error(f"Failed to clear all caches: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to clear caches",
+        )

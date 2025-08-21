@@ -413,6 +413,24 @@ export const audiobookshelf = {
     async searchLibrary(libraryId, query) {
         return apiRequest(`/audiobookshelf/libraries/${libraryId}/search?q=${encodeURIComponent(query)}`);
     },
+
+    async getLibraryItems(libraryId, refresh = false) {
+        const params = new URLSearchParams();
+        if (refresh) {
+            params.append('refresh', 'true');
+        }
+        
+        const queryString = params.toString();
+        const url = `/audiobookshelf/libraries/${libraryId}/items${queryString ? `?${queryString}` : ''}`;
+        
+        return apiRequest(url);
+    },
+
+    async clearAllCache() {
+        return apiRequest('/audiobookshelf/cache/clear', {
+            method: 'POST',
+        });
+    },
 };
 
 // Export the main API object

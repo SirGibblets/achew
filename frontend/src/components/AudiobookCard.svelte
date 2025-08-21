@@ -39,6 +39,7 @@
             {#if showFileCount && fileCount > 1}
                 <div class="audiobook-file-count">{fileCount} files</div>
             {/if}
+            <slot name="metadata" />
         </div>
     </div>
     <slot name="actions"/>
