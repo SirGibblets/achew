@@ -22,6 +22,15 @@
     let showUsageHints = false;
     let includeUnalignedSources = {};
     let showTooltip = false;
+    
+    let timelineTooltip = {
+        show: false,
+        showTop: false,
+        showBottom: false,
+        x: 0,
+        topContent: '',
+        bottomContent: ''
+    };
 
     $: innerWidth = 0
 
@@ -474,6 +483,119 @@
     $: hasAdditionalTimestamps = Object.values(includeUnalignedSources).some(
         (value) => value === true,
     );
+
+    function handleTimelineMouseMove(event) {
+        if (!currentOption || !currentOption.timestamps) return;
+        
+        const timelineTrack = event.currentTarget;
+        const rect = timelineTrack.getBoundingClientRect();
+        const mouseX = event.clientX - rect.left;
+        const timelineWidth = rect.width;
+        const mousePercent = (mouseX / timelineWidth) * 100;
+        
+        let nearestTick = null;
+        let nearestDistance = Infinity;
+        
+        currentOption.timestamps.forEach((timestamp, index) => {
+            if (index === 0) return;
+            
+            const tickPercent = (timestamp / bookDuration) * 100;
+            const distance = Math.abs(mousePercent - tickPercent);
+            if (distance < nearestDistance) {
+                nearestDistance = distance;
+                nearestTick = {
+                    type: 'new',
+                    timestamp,
+                    index,
+                    percent: tickPercent
+                };
+            }
+        });
+        
+        if (activeComparisonSource) {
+            const activeSource = existingCueSources.find(
+                (source) => source.id === activeComparisonSource,
+            );
+            if (activeSource && activeSource.cues) {
+                activeSource.cues.slice(1).forEach((cue, index) => {
+                    const tickPercent = (cue.timestamp / bookDuration) * 100;
+                    const distance = Math.abs(mousePercent - tickPercent);
+                    if (distance < nearestDistance) {
+                        nearestDistance = distance;
+                        nearestTick = {
+                            type: 'existing',
+                            timestamp: cue.timestamp,
+                            index: index + 1,
+                            percent: tickPercent,
+                            source: activeSource
+                        };
+                    }
+                });
+            }
+        }
+        
+        if (nearestTick && nearestDistance < 5) {
+            timelineTooltip.show = true;
+            timelineTooltip.x = (nearestTick.percent / 100) * timelineWidth;
+            
+            if (isComparing) {
+                if (nearestTick.type === 'existing') {
+                    if (nearestTick.source.id === 'file_starts') {
+                        timelineTooltip.topContent = `File Start: ${formatTimelineTime(nearestTick.timestamp)}`;
+                    } else {
+                        timelineTooltip.topContent = `${nearestTick.source.short_name} Chapter: ${formatTimelineTime(nearestTick.timestamp)}`;
+                    }
+                    timelineTooltip.showTop = true;
+                    
+                    const alignedNewTick = currentOption.timestamps.find(ts =>
+                        Math.abs(ts - nearestTick.timestamp) <= 5
+                    );
+                    if (alignedNewTick) {
+                        timelineTooltip.bottomContent = formatTimelineTime(alignedNewTick);
+                        timelineTooltip.showBottom = true;
+                    } else {
+                        timelineTooltip.showBottom = false;
+                    }
+                } else {
+                    timelineTooltip.bottomContent = formatTimelineTime(nearestTick.timestamp);
+                    timelineTooltip.showBottom = true;
+                    
+                    const activeSource = existingCueSources.find(
+                        (source) => source.id === activeComparisonSource,
+                    );
+                    if (activeSource) {
+                        const alignedExistingTick = activeSource.cues.find(cue =>
+                            Math.abs(cue.timestamp - nearestTick.timestamp) <= 5
+                        );
+                        if (alignedExistingTick) {
+                            if (activeSource.id === 'file_starts') {
+                                timelineTooltip.topContent = `File Start: ${formatTimelineTime(alignedExistingTick.timestamp)}`;
+                            } else {
+                                timelineTooltip.topContent = `${activeSource.short_name} Chapter: ${formatTimelineTime(alignedExistingTick.timestamp)}`;
+                            }
+                            timelineTooltip.showTop = true;
+                        } else {
+                            timelineTooltip.showTop = false;
+                        }
+                    } else {
+                        timelineTooltip.showTop = false;
+                    }
+                }
+            } else {
+                timelineTooltip.showTop = true;
+                timelineTooltip.showBottom = false;
+                timelineTooltip.topContent = formatTimelineTime(nearestTick.timestamp);
+            }
+        } else {
+            timelineTooltip.show = false;
+        }
+    }
+    
+    function handleTimelineMouseLeave() {
+        timelineTooltip.show = false;
+        timelineTooltip.showTop = false;
+        timelineTooltip.showBottom = false;
+    }
 </script>
 
 <svelte:window bind:innerWidth/>
@@ -677,7 +799,13 @@
                     </div>
                 </div>
                 <div class="timeline-container">
-                    <div class="timeline-track">
+                    <div
+                        class="timeline-track"
+                        role="region"
+                        aria-label="Timeline visualization with hover tooltips"
+                        on:mousemove={handleTimelineMouseMove}
+                        on:mouseleave={handleTimelineMouseLeave}
+                    >
                         {#if isComparing}
                             <div class="existing-timeline-line"></div>
                         {/if}
@@ -698,9 +826,6 @@
                       ? 'aligned'
                       : ''}"
                                             style="left: {(cue.timestamp / bookDuration) * 100}%"
-                                            title="{activeSource.short_name} Chapter: {formatTimelineTime(
-                      cue.timestamp,
-                    )}"
                                     ></div>
                                 {/each}
                             {/if}
@@ -724,10 +849,28 @@
                     ? 'aligned'
                     : ''}"
                                         style="left: {(timestamp / bookDuration) * 100}%"
-                                        title={formatTimelineTime(timestamp)}
                                 ></div>
                             {/each}
                         </div>
+                        
+                        {#if timelineTooltip.show}
+                            {#if timelineTooltip.showTop}
+                                <div
+                                    class="timeline-tooltip timeline-tooltip-top"
+                                    style="left: {timelineTooltip.x}px"
+                                >
+                                    {timelineTooltip.topContent}
+                                </div>
+                            {/if}
+                            {#if timelineTooltip.showBottom}
+                                <div
+                                    class="timeline-tooltip timeline-tooltip-bottom"
+                                    style="left: {timelineTooltip.x}px"
+                                >
+                                    {timelineTooltip.bottomContent}
+                                </div>
+                            {/if}
+                        {/if}
                     </div>
 
                     <div class="timeline-labels">
@@ -1607,6 +1750,69 @@
         transform: translate(-50%, -1px);
     }
 
+    .timeline-tooltip {
+        position: absolute;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        padding: 0.375rem 0.5rem;
+        font-size: 0.75rem;
+        font-family: monospace;
+        font-weight: 600;
+        white-space: nowrap;
+        z-index: 100;
+        pointer-events: none;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        transform: translateX(-50%);
+        animation: fadeInTooltip 0.2s ease;
+    }
+
+    .timeline-tooltip-top {
+        bottom: calc(100% + 8px);
+    }
+
+    .timeline-tooltip-bottom {
+        top: calc(100% + 8px);
+    }
+
+    .timeline-tooltip::after {
+        content: '';
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        border: 5px solid transparent;
+    }
+
+    .timeline-tooltip-top::after {
+        top: 100%;
+        border-top-color: var(--border-color);
+    }
+
+    .timeline-tooltip-bottom::after {
+        bottom: 100%;
+        border-bottom-color: var(--border-color);
+    }
+
+    .timeline-tooltip::before {
+        content: '';
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        border: 4px solid transparent;
+        z-index: 1;
+    }
+
+    .timeline-tooltip-top::before {
+        top: 100%;
+        border-top-color: var(--bg-primary);
+    }
+
+    .timeline-tooltip-bottom::before {
+        bottom: 100%;
+        border-bottom-color: var(--bg-primary);
+    }
+
     /* Responsive tooltip */
     @media (max-width: 768px) {
         .tooltip {
@@ -1626,6 +1832,11 @@
 
         .tooltip-container {
             margin-left: 0.2rem;
+        }
+
+        .timeline-tooltip {
+            font-size: 0.7rem;
+            padding: 0.3rem 0.4rem;
         }
     }
 
