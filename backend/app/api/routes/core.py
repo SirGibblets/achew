@@ -63,10 +63,9 @@ async def validate_item(request: ValidateItemRequest):
                     error_message="Item not found on Audiobookshelf server",
                 )
 
-            # Generate cover URL using ABS API endpoint
             cover_url = None
             if book.media and book.media.coverPath:
-                cover_url = f"{abs_service.config.url}/api/items/{request.item_id}/cover"
+                cover_url = f"/api/audiobookshelf/covers/{request.item_id}"
 
             return ValidateItemResponse(
                 valid=True,

@@ -139,3 +139,15 @@ cd achew
 Access the running application in a browser at http://localhost:8000. It may take several minutes before the web interface becomes available on the first run.
 
 </details>
+
+
+## FAQ
+
+<details>
+
+<summary>Can I use achew behind a reverse proxy?</summary>
+
+As achew does not include built-in authentication, it is *not* recommended to expose it directly to the internet.  
+With that being said, yes, achew should work behind a reverse proxy so long as you enable websocket support. If you choose to go this route, it is *highly* recommended to add some form of authentication at the proxy level.
+
+</details>

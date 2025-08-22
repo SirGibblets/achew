@@ -2,6 +2,7 @@ import logging
 from typing import List
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from ...core.config import is_abs_configured
@@ -90,8 +91,7 @@ async def search_library(
             # Add proper cover URLs to the results
             for book in search_results:
                 if book.media and book.media.coverPath:
-                    # Generate cover URL using ABS API endpoint
-                    book.media.coverPath = f"{abs_service.config.url}/api/items/{book.id}/cover"
+                    book.media.coverPath = f"/api/audiobookshelf/covers/{book.id}"
 
             return search_results
 
@@ -152,3 +152,34 @@ async def clear_all_cache():
             status_code=500,
             detail="Failed to clear caches",
         )
+
+
+@router.get("/covers/{item_id}")
+async def proxy_cover(item_id: str):
+    """Proxy audiobook cover images"""
+    if not is_abs_configured():
+        raise HTTPException(status_code=503, detail="ABS not configured")
+
+    try:
+        async with ABSService() as abs_service:
+            cover_url = f"{abs_service.config.url}/api/items/{item_id}/cover"
+            headers = abs_service._get_headers()
+
+            async with abs_service.session.get(cover_url, headers=headers) as resp:
+                if resp.status == 200:
+                    content_type = resp.headers.get("content-type", "image/jpeg")
+                    content = await resp.read()
+
+                    return StreamingResponse(
+                        iter([content]),
+                        media_type=content_type,
+                        headers={"Cache-Control": "public, max-age=3600"},
+                    )
+                else:
+                    raise HTTPException(status_code=resp.status, detail="Cover not found")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error proxying cover for {item_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch cover")

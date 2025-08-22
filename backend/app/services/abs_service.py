@@ -267,7 +267,7 @@ class ABSService:
                             try:
                                 book = Book(**item)
                                 if book.media and book.media.coverPath:
-                                    book.media.coverPath = f"{self.config.url}/api/items/{book.id}/cover"
+                                    book.media.coverPath = f"/api/audiobookshelf/covers/{book.id}"
                                 books.append(book)
                             except Exception as e:
                                 logger.warning(f"Failed to parse book data: {e}")

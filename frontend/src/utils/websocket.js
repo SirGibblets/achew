@@ -1,5 +1,5 @@
 // WebSocket utilities for real-time communication
-const WS_BASE = window.location.origin.replace(/^https?/, 'ws');
+const WS_BASE = window.location.origin.replace(/^http/, 'ws').replace(/^https/, 'wss');
 
 export class WebSocketManager {
     constructor() {
