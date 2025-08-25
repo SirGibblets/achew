@@ -24,6 +24,8 @@ ARG VERSION="UNKNOWN"
 ARG REVISION=""
 ARG BUILD_DATE=""
 
+ENV MODEL_CACHE_DIR="/root/.cache/huggingface/hub"
+
 # Container image metadata
 LABEL org.opencontainers.image.authors="Sir Gibblets <gibbletssir@gmail.com>" \
     org.opencontainers.image.title="achew" \

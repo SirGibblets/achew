@@ -1,93 +1,151 @@
 """
-Whisper ASR Service Provider
+Whisper.cpp ASR Service Provider
 
-This module provides CPU and GPU-based Whisper ASR services using the
-Transformers library, with auto-registration.
+This module provides ASR services using the
+whisper.cpp library, with auto-registration.
 """
 
+import asyncio
 import logging
+import os
+import re
+import sys
+import threading
+import tempfile
 from typing import List, Tuple
 
 from app.models.enums import Step
 from app.models.progress import ProgressCallback
 from app.services.asr_service import ASRService
 from app.services.asr_service_options import register_asr_service, ASRModelVariant
+from pywhispercpp.model import Model
 
 logger = logging.getLogger(__name__)
 
 
-class WhisperASRService(ASRService):
-    """ASR service using Whisper via the Transformers library"""
+class ModelDownloadProgress:
+    """Captures and publishes whisper.cpp model download progress"""
+
+    def __init__(self, progress_callback):
+        self.progress_callback = progress_callback
+        self.temp_file = None
+        self.monitor_thread = None
+        self.stop_monitoring = threading.Event()
+        self.last_percent = 0
+
+        try:
+            self.loop = asyncio.get_event_loop()
+        except RuntimeError:
+            self.loop = None
+
+        self.progress_pattern = re.compile(
+            r"Downloading Model (\w+(?:\.\w+)?) \.\.\.:\s*(\d+)%\|[█▇▆▅▄▃▂▁▏▎▍▌▋▊▉\s]*\|\s*([\d\.]+[KMGT]?i?B?|0\.00)/([\d\.]+[KMGT]?i?B?)\s+\[([^\]]+)<([^\]<>?]+),?\s*([^\]]+)\]"
+        )
+
+    def __enter__(self):
+        self.temp_file = tempfile.NamedTemporaryFile(mode="w+", delete=False)
+        self.monitor_thread = threading.Thread(target=self._monitor_file)
+        self.monitor_thread.daemon = True
+        self.monitor_thread.start()
+        return self.temp_file
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.stop_monitoring.set()
+        if self.monitor_thread:
+            self.monitor_thread.join(timeout=1.0)
+
+        if self.temp_file:
+            try:
+                temp_path = self.temp_file.name
+                self.temp_file.close()
+                os.unlink(temp_path)
+            except (OSError, AttributeError):
+                pass
+
+    def _monitor_file(self):
+        if not self.temp_file:
+            return
+
+        temp_file_path = self.temp_file.name
+
+        try:
+            with open(temp_file_path, "r") as f:
+                while not self.stop_monitoring.is_set():
+                    line = f.readline()
+                    if line:
+                        self._parse_progress_line(line)
+                    else:
+                        # No new content, wait a bit
+                        self.stop_monitoring.wait(0.1)
+        except Exception as e:
+            logger.error(f"Error monitoring progress file: {e}")
+
+    def _parse_progress_line(self, line):
+        match = self.progress_pattern.search(line)
+        if match:
+            model_name = match.group(1)
+            percent = int(match.group(2))
+            downloaded = match.group(3)
+            total = match.group(4)
+
+            if percent != self.last_percent:
+                self.last_percent = percent
+                message = f"Downloading {model_name} model: {downloaded}/{total}"
+                try:
+                    if self.loop and self.loop.is_running():
+                        self.loop.call_soon_threadsafe(
+                            self.progress_callback, Step.ASR_PROCESSING, percent, message, {}
+                        )
+                except Exception as e:
+                    logger.error(f"Error in progress callback: {e}")
+
+
+class WhisperCppASRService(ASRService):
+    """ASR service using whisper.cpp"""
 
     def __init__(
         self,
         progress_callback: ProgressCallback,
         use_gpu: bool = False,
-        model_path: str = "openai/whisper-tiny",
+        model_path: str = "tiny",
         language: str = "",
     ):
         super().__init__(progress_callback, model_path, language)
-        self.model = None
-        self.processor = None
-        self.use_gpu = use_gpu
+        self.model: Model = None
 
     @property
     def service_name(self) -> str:
-        return "Transformers"
+        return "Whisper"
 
     async def __aenter__(self):
         """Initialize the ASR model"""
         try:
-            from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
-            import torch
+            self._notify_progress(Step.ASR_PROCESSING, 0, "Loading ASR model. This may take a while the first time...")
 
-            self._notify_progress(Step.ASR_PROCESSING, 0, "Loading ASR model...")
+            model_cache_dir = os.getenv("MODEL_CACHE_DIR", None)
 
-            if torch.cuda.is_available():
-                device = "cuda:0"
-                torch_dtype = torch.float16
-            else:
-                device = "cpu"
-                torch_dtype = torch.float32
+            if model_cache_dir:
+                model_cache_dir = os.path.join(model_cache_dir, "whispercpp")
 
-            # Load model
-            self.model = AutoModelForSpeechSeq2Seq.from_pretrained(
-                self.model_path,
-                torch_dtype=torch_dtype,
-                low_cpu_mem_usage=True,
-                use_safetensors=True,
-            )
-            self.model.to(device)
+            with ModelDownloadProgress(self._notify_progress) as log_file:
 
-            # Load processor
-            self.processor = AutoProcessor.from_pretrained(self.model_path)
+                def create_model():
+                    import contextlib
 
-            # Create pipeline with language parameter if specified
-            pipeline_kwargs = {
-                "model": self.model,
-                "tokenizer": self.processor.tokenizer,
-                "feature_extractor": self.processor.feature_extractor,
-                "max_new_tokens": 128,
-                "chunk_length_s": 30,
-                "batch_size": 16,
-                "return_timestamps": True,
-                "torch_dtype": torch_dtype,
-                "device": device,
-            }
+                    with contextlib.redirect_stderr(log_file), contextlib.redirect_stdout(log_file):
+                        sys.stdout.flush()
+                        sys.stderr.flush()
 
-            # Add language parameter if specified and not "auto"
-            # Note: English-only models (ending in .en) don't accept language parameters
-            is_english_only = self.model_path.endswith(".en")
-            if self.language and self.language != "auto" and not is_english_only:
-                pipeline_kwargs["generate_kwargs"] = {"language": self.language}
+                        model = Model(self.model_path, models_dir=model_cache_dir, redirect_whispercpp_logs_to=log_file)
 
-            self.pipe = pipeline("automatic-speech-recognition", **pipeline_kwargs)
+                        log_file.flush()
+                        return model
+
+                loop = asyncio.get_event_loop()
+                self.model = await loop.run_in_executor(None, create_model)
 
             self._notify_progress(Step.ASR_PROCESSING, 0, "ASR model loaded successfully")
 
-        except ImportError as e:
-            logger.error(f"Required libraries not available: {e}")
-            raise RuntimeError("Transformers library required for ASR processing")
         except Exception as e:
             logger.error(f"Failed to initialize ASR model: {e}")
             raise
@@ -98,26 +156,19 @@ class WhisperASRService(ASRService):
         """Cleanup resources"""
         if hasattr(self, "model") and self.model:
             del self.model
-        if hasattr(self, "processor") and self.processor:
-            del self.processor
-        if hasattr(self, "pipe") and self.pipe:
-            del self.pipe
 
     def _transcribe_file(self, audio_file: str) -> str:
         """Transcribe a single audio file"""
-        if not self.pipe:
-            raise RuntimeError("ASR model not initialized")
 
         try:
-            result = self.pipe(audio_file)
+            results = self.model.transcribe(
+                audio_file,
+                language=self.language,
+                suppress_blank=True,
+                initial_prompt=self.bias_words,
+            )
 
-            if isinstance(result, dict) and "text" in result:
-                return result["text"].strip()
-            elif isinstance(result, str):
-                return result.strip()
-            else:
-                logger.warning(f"Unexpected transcription result format: {type(result)}")
-                return str(result).strip()
+            return "".join([result.text for result in results]).strip()
 
         except Exception as e:
             logger.error(f"Transcription error for {audio_file}: {e}")
@@ -237,91 +288,90 @@ WHISPER_VARIANTS = [
         model_id="tiny",
         name="Tiny",
         desc="Tiny version of the Whisper model. Fastest (~10x faster than Large), but least accurate. Uses ~1GB of memory",
-        path="openai/whisper-tiny",
+        path="tiny",
         languages=WHISPER_LANGS,
     ),
     ASRModelVariant(
         model_id="tiny_en",
         name="Tiny (EN)",
         desc="[English-only] Tiny version of the Whisper model. Fastest (~10x faster than Large), but least accurate. Generally more accurate for English audio than the standard Tiny version. Uses ~1GB of memory.",
-        path="openai/whisper-tiny.en",
+        path="tiny.en",
         languages=EN_LANG,
     ),
     ASRModelVariant(
         model_id="base",
         name="Base",
         desc="Base version of the Whisper model. Fast (~7x faster than Large), but less accurate than larger models. Uses ~1GB of memory.",
-        path="openai/whisper-base",
+        path="base",
         languages=WHISPER_LANGS,
     ),
     ASRModelVariant(
         model_id="base_en",
         name="Base (EN)",
         desc="[English-only] Base version of the Whisper model. Fast (~7x faster than Large), but less accurate than larger models. Generally more accurate for English audio than the standard Base version. Uses ~1GB of memory.",
-        path="openai/whisper-base.en",
+        path="base.en",
         languages=EN_LANG,
     ),
     ASRModelVariant(
         model_id="small",
         name="Small",
         desc="Small version of the Whisper model. Moderate speed (~4x faster than Large), moderate accuracy. Uses ~2GB of memory.",
-        path="openai/whisper-small",
+        path="small",
         languages=WHISPER_LANGS,
     ),
     ASRModelVariant(
         model_id="small_en",
         name="Small (EN)",
         desc="[English-only] Small version of the Whisper model. Moderate speed (~4x faster than Large), moderate accuracy. A bit more accurate for English audio than the standard Small version. Uses ~2GB of memory.",
-        path="openai/whisper-small.en",
+        path="small.en",
         languages=EN_LANG,
     ),
     ASRModelVariant(
         model_id="medium",
         name="Medium",
         desc="Medium version of the Whisper model. Slower (~2x faster than Large), but reasonably accurate. Uses ~5GB of memory.",
-        path="openai/whisper-medium",
+        path="medium",
         languages=WHISPER_LANGS,
     ),
     ASRModelVariant(
         model_id="medium_en",
         name="Medium (EN)",
         desc="[English-only] Medium version of the Whisper model. Slower (~2x faster than Large), but reasonably accurate. A bit more accurate for English audio than the standard Medium version. Uses ~5GB of memory.",
-        path="openai/whisper-medium.en",
+        path="medium.en",
         languages=EN_LANG,
     ),
     ASRModelVariant(
         model_id="large",
         name="Large",
         desc="Largest version of the Whisper model. Slowest, but most accurate. Uses ~10GB of memory.",
-        path="openai/whisper-large-v3",
+        path="large-v3",
         languages=WHISPER_LANGS,
     ),
     ASRModelVariant(
         model_id="turbo",
         name="Turbo",
         desc="Optimized version of the Large Whisper model. Fast (~8x faster than Large), while remaining reasonably accurate. Uses ~6GB of memory.",
-        path="openai/whisper-large-v3-turbo",
+        path="large-v3-turbo",
         languages=WHISPER_LANGS,
     ),
 ]
 
 
-# Register Whisper CPU service
+# Register Whisper service
 @register_asr_service(
-    service_id="whisper_cpu",
+    service_id="whisper_cpp",
     name="Whisper",
     desc="The Whisper ASR model by OpenAI.",
     uses_gpu=False,
+    supports_bias_words=True,
     variants=WHISPER_VARIANTS,
-    priority=70,
+    priority=80,
 )
-class WhisperCPUService(WhisperASRService):
+class WhisperCPUService(WhisperCppASRService):
     """CPU-only Whisper service"""
 
-    def __init__(
-        self, progress_callback: ProgressCallback, model_path: str = "openai/whisper-tiny", language: str = ""
-    ):
+    def __init__(self, progress_callback: ProgressCallback, model_path: str = "tiny", language: str = ""):
         super().__init__(progress_callback, use_gpu=False, model_path=model_path, language=language)
 
 
-logger.info("ASR: ✅ Whisper CPU service registered")
+logger.info("ASR: ✅ Whisper service registered")

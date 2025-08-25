@@ -37,6 +37,8 @@ class SmartDetectConfigRequest(BaseModel):
 
 class ASROptionsRequest(BaseModel):
     trim: bool
+    use_bias_words: bool = False
+    bias_words: str = ""
 
 
 class ConfigureASRRequest(BaseModel):
@@ -573,6 +575,8 @@ async def update_asr_options(request: ASROptionsRequest):
         # Update ASR options in config (persistent)
         app_config = get_app_config()
         app_config.asr_options.trim = request.trim
+        app_config.asr_options.use_bias_words = request.use_bias_words
+        app_config.asr_options.bias_words = request.bias_words
 
         success = update_app_config(app_config)
         if not success:

@@ -32,6 +32,20 @@ class ASRService(ABC):
         """Name of the service for progress messages"""
         pass
 
+    @property
+    def bias_words(self) -> str:
+        """Get bias words from ASR options"""
+        try:
+            from app.core.config import get_app_config
+            config = get_app_config()
+            if config.asr_options.use_bias_words:
+                return config.asr_options.bias_words
+            else:
+                return ""
+        except Exception as e:
+            logger.warning(f"Failed to get bias words from config: {e}")
+            return ""
+
     async def transcribe(self, audio_files: List[str]) -> List[str]:
         """Common transcription logic for all ASR services"""
         transcriptions = []

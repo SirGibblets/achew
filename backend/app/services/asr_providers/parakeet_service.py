@@ -106,7 +106,7 @@ try:
         desc="The Parakeet ASR models from NVIDIA.",
         uses_gpu=False,
         variants=PARAKEET_VARIANTS,
-        priority=75,
+        priority=70,
     )
     class ParakeetCPUService(ParakeetASRService):
         """CPU-only Parakeet service"""

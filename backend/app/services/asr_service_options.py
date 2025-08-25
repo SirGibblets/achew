@@ -45,6 +45,7 @@ class ASRServiceOption:
         name: str,
         desc: str,
         uses_gpu: bool = False,
+        supports_bias_words: bool = False,
         variants: List[ASRModelVariant] = None,
         priority: int = 0,
     ):
@@ -52,11 +53,12 @@ class ASRServiceOption:
         self.name = name
         self.desc = desc
         self.uses_gpu = uses_gpu
+        self.supports_bias_words = supports_bias_words
         self.variants = variants or []
         self.priority = priority
 
     def __repr__(self):
-        return f"ASRServiceOption(id={self.service_id}, name={self.name}, desc={self.desc}, uses_gpu={self.uses_gpu}, priority={self.priority})"
+        return f"ASRServiceOption(id={self.service_id}, name={self.name}, desc={self.desc}, uses_gpu={self.uses_gpu}, supports_bias_words={self.supports_bias_words}, priority={self.priority})"
 
 
 class ASRServiceRegistry:
@@ -244,6 +246,7 @@ def register_asr_service(
     name: str,
     desc: str,
     uses_gpu: bool = False,
+    supports_bias_words: bool = False,
     variants: List[ASRModelVariant] = None,
     priority: int = 0,
 ):
@@ -263,7 +266,7 @@ def register_asr_service(
     """
 
     def decorator(service_class):
-        option = ASRServiceOption(service_id, name, desc, uses_gpu, variants or [], priority)
+        option = ASRServiceOption(service_id, name, desc, uses_gpu, supports_bias_words, variants or [], priority)
         _registry.register(service_id, service_class, option)
         return service_class
 

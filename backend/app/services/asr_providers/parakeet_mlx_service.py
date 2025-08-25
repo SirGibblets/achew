@@ -94,7 +94,7 @@ if sys.platform == "darwin":
             desc="The Parakeet ASR models by NVIDIA, optimized for Apple Silicon (MLX).",
             uses_gpu=True,
             variants=PARAKEET_MLX_VARIANTS,
-            priority=100,
+            priority=90,
         )
         class ParakeetMLXService(ParakeetMLXASRService):
             """MLX-accelerated Parakeet service for Apple Silicon"""

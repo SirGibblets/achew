@@ -48,6 +48,7 @@ class ASRServiceOption(BaseModel):
     name: str
     desc: str
     uses_gpu: bool
+    supports_bias_words: bool
     priority: int
     variants: list
 
@@ -413,6 +414,7 @@ async def get_asr_preferences():
                     name=service.name,
                     desc=service.desc,
                     uses_gpu=service.uses_gpu,
+                    supports_bias_words=service.supports_bias_words,
                     priority=service.priority,
                     variants=variants,
                 )

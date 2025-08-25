@@ -53,6 +53,8 @@ class ASROptions(BaseModel):
     """ASR configuration options"""
 
     trim: bool = True
+    use_bias_words: bool = False
+    bias_words: str = ""
 
 
 class UserPreferences(BaseModel):

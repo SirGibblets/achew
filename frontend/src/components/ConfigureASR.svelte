@@ -2,10 +2,11 @@
     import {onMount} from "svelte";
     import {session} from "../stores/session.js";
     import {api} from "../utils/api.js";
-    import Icon from "./Icon.svelte";
 
     import ChevronDown from "@lucide/svelte/icons/chevron-down";
     import CircleQuestionMark from '@lucide/svelte/icons/circle-question-mark';
+    import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
+    import TriangleAlert from "@lucide/svelte/icons/triangle-alert";
 
     let loading = false;
     let segmentCount = 0;
@@ -19,8 +20,16 @@
     let serviceDropdownOpen = false;
 
     // ASR Options state
-    let asrOptions = {trim: true};
+    let asrOptions = {trim: true, use_bias_words: false, bias_words: ""};
     let asrOptionsLoading = false;
+    
+    // Default bias words
+    const DEFAULT_BIAS_WORDS = `Chapter Section Part Letter Book Volume Section Subsection Paragraph Page Segment Scene Act Episode
+Introduction Preface Epilogue Prologue Foreword Dedication Acknowledgments Afterword Notes Endnotes
+Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
+1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25`;
+
+    let biasWordsDebounceTimer = null;
 
     // Load ASR preferences
     async function loadASRPreferences() {
@@ -132,10 +141,13 @@
             asrOptionsLoading = true;
             const response = await api.session.getASROptions();
             asrOptions = response.options;
+            if (!asrOptions.bias_words) {
+                asrOptions.bias_words = DEFAULT_BIAS_WORDS;
+            }
         } catch (error) {
             console.error("Failed to load ASR options:", error);
             // Use defaults if loading fails
-            asrOptions = {trim: true};
+            asrOptions = {trim: true, use_bias_words: false, bias_words: DEFAULT_BIAS_WORDS};
         } finally {
             asrOptionsLoading = false;
         }
@@ -154,7 +166,30 @@
 
     function handleTrimChange(event) {
         const trimValue = event.target.checked;
-        updateASROptions({trim: trimValue});
+        updateASROptions({...asrOptions, trim: trimValue});
+    }
+
+    function handleUseBiasWordsChange(event) {
+        const useBiasWords = event.target.checked;
+        updateASROptions({...asrOptions, use_bias_words: useBiasWords});
+    }
+
+    function handleBiasWordsChange(event) {
+        const biasWords = event.target.value;
+        
+        asrOptions = {...asrOptions, bias_words: biasWords};
+        
+        if (biasWordsDebounceTimer) {
+            clearTimeout(biasWordsDebounceTimer);
+        }
+        
+        biasWordsDebounceTimer = setTimeout(() => {
+            updateASROptions({...asrOptions, bias_words: biasWords});
+        }, 500);
+    }
+
+    function resetBiasWords() {
+        updateASROptions({...asrOptions, bias_words: DEFAULT_BIAS_WORDS});
     }
 
     // Load segment count
@@ -205,6 +240,7 @@
         (v) => v.model_id === currentASRVariant,
     );
     $: availableLanguages = currentVariantInfo?.languages || [];
+    $: currentServiceSupportsBiasWords = currentService?.supports_bias_words || false;
 
     onMount(async () => {
         await loadASRPreferences();
@@ -303,7 +339,17 @@
                         <!-- Language Selection -->
                         {#if availableLanguages.length > 0}
                             <div class="asr-control-group">
-                                <label for="asr-language">Language</label>
+                                <label for="asr-language" class="language-label">
+                                    Language
+                                    {#if currentASRLanguage === 'auto' && availableLanguages.length > 1}
+                                        <div
+                                            class="warning-icon"
+                                            data-tooltip="Transcriptions tend to be faster and more accurate when the audio language is specified."
+                                        >
+                                            <TriangleAlert size="14"/>
+                                        </div>
+                                    {/if}
+                                </label>
                                 <select
                                         id="asr-language"
                                         value={currentASRLanguage}
@@ -316,31 +362,8 @@
                                 </select>
                             </div>
                         {/if}
-
-                        <!-- Trim Option -->
-                        <div class="asr-control-group">
-                            <label class="checkbox-label">
-                                <input
-                                        type="checkbox"
-                                        bind:checked={asrOptions.trim}
-                                        on:change={handleTrimChange}
-                                        disabled={asrOptionsLoading}
-                                        class="trim-checkbox"
-                                />
-                                <span class="checkbox-text">
-                  Trim segments
-                  <div
-                          class="help-icon"
-                          data-tooltip="Trimming can help increase transcription speed and accuracy by removing excess speech from chapter audio segments. Disable this if transcriptions are frequently blank, nonsensical, or missing wanted portions of the chapter title."
-                  >
-                    <CircleQuestionMark size="14"/>
-                  </div>
-                </span>
-                            </label>
-                        </div>
                     </div>
 
-                    <!-- Combined Descriptions -->
                     <div class="asr-descriptions">
                         {#if currentService}
                             <div class="description-item">
@@ -360,6 +383,76 @@
             {:else}
                 <div class="asr-error">
                     Failed to load ASR services. Please refresh the page.
+                </div>
+            {/if}
+        </div>
+
+        <div class="asr-options-container">
+            <div class="asr-options-row">
+                <label class="checkbox-label">
+                    <input
+                            type="checkbox"
+                            bind:checked={asrOptions.trim}
+                            on:change={handleTrimChange}
+                            disabled={asrOptionsLoading}
+                            class="asr-checkbox"
+                    />
+                    <span class="checkbox-text">
+                        Trim segments
+                        <div
+                                class="help-icon"
+                                data-tooltip="Trimming can help increase transcription speed and accuracy by removing excess speech from chapter audio segments. Disable this if transcriptions are frequently blank, nonsensical, or missing wanted portions of the chapter title."
+                        >
+                            <CircleQuestionMark size="14"/>
+                        </div>
+                    </span>
+                </label>
+
+                <label class="checkbox-label"
+                       class:disabled={!currentServiceSupportsBiasWords}
+                       data-tooltip={!currentServiceSupportsBiasWords ? "Not available for this ASR Service" : null}>
+                    <input
+                            type="checkbox"
+                            bind:checked={asrOptions.use_bias_words}
+                            on:change={handleUseBiasWordsChange}
+                            disabled={asrOptionsLoading || !currentServiceSupportsBiasWords}
+                            class="asr-checkbox"
+                    />
+                    <span class="checkbox-text">
+                        Use Bias Words
+                        {#if currentServiceSupportsBiasWords}
+                            <div
+                                    class="help-icon"
+                                    data-tooltip="Bias words can help guide the ASR model toward more consistent results. For example, providing numerical digits helps the model produce chapter numbers as digits instead of words. Providing a list of uncommon words or names can help the model spell those correctly. You'll want to ensure that the bias words are in the same language as the audiobook."
+                            >
+                                <CircleQuestionMark size="14"/>
+                            </div>
+                        {/if}
+                    </span>
+                </label>
+            </div>
+
+            {#if asrOptions.use_bias_words && currentServiceSupportsBiasWords}
+                <div class="bias-words-input-container">
+                    <div class="input-with-reset">
+                        <textarea
+                                bind:value={asrOptions.bias_words}
+                                on:input={handleBiasWordsChange}
+                                disabled={asrOptionsLoading}
+                                class="bias-words-input"
+                                placeholder="Enter bias words..."
+                                rows="4"
+                        ></textarea>
+                        <button
+                                type="button"
+                                class="reset-button"
+                                on:click={resetBiasWords}
+                                title="Reset to default"
+                                disabled={asrOptionsLoading}
+                        >
+                            <RotateCcw size="12"/>
+                        </button>
+                    </div>
                 </div>
             {/if}
         </div>
@@ -601,6 +694,63 @@
         min-height: 1.2rem;
     }
 
+    .language-label {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .warning-icon {
+        border: none;
+        background: transparent;
+        color: var(--warning);
+        padding: 2px;
+        border-radius: 50%;
+        transition: all 0.2s ease;
+        position: relative;
+        cursor: help;
+        display: flex;
+    }
+
+    .warning-icon:hover {
+        background: var(--bg-tertiary);
+    }
+
+    /* Warning tooltip on hover */
+    .warning-icon[data-tooltip]:hover::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        margin-bottom: 8px;
+        padding: 8px 12px;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        font-size: 0.875rem;
+        line-height: 1.4;
+        white-space: normal;
+        min-width: 280px;
+        max-width: 480px;
+        z-index: 1000;
+        animation: tooltipFadeIn 0.2s ease-out;
+    }
+
+    /* Warning tooltip arrow */
+    .warning-icon[data-tooltip]:hover::before {
+        content: "";
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        margin-bottom: -3px;
+        border: 6px solid transparent;
+        border-top-color: var(--border-color);
+        z-index: 1001;
+    }
+
     .asr-descriptions {
         display: flex;
         flex-direction: column;
@@ -618,6 +768,18 @@
         color: var(--text-primary);
     }
 
+    .asr-options-container {
+        margin-top: 1rem;
+    }
+
+    .asr-options-row {
+        display: flex;
+        gap: 2rem;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 1rem;
+    }
+
     /* Checkbox styles for ASR options */
     .checkbox-label {
         display: flex;
@@ -629,7 +791,7 @@
         margin: 0;
     }
 
-    .trim-checkbox {
+    .asr-checkbox {
         cursor: pointer;
         margin: 0;
     }
@@ -645,12 +807,118 @@
         color: var(--primary-color);
     }
 
-    .trim-checkbox:disabled {
+    .asr-checkbox:disabled {
         opacity: 0.5;
         cursor: not-allowed;
     }
 
-    .checkbox-label:has(.trim-checkbox:disabled) {
+    .checkbox-label:has(.asr-checkbox:disabled) {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .checkbox-label:has(.asr-checkbox:disabled) .checkbox-text {
+        color: var(--text-secondary);
+    }
+
+    .checkbox-label.disabled {
+        position: relative;
+    }
+
+    .checkbox-label.disabled:hover::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        top: -40px;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 8px 12px;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        font-size: 0.875rem;
+        line-height: 1.4;
+        white-space: nowrap;
+        z-index: 1000;
+        animation: tooltipFadeIn 0.2s ease-out;
+        pointer-events: none;
+    }
+
+    .checkbox-label.disabled:hover::before {
+        content: "";
+        position: absolute;
+        top: -3px;
+        left: 50%;
+        transform: translateX(-50%);
+        border: 6px solid transparent;
+        border-top-color: var(--border-color);
+        z-index: 1001;
+        pointer-events: none;
+    }
+
+    .checkbox-label:not(.disabled):hover::after,
+    .checkbox-label:not(.disabled):hover::before {
+        display: none;
+    }
+
+    .bias-words-input-container {
+        margin-top: 1rem;
+    }
+
+    .input-with-reset {
+        position: relative;
+        display: flex;
+        align-items: flex-start;
+    }
+
+    .bias-words-input {
+        flex: 1;
+        padding: 0.5rem 2.5rem 0.5rem 0.75rem;
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        font-size: 0.9rem;
+        font-family: inherit;
+        resize: vertical;
+        min-height: 6rem;
+        line-height: 1.4;
+        transition: border-color 0.2s ease;
+    }
+
+    .bias-words-input:focus {
+        outline: none;
+        border-color: var(--primary-color);
+    }
+
+    .bias-words-input:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .reset-button {
+        position: absolute;
+        right: 0.5rem;
+        top: 0.5rem;
+        width: 1.5rem;
+        height: 1.5rem;
+        border: none;
+        background: transparent;
+        color: var(--text-secondary);
+        cursor: pointer;
+        border-radius: 3px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+    }
+
+    .reset-button:hover {
+        background: var(--bg-tertiary);
+        color: var(--primary-color);
+    }
+
+    .reset-button:disabled {
         opacity: 0.5;
         cursor: not-allowed;
     }

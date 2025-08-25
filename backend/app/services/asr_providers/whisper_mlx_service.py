@@ -68,7 +68,11 @@ class WhisperMLXASRService(ASRService):
             if self.language and self.language != "auto":
                 transcribe_kwargs["language"] = self.language
 
-            result = self.mlx_whisper.transcribe(audio_file, **transcribe_kwargs)
+            result = self.mlx_whisper.transcribe(
+                audio_file,
+                initial_prompt=self.bias_words,
+                **transcribe_kwargs,
+            )
 
             if isinstance(result, dict) and "text" in result:
                 return result["text"].strip()
@@ -272,8 +276,9 @@ if sys.platform == "darwin":
             name="Whisper MLX",
             desc="The Whisper ASR model by OpenAI, optimized for Apple Silicon (MLX).",
             uses_gpu=True,
+            supports_bias_words=True,
             variants=MLX_WHISPER_VARIANTS,
-            priority=90,
+            priority=100,
         )
         class WhisperMLXService(WhisperMLXASRService):
             """MLX-accelerated Whisper service for Apple Silicon"""
