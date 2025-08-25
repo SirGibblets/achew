@@ -264,14 +264,15 @@ class ABSService:
 
                     if "results" in data and isinstance(data["results"], list):
                         for item in data["results"]:
-                            try:
-                                book = Book(**item)
-                                if book.media and book.media.coverPath:
-                                    book.media.coverPath = f"/api/audiobookshelf/covers/{book.id}"
-                                books.append(book)
-                            except Exception as e:
-                                logger.warning(f"Failed to parse book data: {e}")
-                                continue
+                            if item.get("media", {}).get("numAudioFiles", 0) > 0:
+                                try:
+                                    book = Book(**item)
+                                    if book.media and book.media.coverPath:
+                                        book.media.coverPath = f"/api/audiobookshelf/covers/{book.id}"
+                                    books.append(book)
+                                except Exception as e:
+                                    logger.warning(f"Failed to parse book data: {e}")
+                                    continue
 
                     _library_cache[library_id] = {"books": books, "timestamp": datetime.now()}
 
