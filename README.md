@@ -29,13 +29,20 @@ Designed to work with [Audiobookshelf](https://www.audiobookshelf.org/), **achew
 
 https://github.com/user-attachments/assets/cde5b668-2849-4fe5-88b7-db0f97d73019
 
+## System Requirements
+
+- 10GB disk space (SSD recommended)
+- 8GB RAM
+
 ## Installation
 
 <details>
 
-<summary>Docker (Recommended)</summary>
+<summary>Docker</summary>
 
 ## Running with Docker
+
+#### Note: The Docker image uses the CPU for transcription. Hardware-accelerated models are only available via the native installation method on Apple Silicon devices.
 
 ### 1. Install prerequisites
 - [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/)
@@ -45,11 +52,12 @@ https://github.com/user-attachments/assets/cde5b668-2849-4fe5-88b7-db0f97d73019
 - **[Optional]** Create API key for OpenAI, Gemini, or Claude, or have access to a machine running Ollama or LM Studio. This is only required if you want to use the AI Cleanup feature.
 
 ### 3. Set Up the Compose File
-- Download the [docker-compose.yml](docker-compose.yml) file.
-- Change the port and volume mappings as necessary.
+- Download the [docker-compose.yml](docker-compose.yml) file. This can go anywhere (e.g. inside a new directory named `achew` in your home directory).
+- Change the port and volume mappings if desired.
 
 
 ### 4. Run
+In a terminal, cd into the directory where you downloaded the docker-compose.yml file, and run the following command:
 ```bash
 docker-compose up -d
 ```
@@ -145,9 +153,36 @@ Access the running application in a browser at http://localhost:8000. It may tak
 
 <details>
 
+<summary>Can I use the AI Cleanup feature without a paid OpenAI/Anthropic/Gemini account?</summary>
+
+Yes! You have two options:
+1. If you have a Google account, the easiest way is to use Gemini's free tier. Just go [here](https://aistudio.google.com/apikey), create a free API Key, and then copy/paste it into the Gemini section in achew's LLM Configuration page. Be aware that the free tier has usage limits, but it should be good enough for the occasional chapter cleanup.
+2. If you have powerful hardware, you can install Ollama or LM Studio and run any LLM of your choice. This option is free, unlimited, and respects your privacy. Just be aware that small and even medium-size models may produce unusable results.
+
+</details>
+
+<details>
+
 <summary>Can I use achew behind a reverse proxy?</summary>
 
 As achew does not include built-in authentication, it is *not* recommended to expose it directly to the internet.  
 With that being said, yes, achew should work behind a reverse proxy so long as you enable websocket support. If you choose to go this route, it is *highly* recommended to add some form of authentication at the proxy level.
 
+</details>
+
+<details>
+
+<summary>How can I improve the consistency of chapter transcriptions?</summary>
+
+You may find that chapter transcriptions are frequently inconsistent: chapter numbers may be a mix of words, digits, and Roman numerals; words may be in all caps or not capitalized at all; punctuation and separators may vary from chapter to chapter. Part of this is simply the nature of the ASR models and short audio segments used for transcription, and the overall recommendation is to use AI Cleanup when possible to standardize your chapter titles.
+
+If AI Cleanup isn’t an option for you, try using one of the Whisper models with the “Use Bias Words” option enabled. Bias words act as a sort of custom vocabulary for the model and help guide the output toward specific spelling, terminology, and conventions. It’s far from perfect, but it can go a long way toward reducing the manual cleanup required.
+
+</details>
+
+<details>
+
+<summary>I frequently get too many or too few cues when using Smart Detect</summary>
+
+You can fine-tune this by adjusting the Minimum Chapter Gap value, found in the Smart Detect Settings in the Select Cue Source page. If you are getting too few cue options, drop this down to 1.75s or 1.5s. Conversely, if you're getting too many cues, try raising it up to 2.5 or 3s.
 </details>
