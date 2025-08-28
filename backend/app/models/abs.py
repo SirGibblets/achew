@@ -41,6 +41,7 @@ class BookMetadata(BaseModel):
     publishedYear: Optional[str]
     description: Optional[str]
     asin: Optional[str] = None
+    language: Optional[str] = None
 
     # Allow extra fields in case ABS API returns additional metadata
     model_config = ConfigDict(extra="ignore")

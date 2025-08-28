@@ -72,14 +72,14 @@ PARAKEET_MLX_VARIANTS = [
         name="0.6B v2 [English Only]",
         desc="Parakeet TDT 0.6B v2 model. Very fast, reasonably accurate. Recommended for English audiobooks. Uses ~4GB of VRAM.",
         path="mlx-community/parakeet-tdt-0.6b-v2",
-        languages=[("en", "English")],
+        languages=[("en", "English", "English")],
     ),
     ASRModelVariant(
         model_id="0.6b_v3",
         name="0.6B v3 [Multilingual]",
         desc="Parakeet TDT 0.6B v3 model. Very fast, reasonably accurate. Uses ~4GB of VRAM.\nAutomatically detects language. Supported languages: Bulgarian, Croatian, Czech, Danish, Dutch, English, Estonian, Finnish, French, German, Greek, Hungarian, Italian, Latvian, Lithuanian, Maltese, Polish, Portuguese, Romanian, Slovak, Slovenian, Spanish, Swedish, Russian, Ukrainian.",
         path="mlx-community/parakeet-tdt-0.6b-v3",
-        languages=[("auto", "Auto")],
+        languages=[("auto", "Auto", "Auto")],
     ),
 ]
 

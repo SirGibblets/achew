@@ -64,6 +64,7 @@ class ASRPreferencesResponse(BaseModel):
     current_service: str
     current_variant: str
     current_language: str
+    book_language: Optional[str] = None
 
 
 async def validate_abs_connection(abs_url: str, abs_api_key: str) -> Dict[str, Any]:
@@ -424,11 +425,17 @@ async def get_asr_preferences():
         preferred = get_preferred_service()
         preferences = get_user_preferences()
 
+        book_language = None
+        app_state = get_app_state()
+        if app_state.pipeline and app_state.pipeline.book:
+            book_language = app_state.pipeline.book.media.metadata.language
+
         return ASRPreferencesResponse(
             available_services=available_services,
             current_service=preferred.service_id if preferred else "",
             current_variant=preferences.preferred_asr_variant,
             current_language=preferences.preferred_asr_language,
+            book_language=book_language,
         )
 
     except Exception as e:

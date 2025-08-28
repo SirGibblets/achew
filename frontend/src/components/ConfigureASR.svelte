@@ -16,6 +16,7 @@
     let currentASRService = "";
     let currentASRVariant = "";
     let currentASRLanguage = "";
+    let bookLanguage = null;
     let asrLoading = false;
     let serviceDropdownOpen = false;
 
@@ -31,6 +32,54 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
 
     let biasWordsDebounceTimer = null;
 
+    function findMatchingLanguage(availableLanguages, bookLang) {
+        if (!bookLang || !availableLanguages || availableLanguages.length === 0) {
+            return null;
+        }
+        
+        const normalizedBookLang = bookLang.trim().toLowerCase();
+        
+        // Try exact matches first (language codes)
+        for (const [code, englishName, nativeName] of availableLanguages) {
+            if (code.toLowerCase() === normalizedBookLang) {
+                return code;
+            }
+        }
+        
+        // Try matching English names
+        for (const [code, englishName, nativeName] of availableLanguages) {
+            if (englishName.toLowerCase() === normalizedBookLang) {
+                return code;
+            }
+        }
+        
+        // Try matching native names
+        for (const [code, englishName, nativeName] of availableLanguages) {
+            if (nativeName && nativeName.toLowerCase() === normalizedBookLang) {
+                return code;
+            }
+        }
+        
+        // Try partial matches on English names
+        for (const [code, englishName, nativeName] of availableLanguages) {
+            if (englishName.toLowerCase().includes(normalizedBookLang) ||
+                normalizedBookLang.includes(englishName.toLowerCase())) {
+                return code;
+            }
+        }
+        
+        return null;
+    }
+
+    function selectLanguageForVariant(variant, bookLang) {
+        if (!variant || !variant.languages) {
+            return variant?.languages?.[0]?.[0] || "";
+        }
+        
+        const matchedLanguage = findMatchingLanguage(variant.languages, bookLang);
+        return matchedLanguage || variant.languages[0][0] || "";
+    }
+
     // Load ASR preferences
     async function loadASRPreferences() {
         try {
@@ -40,6 +89,7 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
             currentASRService = response.current_service;
             currentASRVariant = response.current_variant;
             currentASRLanguage = response.current_language;
+            bookLanguage = response.book_language;
 
             // If no variant is set, default to the first variant of the current service
             if (!currentASRVariant && currentASRService) {
@@ -58,22 +108,40 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
                 }
             }
 
-            // If no language is set, default to the first language of the current variant
-            if (!currentASRLanguage && currentASRService && currentASRVariant) {
+            // If no language is set or if there's a book language, try to select matching language
+            if (currentASRService && currentASRVariant) {
                 const service = asrServices.find(
                     (s) => s.service_id === currentASRService,
                 );
                 const variant = service?.variants?.find(
                     (v) => v.model_id === currentASRVariant,
                 );
-                const firstLanguage = variant?.languages?.[0]?.[0];
-                if (firstLanguage) {
-                    currentASRLanguage = firstLanguage;
-                    await updateASRPreference(
-                        currentASRService,
-                        currentASRVariant,
-                        firstLanguage,
-                    );
+                
+                if (variant) {
+                    let selectedLanguage = currentASRLanguage;
+                    
+                    // If no current language is set, or if book language exists, try to match book language
+                    if (!currentASRLanguage || bookLanguage) {
+                        const matchedLanguage = selectLanguageForVariant(variant, bookLanguage);
+                        if (matchedLanguage) {
+                            selectedLanguage = matchedLanguage;
+                        }
+                    }
+                    
+                    // If still no language, use first available
+                    if (!selectedLanguage) {
+                        selectedLanguage = variant.languages?.[0]?.[0] || "";
+                    }
+                    
+                    // Update if language changed
+                    if (selectedLanguage !== currentASRLanguage) {
+                        currentASRLanguage = selectedLanguage;
+                        await updateASRPreference(
+                            currentASRService,
+                            currentASRVariant,
+                            selectedLanguage,
+                        );
+                    }
                 }
             }
         } catch (error) {
@@ -96,19 +164,21 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
 
     function handleASRServiceChange(event) {
         const serviceId = event.target.value;
-        // Find the new service and auto-select its first variant and language
+        // Find the new service and auto-select its first variant and appropriate language
         const newService = asrServices.find((s) => s.service_id === serviceId);
-        const firstVariant = newService?.variants?.[0]?.model_id || "";
-        const firstLanguage = newService?.variants?.[0]?.languages?.[0]?.[0] || "";
-        updateASRPreference(serviceId, firstVariant, firstLanguage);
+        const firstVariant = newService?.variants?.[0];
+        const firstVariantId = firstVariant?.model_id || "";
+        const selectedLanguage = selectLanguageForVariant(firstVariant, bookLanguage);
+        updateASRPreference(serviceId, firstVariantId, selectedLanguage);
     }
 
     function selectASRService(serviceId) {
-        // Find the new service and auto-select its first variant and language
+        // Find the new service and auto-select its first variant and appropriate language
         const newService = asrServices.find((s) => s.service_id === serviceId);
-        const firstVariant = newService?.variants?.[0]?.model_id || "";
-        const firstLanguage = newService?.variants?.[0]?.languages?.[0]?.[0] || "";
-        updateASRPreference(serviceId, firstVariant, firstLanguage);
+        const firstVariant = newService?.variants?.[0];
+        const firstVariantId = firstVariant?.model_id || "";
+        const selectedLanguage = selectLanguageForVariant(firstVariant, bookLanguage);
+        updateASRPreference(serviceId, firstVariantId, selectedLanguage);
         serviceDropdownOpen = false;
     }
 
@@ -121,11 +191,11 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
 
     function handleASRVariantChange(event) {
         const variantId = event.target.value;
-        // Find the new variant and auto-select its first language
+        // Find the new variant and auto-select appropriate language
         const service = asrServices.find((s) => s.service_id === currentASRService);
         const variant = service?.variants?.find((v) => v.model_id === variantId);
-        const firstLanguage = variant?.languages?.[0]?.[0] || "";
-        updateASRPreference(currentASRService, variantId, firstLanguage);
+        const selectedLanguage = selectLanguageForVariant(variant, bookLanguage);
+        updateASRPreference(currentASRService, variantId, selectedLanguage);
     }
 
     function handleASRLanguageChange(event) {
@@ -356,7 +426,7 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
                                         on:change={handleASRLanguageChange}
                                         class="setting-select"
                                 >
-                                    {#each availableLanguages as [code, name]}
+                                    {#each availableLanguages as [code, name, nativeName]}
                                         <option value={code}>{name}</option>
                                     {/each}
                                 </select>
