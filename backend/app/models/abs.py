@@ -13,6 +13,7 @@ class AudioFileMetadata(BaseModel):
     filename: str
     ext: str
     relPath: str
+    size: int
 
 
 class BookChapter(BaseModel):

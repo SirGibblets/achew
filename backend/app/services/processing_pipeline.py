@@ -580,6 +580,9 @@ class ProcessingPipeline:
         try:
             audio_file_paths = []
             completed_files = 0
+            
+            total_bytes_all_files = sum(audio_file.metadata.size for audio_file in audio_files)
+            total_downloaded_bytes = 0
 
             for i, audio_file in enumerate(audio_files):
                 # Check for cancellation before starting each file download
@@ -596,32 +599,29 @@ class ProcessingPipeline:
                     total_current: int,
                     file_index=i,
                     files_completed=completed_files,
+                    total_downloaded_so_far=total_downloaded_bytes,
                 ):
                     # Check for cancellation during download progress updates
                     if self.step != Step.DOWNLOADING:
                         return  # Don't update progress if cancelled
 
                     if total_current > 0:
-                        # Calculate file-based progress with equal portions per file
-                        # Each file gets an equal fraction of the total progress bar
-                        file_fraction = 100.0 / len(audio_files)  # e.g., ~3.7% for 27 files
-                        file_progress = downloaded_current / total_current  # 0.0 to 1.0
-
-                        # Overall progress = completed files + current file progress
-                        overall_percent = (files_completed * file_fraction) + (file_progress * file_fraction)
+                        # Calculate overall downloaded bytes across all files
+                        overall_downloaded = total_downloaded_so_far + downloaded_current
+                        overall_percent = (overall_downloaded / total_bytes_all_files) * 100 if total_bytes_all_files > 0 else 0
 
                         speed_bps = getattr(download_progress, "speed", 0)
 
                         self._notify_progress(
                             Step.DOWNLOADING,
                             overall_percent,
-                            f"Downloading file {file_index+1}/{len(audio_files)} - {downloaded_current / 1024 / 1024:.1f} MB of {total_current / 1024 / 1024:.1f} MB ({file_progress * 100:.1f}%)",
+                            f"Downloading file {file_index+1}/{len(audio_files)} - {overall_downloaded / 1024 / 1024:.1f} MB of {total_bytes_all_files / 1024 / 1024:.1f} MB",
                             {
-                                "bytes_downloaded": downloaded_current,
-                                "total_bytes": total_current,
+                                "bytes_downloaded": overall_downloaded,
+                                "total_bytes": total_bytes_all_files,
                                 "current_file": file_index + 1,
                                 "total_files": len(audio_files),
-                                "current_file_progress": file_progress * 100,
+                                "current_file_progress": (downloaded_current / total_current) * 100,
                                 "files_completed": files_completed,
                                 "speed_bps": speed_bps,
                             },
@@ -643,8 +643,9 @@ class ProcessingPipeline:
                 if not success:
                     raise RuntimeError(f"Failed to download audio file {i+1}")
 
-                # Increment completed files counter
+                # Increment completed files counter and update total downloaded bytes
                 completed_files += 1
+                total_downloaded_bytes += audio_file.metadata.size
 
             self._notify_progress(Step.DOWNLOADING, 100, f"Downloaded {len(audio_files)} audio file(s)")
             return audio_file_paths
