@@ -18,72 +18,8 @@ import json
 import librosa
 import warnings
 import time
-
-
-def process_chunk(chunk_file, chunk_index, segment_duration, min_silence_duration, enable_progress=False):
-    """Process a single audio chunk with VAD in isolated process"""
-    try:
-        # Calculate start time for this chunk
-        start_time = chunk_index * segment_duration
-
-        # Load the entire chunk file
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", UserWarning)
-            warnings.simplefilter("ignore", FutureWarning)
-            wav, sr = librosa.load(chunk_file, sr=16000, mono=True)
-
-        if len(wav) == 0:
-            return {"chunk_index": chunk_index, "gaps": [], "error": "Empty audio"}
-
-        # Load and use VAD model
-        from silero_vad import load_silero_vad, get_speech_timestamps
-
-        model = load_silero_vad()
-
-        # Get speech timestamps from VAD with optional progress tracking
-        if enable_progress:
-            # Progress callback with throttling (max once per 0.1 seconds)
-            last_progress_time = 0
-
-            def progress_callback(progress_percent):
-                nonlocal last_progress_time
-                current_time = time.time()
-                if current_time - last_progress_time >= 0.1:  # Throttle to 0.1 second intervals
-                    last_progress_time = current_time
-                    # Send progress update to stdout (will be captured by parent process)
-                    progress_data = {
-                        "type": "progress",
-                        "chunk_index": chunk_index,
-                        "progress": progress_percent,
-                    }
-                    print(f"PROGRESS:{json.dumps(progress_data)}", flush=True)
-
-            speech_timestamps = get_speech_timestamps(
-                wav,
-                model,
-                speech_pad_ms=100,
-                return_seconds=True,
-                progress_tracking_callback=progress_callback,
-            )
-        else:
-            speech_timestamps = get_speech_timestamps(
-                wav,
-                model,
-                speech_pad_ms=100,
-                return_seconds=True,
-            )
-
-        # Calculate end time for this chunk
-        chunk_duration = len(wav) / sr
-        end_time = start_time + chunk_duration
-
-        # Convert speech timestamps to gaps
-        gaps = find_gaps_in_speech(speech_timestamps, start_time, end_time, min_silence_duration)
-
-        return {"chunk_index": chunk_index, "gaps": gaps, "error": None}
-
-    except Exception as e:
-        return {"chunk_index": chunk_index, "gaps": [], "error": str(e)}
+import subprocess
+import os
 
 
 def find_gaps_in_speech(speech_timestamps, segment_start, segment_end, min_silence_duration):
@@ -225,37 +161,20 @@ if __name__ == "__main__":
         print(json.dumps({"error": "Invalid arguments"}))
         sys.exit(1)
 
-    # Check if we're processing multiple chunks (new format) or single chunk (legacy format)
-    if sys.argv[1].startswith("["):
-        # Multiple chunks format: python vad_worker.py '[["chunk1.wav", 0], ["chunk2.wav", 1]]' segment_duration min_silence_duration [enable_progress]
-        try:
-            chunk_files_with_indices = json.loads(sys.argv[1])
-            segment_duration = float(sys.argv[2])
-            min_silence_duration = float(sys.argv[3])
-            enable_progress = len(sys.argv) >= 5 and sys.argv[4].lower() == "true"
+    try:
+        chunk_files_with_indices = json.loads(sys.argv[1])
+        segment_duration = float(sys.argv[2])
+        min_silence_duration = float(sys.argv[3])
+        enable_progress = len(sys.argv) >= 5 and sys.argv[4].lower() == "true"
 
-            results = process_multiple_chunks(
-                chunk_files_with_indices, segment_duration, min_silence_duration, enable_progress
-            )
+        results = process_multiple_chunks(
+            chunk_files_with_indices, segment_duration, min_silence_duration, enable_progress
+        )
 
-            # Output all results
-            for result in results:
-                print(f"RESULT:{json.dumps(result)}")
+        # Output all results
+        for result in results:
+            print(f"RESULT:{json.dumps(result)}")
 
-        except (json.JSONDecodeError, ValueError) as e:
-            print(json.dumps({"error": f"Failed to parse arguments: {str(e)}"}))
-            sys.exit(1)
-    else:
-        # Legacy single chunk format for backward compatibility
-        if len(sys.argv) not in [5, 6]:
-            print(json.dumps({"error": "Invalid arguments"}))
-            sys.exit(1)
-
-        chunk_file = sys.argv[1]
-        chunk_index = int(sys.argv[2])
-        segment_duration = float(sys.argv[3])
-        min_silence_duration = float(sys.argv[4])
-        enable_progress = len(sys.argv) == 6 and sys.argv[5].lower() == "true"
-
-        result = process_chunk(chunk_file, chunk_index, segment_duration, min_silence_duration, enable_progress)
-        print(f"RESULT:{json.dumps(result)}")
+    except (json.JSONDecodeError, ValueError) as e:
+        print(json.dumps({"error": f"Failed to parse arguments: {str(e)}"}))
+        sys.exit(1)

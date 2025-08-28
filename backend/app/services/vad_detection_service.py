@@ -97,7 +97,8 @@ class VadDetectionService:
         if self._is_cancelled:
             return []
 
-        output_pattern = os.path.join(temp_dir, "vad_chunk_%03d.wav")
+        _, ext = os.path.splitext(audio_file)
+        output_pattern = os.path.join(temp_dir, f"vad_chunk_%03d{ext}")
 
         # Use ffmpeg segment to efficiently split the file
         cmd = [
@@ -109,12 +110,8 @@ class VadDetectionService:
             "segment",  # Use segment muxer
             "-segment_time",
             str(self.segment_duration),  # 10 minutes per segment
-            "-acodec",
-            "pcm_s16le",  # Use PCM encoding for better librosa compatibility
-            "-ar",
-            "16000",  # 16kHz sample rate for VAD
-            "-ac",
-            "1",  # Mono
+            "-c",
+            "copy",
             output_pattern,
         ]
 
@@ -125,7 +122,7 @@ class VadDetectionService:
             # Monitor progress by watching stderr for segment creation
             import re
 
-            segment_pattern = re.compile(r"Opening '.*vad_chunk_(\d+)\.wav' for writing")
+            segment_pattern = re.compile(r"Opening '.*vad_chunk_(\d+)\.[^']+' for writing")
             segments_created = 0
             expected_segments = int(duration // self.segment_duration) + 1
 
@@ -179,7 +176,7 @@ class VadDetectionService:
                 pass
 
         # Find all created chunk files
-        chunk_files = sorted(glob.glob(os.path.join(temp_dir, "vad_chunk_*.wav")))
+        chunk_files = sorted(glob.glob(os.path.join(temp_dir, "vad_chunk_*")))
         logger.info(f"Successfully created {len(chunk_files)} audio chunks")
 
         return chunk_files
