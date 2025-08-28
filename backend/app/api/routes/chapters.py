@@ -50,7 +50,8 @@ class BatchOperationRequest(BaseModel):
 class AIOptions(BaseModel):
     inferOpeningCredits: bool = True
     inferEndCredits: bool = True
-    assumeAllValid: bool = False
+    deselectNonChapters: bool = True
+    keepDeselectedTitles: bool = False
     usePreferredTitles: bool = False
     preferredTitlesSource: str = ""
     additionalInstructions: str = ""
@@ -354,7 +355,8 @@ async def get_ai_options():
         return AIOptions(
             inferOpeningCredits=pipeline_options.inferOpeningCredits,
             inferEndCredits=pipeline_options.inferEndCredits,
-            assumeAllValid=pipeline_options.assumeAllValid,
+            deselectNonChapters=pipeline_options.deselectNonChapters,
+            keepDeselectedTitles=pipeline_options.keepDeselectedTitles,
             usePreferredTitles=pipeline_options.usePreferredTitles,
             preferredTitlesSource=pipeline_options.preferredTitlesSource,
             additionalInstructions=pipeline_options.additionalInstructions,
@@ -392,7 +394,8 @@ async def update_ai_options(ai_options: AIOptions):
         pipeline_ai_options = PipelineAIOptions(
             inferOpeningCredits=ai_options.inferOpeningCredits,
             inferEndCredits=ai_options.inferEndCredits,
-            assumeAllValid=ai_options.assumeAllValid,
+            deselectNonChapters=ai_options.deselectNonChapters,
+            keepDeselectedTitles=ai_options.keepDeselectedTitles,
             usePreferredTitles=ai_options.usePreferredTitles,
             preferredTitlesSource=ai_options.preferredTitlesSource,
             additionalInstructions=ai_options.additionalInstructions,

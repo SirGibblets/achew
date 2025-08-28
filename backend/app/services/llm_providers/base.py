@@ -152,7 +152,7 @@ class AIService(ABC):
 
     @staticmethod
     def _build_system_prompt(
-        keep_all_chapters: bool = False,
+        deselect_non_chapters: bool = True,
         infer_opening_credits: bool = True,
         infer_end_credits: bool = True,
         preferred_titles: List[str] = None,
@@ -192,9 +192,9 @@ Rules for processing chapter titles:
             base_prompt += """
         - The very last item will often be named "End Credits" unless it appears to be a chapter or other special section."""
 
-        # Add chapter removal logic based on keep_all_chapters setting
-        if keep_all_chapters:
-            base_prompt += "\n- Attempt to keep all existing chapters."
+        # Add chapter removal logic based on deselect_non_chapters setting
+        if not deselect_non_chapters:
+            base_prompt += "\n- Assume all items are valid chapters."
         else:
             base_prompt += """
     - If it appears in the middle of the list and doesn't seem to be a chapter/section/etc or other book division point (i.e. it appears to be narrative content), consider removing it entirely.
@@ -217,7 +217,7 @@ Rules for processing chapter titles:
         transcriptions: List[str],
         model_id: str,
         additional_instructions: List[str] = None,
-        keep_all_chapters: bool = False,
+        deselect_non_chapters: bool = True,
         infer_opening_credits: bool = True,
         infer_end_credits: bool = True,
         preferred_titles: List[str] = None,

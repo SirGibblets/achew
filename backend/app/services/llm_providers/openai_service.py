@@ -284,7 +284,7 @@ class OpenAIService(AIService):
         transcriptions: List[str],
         model_id: str,
         additional_instructions: List[str] = None,
-        keep_all_chapters: bool = False,
+        deselect_non_chapters: bool = True,
         infer_opening_credits: bool = True,
         infer_end_credits: bool = True,
         preferred_titles: List[str] = None,
@@ -300,7 +300,7 @@ class OpenAIService(AIService):
 
         # Build system prompt dynamically based on options
         system_prompt = self._build_system_prompt(
-            keep_all_chapters=keep_all_chapters,
+            deselect_non_chapters=deselect_non_chapters,
             infer_opening_credits=infer_opening_credits,
             infer_end_credits=infer_end_credits,
             preferred_titles=preferred_titles,

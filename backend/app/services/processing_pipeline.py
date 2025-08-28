@@ -89,7 +89,8 @@ class AIOptions:
         self,
         inferOpeningCredits: bool = True,
         inferEndCredits: bool = True,
-        assumeAllValid: bool = False,
+        deselectNonChapters: bool = True,
+        keepDeselectedTitles: bool = False,
         usePreferredTitles: bool = False,
         preferredTitlesSource: str = "",
         additionalInstructions: str = "",
@@ -98,7 +99,8 @@ class AIOptions:
     ):
         self.inferOpeningCredits = inferOpeningCredits
         self.inferEndCredits = inferEndCredits
-        self.assumeAllValid = assumeAllValid
+        self.deselectNonChapters = deselectNonChapters
+        self.keepDeselectedTitles = keepDeselectedTitles
         self.usePreferredTitles = usePreferredTitles
         self.preferredTitlesSource = preferredTitlesSource
         self.additionalInstructions = additionalInstructions
@@ -1424,7 +1426,8 @@ class ProcessingPipeline:
             # Use AI options
             infer_opening_credits = self.ai_options.inferOpeningCredits
             infer_end_credits = self.ai_options.inferEndCredits
-            assume_all_valid = self.ai_options.assumeAllValid
+            deselect_non_chapters = self.ai_options.deselectNonChapters
+            keep_deselected_titles = self.ai_options.keepDeselectedTitles
             additional_instructions = self.ai_options.additionalInstructions
             preferred_titles: List[str] = None
 
@@ -1447,7 +1450,7 @@ class ProcessingPipeline:
                     transcriptions,
                     model_id=self.ai_options.model_id,
                     additional_instructions=instructions_list,
-                    keep_all_chapters=assume_all_valid,
+                    deselect_non_chapters=deselect_non_chapters,
                     infer_opening_credits=infer_opening_credits,
                     infer_end_credits=infer_end_credits,
                     preferred_titles=preferred_titles,
@@ -1484,11 +1487,11 @@ class ProcessingPipeline:
                         )
                         chapter.current_title = processed_title
                     else:
-                        # Title is empty/None - deselect the chapter and clear the title
+                        # Title is empty/None - deselect the chapter and optionally clear the title
                         changes_made = False
 
-                        # Clear the title if it's different from empty
-                        if chapter.current_title.strip() != "":
+                        # Only clear the title if keep_deselected_titles is False
+                        if not keep_deselected_titles and chapter.current_title.strip() != "":
                             title_changes.append(
                                 {
                                     "chapter_id": chapter.id,
