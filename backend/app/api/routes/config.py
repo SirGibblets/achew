@@ -10,6 +10,7 @@ from ...core.config import (
     save_abs_config,
     save_llm_provider_config,
     get_user_preferences,
+    update_user_preferences,
     refresh_app_config,
     ABSConfig,
     LLMProviderConfig,
@@ -658,3 +659,48 @@ async def get_llm_provider_config(provider_id: str):
     except Exception as e:
         logger.error(f"Failed to get provider config: {e}")
         raise HTTPException(status_code=400, detail=str(e))
+
+
+class EditorSettingsRequest(BaseModel):
+    tab_navigation: Optional[bool] = None
+    hide_transcriptions: Optional[bool] = None
+    show_formatted_time: Optional[bool] = None
+
+
+@router.get("/config/editor-settings")
+async def get_editor_settings():
+    """Get current editor settings"""
+    try:
+        preferences = get_user_preferences()
+        return preferences.editor_settings.model_dump()
+    except Exception as e:
+        logger.error(f"Failed to get editor settings: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/config/editor-settings")
+async def update_editor_settings(request: EditorSettingsRequest):
+    """Update editor settings (partial update)"""
+    try:
+        current_prefs = get_user_preferences()
+
+        update_data = request.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            if hasattr(current_prefs.editor_settings, field):
+                setattr(current_prefs.editor_settings, field, value)
+
+        if not update_user_preferences(current_prefs):
+            raise HTTPException(status_code=500, detail="Failed to save editor settings")
+
+        refresh_app_config()
+
+        return {
+            "message": "Editor settings updated successfully",
+            "editor_settings": current_prefs.editor_settings.model_dump(),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update editor settings: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

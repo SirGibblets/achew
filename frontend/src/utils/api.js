@@ -358,6 +358,17 @@ export const config = {
             body: {service_id: serviceId, variant_id: variantId, language: language},
         });
     },
+
+    async getEditorSettings() {
+        return apiRequest('/config/editor-settings');
+    },
+
+    async updateEditorSettings(settings) {
+        return apiRequest('/config/editor-settings', {
+            method: 'PATCH',
+            body: settings,
+        });
+    },
 };
 
 // LLM API

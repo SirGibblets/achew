@@ -57,14 +57,21 @@ class ASROptions(BaseModel):
     bias_words: str = ""
 
 
+class EditorSettings(BaseModel):
+    """Chapter editor settings"""
+
+    tab_navigation: bool = False
+    hide_transcriptions: bool = False
+    show_formatted_time: bool = True
+
+
 class UserPreferences(BaseModel):
     """User preferences configuration section"""
 
     preferred_asr_service: str = ""
     preferred_asr_variant: str = ""
     preferred_asr_language: str = ""
-    theme: str = "auto"
-    notifications: bool = True
+    editor_settings: EditorSettings = EditorSettings()
 
 
 class AppConfig(BaseModel):

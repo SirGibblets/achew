@@ -19,6 +19,10 @@
     let hasEmptyChapters = false;
     let emptyChapterNumbers = [];
 
+    let editorSettings = {
+        show_formatted_time: true
+    };
+
     $: if ($chapters) {
         selectedChapters = $chapters.filter((chapter) => chapter.selected);
     }
@@ -40,6 +44,10 @@
 
     // Format timestamp
     function formatTimestamp(seconds) {
+        if (!editorSettings.show_formatted_time) {
+            return seconds.toFixed(2);
+        }
+
         const hours = Math.floor(seconds / 3600);
         const minutes = Math.floor((seconds % 3600) / 60);
         const secs = Math.floor(seconds % 60);
@@ -48,6 +56,15 @@
             return `${hours}:${minutes.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
         } else {
             return `${minutes}:${secs.toString().padStart(2, "0")}`;
+        }
+    }
+
+    async function loadEditorSettings() {
+        try {
+            const response = await api.config.getEditorSettings();
+            editorSettings = response;
+        } catch (err) {
+            console.warn('Failed to load editor settings:', err);
         }
     }
 
@@ -126,6 +143,8 @@
     // Ensure chapters are loaded when arriving at reviewing step
     onMount(async () => {
         try {
+            await loadEditorSettings();
+            
             if (
                 $session.step === "reviewing" &&
                 (!$chapters || $chapters.length === 0)

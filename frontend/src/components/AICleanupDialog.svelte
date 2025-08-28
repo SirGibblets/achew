@@ -418,12 +418,12 @@
                         {#if aiOptions.deselectNonChapters}
                             <label class="checkbox-label nested-checkbox">
                                 <input type="checkbox" bind:checked={aiOptions.keepDeselectedTitles}/>
-                                <span>Keep Titles</span>
+                                <span>Preserve Titles</span>
                                 <div
                                         class="help-icon"
                                         data-tooltip="When enabled, the titles of deselected chapters will be preserved instead of being cleared."
                                 >
-                                    <CircleQuestionMark size="12"/>
+                                    <CircleQuestionMark size="14"/>
                                 </div>
                             </label>
                         {/if}
@@ -764,8 +764,6 @@
 
     .checkbox-label.nested-checkbox {
         margin-left: 1.5rem;
-        font-size: 0.8rem;
-        color: var(--text-muted);
     }
 
     .checkbox-label.nested-checkbox:hover {

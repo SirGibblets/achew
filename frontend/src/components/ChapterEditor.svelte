@@ -16,9 +16,11 @@
     // Icons
     import ArrowRight from "@lucide/svelte/icons/arrow-right";
     import BookMarked from "@lucide/svelte/icons/book-marked";
+    import ChevronUp from "@lucide/svelte/icons/chevron-up";
     import Pause from "@lucide/svelte/icons/pause";
     import Play from "@lucide/svelte/icons/play";
     import Redo from "@lucide/svelte/icons/redo";
+    import Settings from "@lucide/svelte/icons/settings";
     import Trash2 from "@lucide/svelte/icons/trash-2";
     import TriangleAlert from "@lucide/svelte/icons/triangle-alert";
     import Undo from "@lucide/svelte/icons/undo";
@@ -29,8 +31,12 @@
     let aiCleanupError = $state(null);
     let showAIConfirmation = $state(false);
 
-    // Time format toggle state - true for hh:mm:ss, false for raw seconds
-    let showFormattedTime = $state(true);
+    let showSettings = $state(false);
+    let editorSettings = $state({
+        tab_navigation: false,
+        hide_transcriptions: false,
+        show_formatted_time: true
+    });
 
     // Store textarea references for auto-resizing
     let textareaRefs = new Map();
@@ -42,9 +48,14 @@
         ),
     );
 
+    let showTranscriptions = $derived(
+        hasTranscriptions && !editorSettings.hide_transcriptions
+    );
+
     // Load chapters and AI options when component mounts
     onMount(async () => {
         mounted = true;
+        await loadEditorSettings();
         await loadChapters();
         window.addEventListener("keydown", handleKeydown);
     });
@@ -96,13 +107,54 @@
         }
     });
 
-    // Keyboard shortcuts for undo/redo
+    async function loadEditorSettings() {
+        try {
+            const response = await api.config.getEditorSettings();
+            editorSettings = response;
+        } catch (err) {
+            console.warn('Failed to load editor settings:', err);
+        }
+    }
+
+    async function saveEditorSettings(updates) {
+        try {
+            const response = await api.config.updateEditorSettings(updates);
+            editorSettings = response.editor_settings;
+        } catch (err) {
+            error = handleApiError(err);
+        }
+    }
+
+    function toggleSettingsPanel() {
+        showSettings = !showSettings;
+    }
+
+    async function handleTabNavigationChange(event) {
+        const enabled = event.target.checked;
+        await saveEditorSettings({ tab_navigation: enabled });
+    }
+
+    async function handleHideTranscriptionsChange(event) {
+        const enabled = event.target.checked;
+        await saveEditorSettings({ hide_transcriptions: enabled });
+    }
+
+    async function handleTimeFormatChange(event) {
+        const enabled = event.target.checked;
+        await saveEditorSettings({ show_formatted_time: enabled });
+    }
+
+    // Keyboard shortcuts
     function handleKeydown(event) {
         // Check if user is typing in an input field
         if (
             event.target.tagName === "TEXTAREA" ||
             event.target.tagName === "INPUT"
         ) {
+            if (event.key === "Tab" && editorSettings.tab_navigation) {
+                event.preventDefault();
+                handleTabNavigation(event.target, event.shiftKey);
+            }
             return;
         }
 
@@ -119,6 +171,66 @@
             event.preventDefault();
             redo();
         }
+    }
+
+    function handleTabNavigation(currentTextarea, isReverse = false) {
+        const selectedChapters = $chapters.filter(ch => ch.selected);
+        const currentChapterId = getCurrentChapterIdFromTextarea(currentTextarea);
+        const currentChapterIndex = selectedChapters.findIndex(ch => ch.id === currentChapterId);
+        
+        if (currentChapterIndex === -1) return;
+        
+        let targetChapter = null;
+        
+        if (isReverse) {
+            if (currentChapterIndex > 0) {
+                targetChapter = selectedChapters[currentChapterIndex - 1];
+            }
+        } else {
+            if (currentChapterIndex < selectedChapters.length - 1) {
+                targetChapter = selectedChapters[currentChapterIndex + 1];
+            }
+        }
+        
+        if (targetChapter) {
+            const targetTextarea = textareaRefs.get(targetChapter.id);
+            if (targetTextarea) {
+                targetTextarea.focus();
+                targetTextarea.select();
+                
+                scrollToFocusedInput(targetTextarea);
+            }
+        }
+    }
+
+    function scrollToFocusedInput(textarea) {
+        requestAnimationFrame(() => {
+            const textareaRect = textarea.getBoundingClientRect();
+            const stickyBar = document.querySelector('.sticky-action-bar');
+            const stickyBarRect = stickyBar ? stickyBar.getBoundingClientRect() : null;
+            
+            const bottomBarHeight = stickyBarRect ? stickyBarRect.height : 0;
+            const padding = 32;
+            const scrollTarget = textareaRect.bottom + bottomBarHeight + padding;
+            const viewportHeight = window.innerHeight;
+            
+            if (scrollTarget > viewportHeight) {
+                const scrollOffset = scrollTarget - viewportHeight;
+                window.scrollBy({
+                    top: scrollOffset,
+                    behavior: 'smooth'
+                });
+            }
+        });
+    }
+
+    function getCurrentChapterIdFromTextarea(textarea) {
+        for (const [chapterId, ref] of textareaRefs.entries()) {
+            if (ref === textarea) {
+                return chapterId;
+            }
+        }
+        return null;
     }
 
     async function loadChapters() {
@@ -208,7 +320,7 @@
 
     // Format timestamp
     function formatTimestamp(seconds) {
-        if (!showFormattedTime) {
+        if (!editorSettings.show_formatted_time) {
             // Show raw seconds with 2 decimal places
             return seconds.toFixed(2);
         }
@@ -223,11 +335,6 @@
         } else {
             return `${minutes}:${secs.toString().padStart(2, "0")}`;
         }
-    }
-
-    // Toggle time format display
-    function toggleTimeFormat() {
-        showFormattedTime = !showFormattedTime;
     }
 
     // Title editing with debounce
@@ -380,7 +487,7 @@
             <p>Chapters will appear here once processing is complete.</p>
         </div>
     {:else}
-        <div class="table-container">
+        <div class="table-container" class:hide-transcriptions={editorSettings.hide_transcriptions}>
             <table class="table">
                 <thead>
                 <tr>
@@ -397,21 +504,15 @@
                     : api.batch.deselectAll()}
                         />
                     </th>
-                    <th
-                            width="1"
-                            class="time-header"
-                            onclick={toggleTimeFormat}
-                            title="Click to toggle between hh:mm:ss and seconds"
-                    >
+                    <th width="1" class="time-header">
                         Time
                     </th>
-                    {#if hasTranscriptions}
+                    {#if showTranscriptions}
                         <th width="1">Transcription</th>
                         <th width="1"></th>
                     {/if}
                     <th>Title</th>
                     <th width="1">Actions</th>
-                    <!-- <th width="10">Ac</th> -->
                 </tr>
                 </thead>
                 <tbody>
@@ -426,21 +527,21 @@
                             />
                         </td>
                         <td class="timestamp">
-                            {(showFormattedTime, formatTimestamp(chapter.timestamp))}
+                            {formatTimestamp(chapter.timestamp)}
                         </td>
-                        {#if hasTranscriptions}
+                        {#if showTranscriptions}
                             <td class="original-title-cell">
-                  <span class="asr-title" title={chapter.asr_title}>
-                    {chapter.asr_title?.length > 120
-                        ? chapter.asr_title.substring(0, 120) + "…"
-                        : chapter.asr_title}
-                  </span>
+                   <span class="asr-title" title={chapter.asr_title}>
+                     {chapter.asr_title?.length > 120
+                         ? chapter.asr_title.substring(0, 120) + "…"
+                         : chapter.asr_title}
+                   </span>
                             </td>
                             <td class="restore-cell">
                                 <button
                                         class="btn btn-sm btn-outline restore-btn"
                                         onclick={() =>
-                      restoreAsrTitle(chapter.id, chapter.asr_title)}
+                       restoreAsrTitle(chapter.id, chapter.asr_title)}
                                         disabled={chapter.current_title === chapter.asr_title}
                                         title="Replace with transcribed title"
                                 >
@@ -499,8 +600,78 @@
 
         <!-- Sticky Action Bar -->
         <div class="sticky-action-bar">
+            <!-- Settings Panel -->
+            {#if showSettings}
+                <div class="settings-section">
+                    <div class="settings-content">
+                        <h4>Editor Settings</h4>
+                        <div class="setting-item">
+                            <label class="setting-label">
+                                <input
+                                    type="checkbox"
+                                    checked={editorSettings.tab_navigation}
+                                    onchange={handleTabNavigationChange}
+                                />
+                                <span class="setting-text">
+                                    Tab to Next Title
+                                </span>
+                            </label>
+                            <div class="setting-description">
+                                Press Tab while editing a chapter title to move focus to the next selected chapter
+                            </div>
+                        </div>
+
+                        {#if hasTranscriptions}
+                            <div class="setting-item">
+                                <label class="setting-label">
+                                    <input
+                                        type="checkbox"
+                                        checked={editorSettings.hide_transcriptions}
+                                        onchange={handleHideTranscriptionsChange}
+                                    />
+                                    <span class="setting-text">
+                                        Hide Transcriptions
+                                    </span>
+                                </label>
+                                <div class="setting-description">
+                                    Hide the original transcriptions to focus on editing titles
+                                </div>
+                            </div>
+                        {/if}
+
+                        <div class="setting-item">
+                            <label class="setting-label">
+                                <input
+                                    type="checkbox"
+                                    checked={editorSettings.show_formatted_time}
+                                    onchange={handleTimeFormatChange}
+                                />
+                                <span class="setting-text">
+                                    Format Timestamps
+                                </span>
+                            </label>
+                            <div class="setting-description">
+                                Show timestamps as hh:mm:ss instead of seconds
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {/if}
+
             <div class="action-bar-content">
                 <div class="selection-info">
+                    <div class="settings-control">
+                        <div class="chevron-indicator" class:expanded={showSettings}>
+                            <ChevronUp size="12"/>
+                        </div>
+                        <button
+                            class="settings-toggle"
+                            onclick={toggleSettingsPanel}
+                            title="Settings"
+                        >
+                            <Settings size="20"/>
+                        </button>
+                    </div>
           <span class="badge badge-primary">
             {$selectionStats.selected} of {$selectionStats.total} selected
           </span>
@@ -626,16 +797,6 @@
         text-align: left;
     }
 
-    .time-header {
-        cursor: pointer;
-        user-select: none;
-        position: relative;
-    }
-
-    .time-header:hover {
-        background-color: var(--hover-bg);
-    }
-
     .chapter-row {
         transition: opacity 0.1s ease;
     }
@@ -711,6 +872,11 @@
         -ms-overflow-style: none;
         margin-top: 0.2rem;
         margin-bottom: -0.25rem;
+    }
+
+    :global(.hide-transcriptions) .chapter-title-input {
+        max-height: 2.5rem;
+        overflow: hidden;
     }
 
     .chapter-title-input::-webkit-scrollbar {
@@ -895,5 +1061,95 @@
     .action-bar-verify {
         padding: 0 0.6rem 0 1rem;
         gap: 0.20rem;
+    }
+
+    .settings-section {
+        border-bottom: 1px solid var(--border-color);
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+    }
+
+    .settings-content h4 {
+        margin: 0 0 1rem 0;
+        color: var(--text-primary);
+        font-size: 1rem;
+        font-weight: 600;
+    }
+
+    .setting-item {
+        margin-bottom: 0.75rem;
+    }
+
+    .setting-label {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5rem;
+        cursor: pointer;
+        font-size: 0.875rem;
+    }
+
+    .setting-label input[type="checkbox"] {
+        margin-top: 0.25rem;
+        flex-shrink: 0;
+    }
+
+    .setting-text {
+        color: var(--text-primary);
+        font-weight: 500;
+    }
+
+    .setting-description {
+        margin-top: 0.25rem;
+        margin-left: 1.75rem;
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        line-height: 1.4;
+    }
+
+    .settings-toggle {
+        background: none;
+        border: none;
+        color: var(--text-secondary);
+        cursor: pointer;
+        padding: 0.25rem;
+        border-radius: 0.25rem;
+        margin-right: 0.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+    }
+
+    .settings-toggle:hover {
+        color: var(--text-primary);
+        background-color: var(--hover-bg);
+    }
+
+    .selection-info {
+        display: flex;
+        align-items: center;
+    }
+
+    .settings-control {
+        position: relative;
+        display: flex;
+        align-items: center;
+        margin-right: 0.5rem;
+    }
+
+    .chevron-indicator {
+        position: absolute;
+        top: -14px;
+        left: 50%;
+        transform: translateX(-10px);
+        color: var(--text-muted);
+        transition: all 0.15s ease;
+        z-index: 1;
+        pointer-events: none;
+    }
+
+    .chevron-indicator.expanded {
+        top: 16px;
+        transform: translateX(-10px) rotate(180deg);
     }
 </style>
