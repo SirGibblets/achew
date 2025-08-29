@@ -86,7 +86,7 @@ function createAudioStore() {
         subscribe,
 
         // Playback controls
-        async play(segmentId) {
+        async play(segmentId, chapterTimestamp = null) {
             const audio = createAudioElement();
 
             update(state => ({
@@ -103,11 +103,11 @@ function createAudioStore() {
                 audio.src = '';
                 audio.load();
 
-                // Get segment URL with cache-busting
-                const segmentUrl = api.audio.getSegmentUrl(segmentId);
+                // Get streaming URL
+                const streamUrl = api.audio.getStreamUrl();
 
                 // Set new source
-                audio.src = segmentUrl;
+                audio.src = streamUrl;
 
                 // Force load to ensure fresh content
                 audio.load();
@@ -119,7 +119,25 @@ function createAudioStore() {
                     audioElement: audio
                 }));
 
-                // Start playback from beginning
+                if (chapterTimestamp !== null) {
+                    await new Promise((resolve, reject) => {
+                        const onLoadedMetadata = () => {
+                            audio.removeEventListener('loadedmetadata', onLoadedMetadata);
+                            audio.removeEventListener('error', onError);
+                            resolve();
+                        };
+                        const onError = (e) => {
+                            audio.removeEventListener('loadedmetadata', onLoadedMetadata);
+                            audio.removeEventListener('error', onError);
+                            reject(e);
+                        };
+                        audio.addEventListener('loadedmetadata', onLoadedMetadata);
+                        audio.addEventListener('error', onError);
+                    });
+
+                    audio.currentTime = chapterTimestamp;
+                }
+
                 await audio.play();
 
             } catch (error) {
@@ -174,39 +192,6 @@ function createAudioStore() {
             if (audioElement && audioElement.duration) {
                 const time = (percent / 100) * audioElement.duration;
                 this.seek(time);
-            }
-        },
-
-        // Segment management
-        async loadSegments() {
-            update(state => ({...state, loading: true, error: null}));
-
-            try {
-                const response = await api.audio.listSegments();
-                const segments = response.segments;
-
-                // Create URL map
-                const segmentUrls = new Map();
-                segments.forEach(segment => {
-                    segmentUrls.set(segment.segment_id, segment.url);
-                });
-
-                update(state => ({
-                    ...state,
-                    segments,
-                    segmentUrls,
-                    loading: false
-                }));
-
-                return segments;
-            } catch (error) {
-                const errorMessage = `Failed to load segments: ${error.message}`;
-                update(state => ({
-                    ...state,
-                    loading: false,
-                    error: errorMessage
-                }));
-                throw error;
             }
         },
 

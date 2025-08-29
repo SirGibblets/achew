@@ -310,8 +310,10 @@
                 // Stop the current playback instead of pausing
                 audio.stop();
             } else {
-                // Always start fresh playback (no resume functionality)
-                await audio.play(chapterId);
+                const chapter = $chapters.find(ch => ch.id === chapterId);
+                const chapterTimestamp = chapter ? chapter.timestamp : null;
+                
+                await audio.play(chapterId, chapterTimestamp);
             }
         } catch (err) {
             error = `Failed to play audio: ${err.message}`;

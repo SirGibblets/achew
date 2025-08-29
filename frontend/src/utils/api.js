@@ -289,14 +289,10 @@ export const batch = {
 
 // Audio API
 export const audio = {
-    getSegmentUrl(segmentId) {
-        // Add cache-busting timestamp to prevent stale audio cache
+    getStreamUrl() {
         const timestamp = Date.now();
-        return `${API_BASE}/api/audio/segment/${segmentId}?t=${timestamp}`;
-    },
-
-    async listSegments() {
-        return apiRequest('/audio/segments');
+        let url = `${API_BASE}/api/audio/stream?t=${timestamp}`;
+        return url;
     },
 };
 

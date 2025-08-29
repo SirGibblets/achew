@@ -1,9 +1,8 @@
 import logging
 import mimetypes
 import os
-import tempfile
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from ...app import get_app_state
@@ -40,187 +39,75 @@ def _get_audio_mime_type(file_path: str) -> str:
     return mime_type
 
 
-def _get_audio_format_info(file_path: str) -> tuple[str, str]:
-    """Get format and MIME type for audio file"""
-    file_path_lower = file_path.lower()
-
-    if file_path_lower.endswith(".aac"):
-        return "aac", "audio/aac"
-    elif file_path_lower.endswith(".wav"):
-        return "wav", "audio/wav"
-    elif file_path_lower.endswith(".mp3"):
-        return "mp3", "audio/mpeg"
-    elif file_path_lower.endswith(".m4b"):
-        return "m4b", "audio/mp4"
-    elif file_path_lower.endswith(".m4a"):
-        return "m4a", "audio/mp4"
-    elif file_path_lower.endswith(".flac"):
-        return "flac", "audio/flac"
-    elif file_path_lower.endswith(".ogg"):
-        return "ogg", "audio/ogg"
-    elif file_path_lower.endswith(".opus"):
-        return "opus", "audio/opus"
-    elif file_path_lower.endswith(".wma"):
-        return "wma", "audio/x-ms-wma"
-    else:
-        # Try to get MIME type and derive format
-        mime_type = _get_audio_mime_type(file_path)
-        format_name = mime_type.split("/")[-1] if "/" in mime_type else "unknown"
-        return format_name, mime_type
-
-
-def _get_chapter_and_segment_path(segment_id: str) -> tuple:
-    """Common logic to get app state, chapter, and segment path"""
-    app_state = get_app_state()
-
-    if not app_state.pipeline:
-        raise HTTPException(status_code=404, detail="Pipeline not found")
-
-    # Find the chapter by segment_id (which should be chapter_id)
-    try:
-        chapter_id = int(segment_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid segment ID")
-
-    chapter = None
-    for ch in app_state.pipeline.chapters:
-        if ch.id == chapter_id:
-            chapter = ch
-            break
-
-    if not chapter:
-        raise HTTPException(status_code=404, detail="Chapter not found")
-
-    # Get the audio segment file path
-    segment_path = chapter.audio_segment_path
-
-    if not segment_path:
-        raise HTTPException(status_code=404, detail="Audio segment path not configured")
-
-    return app_state, chapter, segment_path
-
-
-@router.get("/audio/segment/{segment_id}")
-async def get_audio_segment(segment_id: str):
-    """Stream audio segment for a chapter"""
-    try:
-        app_state, chapter, segment_path = _get_chapter_and_segment_path(segment_id)
-
-        if not os.path.exists(segment_path):
-            logger.error(f"Audio segment file does not exist: {segment_path}")
-            # Log some debugging info about the temp directories
-            sys_tmp_dir = tempfile.gettempdir()
-            base_tmp_dir = os.path.join(sys_tmp_dir, "achew")
-            logger.error(f"Base temp directory exists: {os.path.exists(base_tmp_dir)}")
-            if os.path.exists(base_tmp_dir):
-                try:
-                    temp_dirs = [d for d in os.listdir(base_tmp_dir) if d.startswith("pipeline_")]
-                    logger.error(f"Pipeline temp directories: {temp_dirs}")
-                    for temp_dir in temp_dirs:
-                        temp_dir_path = os.path.join(base_tmp_dir, temp_dir)
-                        if os.path.exists(temp_dir_path):
-                            files = os.listdir(temp_dir_path)
-                            logger.error(f"Files in {temp_dir}: {files}")
-                except Exception as e:
-                    logger.error(f"Error listing temp directories: {e}")
-            raise HTTPException(status_code=404, detail="Audio segment file not found")
-
-        # Determine MIME type
-        mime_type = _get_audio_mime_type(segment_path)
-
-        # Stream the file
-        def generate_audio():
-            with open(segment_path, "rb") as audio_file:
-                while chunk := audio_file.read(8192):
-                    yield chunk
-
-        file_size = os.path.getsize(segment_path)
-
-        return StreamingResponse(
-            generate_audio(),
-            media_type=mime_type,
-            headers={
-                "Content-Length": str(file_size),
-                "Accept-Ranges": "bytes",
-                "Cache-Control": "no-cache, no-store, must-revalidate",
-                "Pragma": "no-cache",
-                "Expires": "0",
-            },
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to get audio segment: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/audio/segments")
-async def list_audio_segments():
-    """List available audio segments for the current session"""
+@router.get("/audio/stream")
+async def stream_book_audio(request: Request):
+    """Stream book audio from main file"""
     try:
         app_state = get_app_state()
 
         if not app_state.pipeline:
             raise HTTPException(status_code=404, detail="Pipeline not found")
 
-        segments = []
-        for chapter in app_state.pipeline.chapters:
-            segment_info = {
-                "segment_id": str(chapter.id),
-                "chapter_id": chapter.id,
-                "title": chapter.current_title,
-                "timestamp": chapter.timestamp,
-                "selected": chapter.selected,
-                "url": f"/api/audio/segment/{chapter.id}",
-                "available": bool(chapter.audio_segment_path and os.path.exists(chapter.audio_segment_path)),
-            }
+        if not app_state.pipeline.audio_file_path:
+            raise HTTPException(status_code=404, detail="Book audio file not available")
 
-            # Add file info if available
-            if chapter.audio_segment_path and os.path.exists(chapter.audio_segment_path):
-                try:
-                    file_size = os.path.getsize(chapter.audio_segment_path)
-                    segment_info["file_size"] = file_size
+        book_audio_path = app_state.pipeline.audio_file_path
 
-                    # Determine format from extension
-                    format_name, mime_type = _get_audio_format_info(chapter.audio_segment_path)
-                    segment_info["format"] = format_name
-                    segment_info["mime_type"] = mime_type
+        if not os.path.exists(book_audio_path):
+            raise HTTPException(status_code=404, detail="Book audio file not found")
 
-                except Exception as e:
-                    logger.warning(f"Failed to get file info for {chapter.audio_segment_path}: {e}")
+        file_size = os.path.getsize(book_audio_path)
+        mime_type = _get_audio_mime_type(book_audio_path)
 
-            segments.append(segment_info)
+        range_header = request.headers.get("range")
 
-        return {
-            "segments": segments,
-            "total_segments": len(segments),
-            "available_segments": len([s for s in segments if s["available"]]),
-        }
+        if range_header:
+            try:
+                range_match = range_header.replace("bytes=", "").split("-")
+                start = int(range_match[0]) if range_match[0] else 0
+                end = int(range_match[1]) if range_match[1] else file_size - 1
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to list audio segments: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+                start = max(0, start)
+                end = min(file_size - 1, end)
+                content_length = end - start + 1
 
+                def generate_ranged_audio():
+                    with open(book_audio_path, "rb") as audio_file:
+                        audio_file.seek(start)
+                        remaining = content_length
+                        while remaining > 0:
+                            chunk_size = min(8192, remaining)
+                            chunk = audio_file.read(chunk_size)
+                            if not chunk:
+                                break
+                            remaining -= len(chunk)
+                            yield chunk
 
-@router.head("/audio/segment/{segment_id}")
-async def head_audio_segment(segment_id: str):
-    """Get audio segment metadata without content"""
-    try:
-        app_state, chapter, segment_path = _get_chapter_and_segment_path(segment_id)
+                return StreamingResponse(
+                    generate_ranged_audio(),
+                    status_code=206,
+                    media_type=mime_type,
+                    headers={
+                        "Content-Range": f"bytes {start}-{end}/{file_size}",
+                        "Accept-Ranges": "bytes",
+                        "Content-Length": str(content_length),
+                        "Cache-Control": "no-cache, no-store, must-revalidate",
+                        "Pragma": "no-cache",
+                        "Expires": "0",
+                    },
+                )
+            except (ValueError, IndexError):
+                # Invalid range header, fall back to full file
+                pass
 
-        if not os.path.exists(segment_path):
-            raise HTTPException(status_code=404, detail="Audio segment not found")
+        # Serve full file if no range or invalid range
+        def generate_full_audio():
+            with open(book_audio_path, "rb") as audio_file:
+                while chunk := audio_file.read(8192):
+                    yield chunk
 
-        # Determine MIME type
-        mime_type = _get_audio_mime_type(segment_path)
-
-        file_size = os.path.getsize(segment_path)
-
-        return Response(
-            content=b"",
+        return StreamingResponse(
+            generate_full_audio(),
             media_type=mime_type,
             headers={
                 "Content-Length": str(file_size),
@@ -234,5 +121,5 @@ async def head_audio_segment(segment_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get audio segment metadata: {e}")
+        logger.error(f"Failed to stream book audio: {e}")
         raise HTTPException(status_code=500, detail=str(e))
