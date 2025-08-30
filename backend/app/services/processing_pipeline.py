@@ -6,7 +6,6 @@ import subprocess
 import tempfile
 import uuid
 from typing import Optional, List, Dict, Any, Tuple
-from datetime import datetime
 
 from app.app import get_app_state
 from app.models.abs import AudioFile, Book
@@ -17,9 +16,10 @@ from .audio_service import AudioProcessingService
 from .smart_detection_service import SmartDetectionService
 from .vad_detection_service import VadDetectionService
 from ..core.config import get_app_config
-from ..models.chapter import ChapterData, ChapterHistory, ChapterBatchHistory
-from ..models.enums import RestartStep, Step, ActionType
+from ..models.chapter import ChapterData
+from ..models.enums import RestartStep, Step
 from ..models.progress import ProgressCallback
+from ..models.chapter_operation import AICleanupOperation, BatchChapterOperation, ChapterOperation
 
 logger = logging.getLogger(__name__)
 
@@ -134,7 +134,7 @@ class ProcessingPipeline:
 
         # Chapter management
         self.chapters: List[ChapterData] = []
-        self.history_stack: List[ChapterBatchHistory] = []
+        self.history_stack: List[ChapterOperation] = []
         self.history_index: int = -1
 
         # Configuration options (per-pipeline)
@@ -156,6 +156,8 @@ class ProcessingPipeline:
         self.transcribed_chapters: List[ChapterData] = []
         self.cue_sets: Dict[int, List[float]] = {}
         self.include_unaligned: List[str] = []
+
+        self.detected_silences: List[Tuple[float, float]] = []  # List of (silence_start, silence_end)
 
     async def __aenter__(self):
         return self
@@ -336,10 +338,12 @@ class ProcessingPipeline:
             self.cleanup_segment_files()
             self.cues = []
             self.include_unaligned = []
+            self.detected_silences = []
             self.step = Step.CUE_SET_SELECTION
 
         if step_num <= RestartStep.SELECT_CUE_SOURCE.ordinal:
             self.cue_sets = {}
+            self.detected_silences = []
             self.step = Step.SELECT_CUE_SOURCE
 
         # Background tasks have been properly cancelled, safe to broadcast step change
@@ -352,21 +356,6 @@ class ProcessingPipeline:
         selected = sum(1 for c in self.chapters if c.selected)
         return {"total": total, "selected": selected, "unselected": total - selected}
 
-    def get_chapter_by_id(self, chapter_id: int) -> Optional[ChapterData]:
-        """Get chapter by ID"""
-        for chapter in self.chapters:
-            if chapter.id == chapter_id:
-                return chapter
-        return None
-
-    def remove_chapter_by_id(self, chapter_id: int) -> bool:
-        """Remove chapter by ID"""
-        for i, chapter in enumerate(self.chapters):
-            if chapter.id == chapter_id:
-                del self.chapters[i]
-                return True
-        return False
-
     def can_undo(self) -> bool:
         """Check if undo is possible"""
         return self.history_index >= 0
@@ -375,50 +364,13 @@ class ProcessingPipeline:
         """Check if redo is possible"""
         return self.history_index < len(self.history_stack) - 1
 
-    def add_to_history(self, action_type: ActionType, data: Dict[str, Any]):
+    def add_to_history(self, operation: ChapterOperation):
         """Add an action to the history stack"""
-        import uuid
-
-        # Determine old and new values based on action type
-        if action_type == ActionType.EDIT_TITLE:
-            old_value = data.get("old_title")
-            new_value = data.get("new_title")
-        elif action_type == ActionType.DELETE:
-            # For delete, store the chapter data in old_value
-            old_value = data.get("chapter_data")
-            new_value = None
-        elif action_type == ActionType.AI_CLEANUP:
-            # For AI cleanup, store both title and selection changes
-            old_value = {
-                "title_changes": data.get("title_changes", []),
-                "selection_changes": data.get("selection_changes", []),
-            }
-            new_value = None
-        else:
-            # Fallback for other action types
-            old_value = data.get("old_value")
-            new_value = data.get("new_value")
-
-        history_entry = ChapterHistory(
-            action_type=action_type,
-            chapter_id=data.get("chapter_id"),
-            old_value=old_value,
-            new_value=new_value,
-            timestamp=datetime.now(),
-        )
-
-        batch_history = ChapterBatchHistory(
-            batch_id=str(uuid.uuid4()),
-            operations=[history_entry],
-            description=f"{action_type.value} operation",
-            timestamp=datetime.now(),
-        )
-
         # Remove any future history if we're not at the end
         if self.history_index < len(self.history_stack) - 1:
             self.history_stack = self.history_stack[: self.history_index + 1]
 
-        self.history_stack.append(batch_history)
+        self.history_stack.append(operation)
         self.history_index = len(self.history_stack) - 1
 
     def undo(self) -> Dict[str, Any]:
@@ -426,92 +378,20 @@ class ProcessingPipeline:
         if not self.can_undo():
             raise ValueError("Cannot undo")
 
-        # Get the current action
-        current_action = self.history_stack[self.history_index]
-        operation = current_action.operations[0]
+        operation = self.history_stack[self.history_index]
+        operation.undo(self)
 
-        # Move back in history
         self.history_index -= 1
-        action_type_str = operation.action_type.value
-
-        # Build data structure based on action type
-        data = {"chapter_id": operation.chapter_id}
-
-        if operation.action_type == ActionType.EDIT_TITLE:
-            data.update({"old_title": operation.old_value, "new_title": operation.new_value})
-        elif operation.action_type == ActionType.AI_CLEANUP:
-            data.update(
-                {
-                    "title_changes": operation.old_value.get("title_changes", []),
-                    "selection_changes": operation.old_value.get("selection_changes", []),
-                }
-            )
-        elif operation.action_type == ActionType.DELETE:
-            # For delete operations, we need to get the chapter_index from the stored data
-            # The chapter_id is stored normally, but we need the index for restoration
-            chapter_data = operation.old_value
-            if isinstance(chapter_data, dict) and "id" in chapter_data:
-                # Find the current index of this chapter ID (it may have changed due to re-indexing)
-                chapter_index = None
-                for i, ch in enumerate(self.chapters):
-                    if ch.id == chapter_data["id"]:
-                        chapter_index = i
-                        break
-                # If not found, use the original chapter_id as fallback
-                if chapter_index is None:
-                    chapter_index = operation.chapter_id
-            else:
-                chapter_index = operation.chapter_id
-
-            data.update({"chapter_index": chapter_index, "chapter_data": operation.old_value})
-
-        return {"action_type": action_type_str, "data": data}
 
     def redo(self) -> Dict[str, Any]:
         """Redo the next action"""
         if not self.can_redo():
             raise ValueError("Cannot redo")
 
-        # Move forward in history
+        operation = self.history_stack[self.history_index + 1]
+        operation.apply(self)
+
         self.history_index += 1
-
-        # Get the action to redo
-        action_to_redo = self.history_stack[self.history_index]
-        operation = action_to_redo.operations[0]
-
-        action_type_str = operation.action_type.value
-
-        # Build data structure based on action type
-        data = {"chapter_id": operation.chapter_id}
-
-        if operation.action_type == ActionType.EDIT_TITLE:
-            data.update({"old_title": operation.old_value, "new_title": operation.new_value})
-        elif operation.action_type == ActionType.AI_CLEANUP:
-            data.update(
-                {
-                    "title_changes": operation.old_value.get("title_changes", []),
-                    "selection_changes": operation.old_value.get("selection_changes", []),
-                }
-            )
-        elif operation.action_type == ActionType.DELETE:
-            # For delete operations, we need to get the chapter_index from the stored data
-            chapter_data = operation.old_value
-            if isinstance(chapter_data, dict) and "id" in chapter_data:
-                # Find the current index of this chapter ID
-                chapter_index = None
-                for i, ch in enumerate(self.chapters):
-                    if ch.id == chapter_data["id"]:
-                        chapter_index = i
-                        break
-                # If not found, use the original chapter_id as fallback
-                if chapter_index is None:
-                    chapter_index = operation.chapter_id
-            else:
-                chapter_index = operation.chapter_id
-
-            data.update({"chapter_index": chapter_index, "chapter_data": operation.old_value})
-
-        return {"action_type": action_type_str, "data": data}
 
     def update_smart_detect_config(self, config_data: Dict[str, float]) -> Dict[str, Any]:
         """Update smart detect configuration with validation"""
@@ -580,7 +460,7 @@ class ProcessingPipeline:
         try:
             audio_file_paths = []
             completed_files = 0
-            
+
             total_bytes_all_files = sum(audio_file.metadata.size for audio_file in audio_files)
             total_downloaded_bytes = 0
 
@@ -608,7 +488,9 @@ class ProcessingPipeline:
                     if total_current > 0:
                         # Calculate overall downloaded bytes across all files
                         overall_downloaded = total_downloaded_so_far + downloaded_current
-                        overall_percent = (overall_downloaded / total_bytes_all_files) * 100 if total_bytes_all_files > 0 else 0
+                        overall_percent = (
+                            (overall_downloaded / total_bytes_all_files) * 100 if total_bytes_all_files > 0 else 0
+                        )
 
                         speed_bps = getattr(download_progress, "speed", 0)
 
@@ -935,6 +817,8 @@ class ProcessingPipeline:
         # Store silences in the detection service for clustering
         detection_service.silences = silences
 
+        self.detected_silences = silences.copy() if silences else []
+
         await self._cluster_and_set_cues(detection_service)
 
     async def _detect_cues_vad(self):
@@ -965,6 +849,8 @@ class ProcessingPipeline:
 
             # Store silences in the detection service for clustering
             service.silences = silences
+
+            self.detected_silences = silences.copy() if silences else []
 
             await self._cluster_and_set_cues(service)
 
@@ -1115,7 +1001,6 @@ class ProcessingPipeline:
                 initial_title = ""
 
             chapter = ChapterData(
-                id=i,
                 timestamp=timestamp,
                 asr_title=initial_title,
                 current_title=initial_title,
@@ -1182,7 +1067,6 @@ class ProcessingPipeline:
             # Create chapter objects with empty titles
             for i, timestamp in enumerate(self.cues):
                 chapter = ChapterData(
-                    id=i,
                     timestamp=timestamp,
                     asr_title="",
                     current_title="",
@@ -1460,74 +1344,48 @@ class ProcessingPipeline:
                 logger.error(f"AI cleanup failed, no changes made to chapters: {e}")
                 raise
 
-            # Track all changes for batch history
-            title_changes = []
-            selection_changes = []
             deselected_count = 0
 
-            # Update chapter titles and deselect chapters with empty/None titles
+            if len(processed_titles) != len(selected_chapters):
+                raise ValueError("An incorrect chapter count was returned. Please try again.")
+
+            operations: list[AICleanupOperation] = []
+
+            # Create AI cleanup operations for each chapter
             for i, chapter in enumerate(selected_chapters):
                 if i < len(processed_titles):
-                    processed_title = processed_titles[i]
+                    new_title = processed_titles[i]
 
                     # Check if title is None, empty, just whitespace, or the literal string "null"
                     is_valid_title = (
-                        processed_title is not None
-                        and str(processed_title).strip() != ""
-                        and str(processed_title).strip().lower() != "null"
+                        new_title is not None
+                        and str(new_title).strip() != ""
+                        and str(new_title).strip().lower() != "null"
                     )
 
                     if is_valid_title:
-                        # Track the title change
-                        title_changes.append(
-                            {
-                                "chapter_id": chapter.id,
-                                "old_title": chapter.current_title,
-                                "new_title": processed_title,
-                            }
+                        operations.append(
+                            AICleanupOperation(
+                                chapter_id=chapter.id,
+                                old_title=chapter.current_title,
+                                new_title=new_title,
+                            )
                         )
-                        chapter.current_title = processed_title
                     else:
-                        # Title is empty/None - deselect the chapter and optionally clear the title
-                        changes_made = False
-
-                        # Only clear the title if keep_deselected_titles is False
-                        if not keep_deselected_titles and chapter.current_title.strip() != "":
-                            title_changes.append(
-                                {
-                                    "chapter_id": chapter.id,
-                                    "old_title": chapter.current_title,
-                                    "new_title": "",
-                                }
+                        operations.append(
+                            AICleanupOperation(
+                                chapter_id=chapter.id,
+                                old_title=chapter.current_title,
+                                new_title=chapter.current_title if keep_deselected_titles else "",
+                                selected=False,
                             )
-                            chapter.current_title = ""
-                            changes_made = True
+                        )
 
-                        # Deselect the chapter if it's currently selected
-                        if chapter.selected:
-                            selection_changes.append(
-                                {
-                                    "chapter_id": chapter.id,
-                                    "old_selected": True,
-                                    "new_selected": False,
-                                }
-                            )
-                            chapter.selected = False
-                            changes_made = True
+                        deselected_count += 1
 
-                        if changes_made:
-                            deselected_count += 1
-
-            # Add batch AI cleanup to history if there were changes
-            if title_changes or selection_changes:
-                self.add_to_history(
-                    ActionType.AI_CLEANUP,
-                    {
-                        "title_changes": title_changes,
-                        "selection_changes": selection_changes,
-                        "count": len(title_changes) + len(selection_changes),
-                    },
-                )
+            batch_operation = BatchChapterOperation(operations=operations)
+            batch_operation.apply(self)
+            self.add_to_history(batch_operation)
 
             # Update progress message to include deselection info
             if deselected_count > 0:
@@ -1551,8 +1409,8 @@ class ProcessingPipeline:
             return True
 
         except ValueError as e:
-            error_msg = f"AI configuration error: {str(e)}"
-            logger.error(f"AI cleanup configuration error: {e}")
+            error_msg = f"AI cleanup error: {str(e)}"
+            logger.error(f"AI cleanup error: {e}")
             asyncio.create_task(get_app_state().broadcast_step_change(Step.CHAPTER_EDITING, error_message=error_msg))
             return False
         except Exception as e:

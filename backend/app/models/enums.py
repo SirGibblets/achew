@@ -39,12 +39,3 @@ class RestartStep(str, Enum):
     @property
     def ordinal(self):
         return list(self.__class__.__members__).index(self.name)
-
-
-class ActionType(str, Enum):
-    EDIT_TITLE = "edit_title"
-    DELETE = "delete"
-    TOGGLE_SELECT = "toggle_select"
-    SELECT_ALL = "select_all"
-    DESELECT_ALL = "deselect_all"
-    AI_CLEANUP = "ai_cleanup"

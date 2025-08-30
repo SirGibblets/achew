@@ -5,7 +5,13 @@ import json
 import io
 from datetime import datetime
 
-from app.models.enums import ActionType
+from app.models.chapter_operation import (
+    AddChapterOperation,
+    ChapterOperation,
+    DeleteChapterOperation,
+    EditTitleOperation,
+    RestoreChapterOperation,
+)
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
@@ -18,7 +24,7 @@ router = APIRouter()
 
 
 class ChapterResponse(BaseModel):
-    id: int
+    id: str
     timestamp: float
     asr_title: str
     current_title: str
@@ -81,6 +87,34 @@ class HistoryResponse(BaseModel):
     can_redo: bool
 
 
+class DetectedCue(BaseModel):
+    timestamp: float
+    gap: float
+
+
+class ExistingCue(BaseModel):
+    timestamp: float
+    title: str
+
+
+class DeletedChapter(BaseModel):
+    timestamp: float
+    title: str
+
+
+class AddOptionsResponse(BaseModel):
+    min_timestamp: float
+    max_timestamp: float
+    detected_cues: List[DetectedCue]
+    existing_cues: Dict[str, List[ExistingCue]]
+    deleted: List[DeletedChapter]
+
+
+class AddChapterRequest(BaseModel):
+    timestamp: float
+    title: str = ""
+
+
 @router.get("/chapters", response_model=ChaptersListResponse)
 async def get_chapters():
     """Get all chapters for the current session"""
@@ -119,7 +153,7 @@ async def get_chapters():
 
 
 @router.put("/chapters/{chapter_id}/title")
-async def update_chapter_title(chapter_id: int, request: UpdateTitleRequest):
+async def update_chapter_title(chapter_id: str, request: UpdateTitleRequest):
     """Update a chapter's title"""
     try:
         app_state = get_app_state()
@@ -127,28 +161,9 @@ async def update_chapter_title(chapter_id: int, request: UpdateTitleRequest):
         if not app_state.pipeline:
             raise HTTPException(status_code=404, detail="Pipeline not found")
 
-        # Find the chapter
-        chapter = None
-        for ch in app_state.pipeline.chapters:
-            if ch.id == chapter_id:
-                chapter = ch
-                break
-
-        if not chapter:
-            raise HTTPException(status_code=404, detail="Chapter not found")
-
-        # Save to history
-        app_state.pipeline.add_to_history(
-            ActionType.EDIT_TITLE,
-            {
-                "chapter_id": chapter_id,
-                "old_title": chapter.current_title,
-                "new_title": request.title,
-            },
-        )
-
-        # Update title
-        chapter.current_title = request.title
+        operation = EditTitleOperation(chapter_id=chapter_id, new_title=request.title)
+        operation.apply(app_state.pipeline)
+        app_state.pipeline.add_to_history(operation)
 
         # Broadcast updates
         await app_state.broadcast_chapter_update()
@@ -164,7 +179,7 @@ async def update_chapter_title(chapter_id: int, request: UpdateTitleRequest):
 
 
 @router.put("/chapters/{chapter_id}/select")
-async def toggle_chapter_selection(chapter_id: int, request: ToggleSelectionRequest):
+async def toggle_chapter_selection(chapter_id: str, request: ToggleSelectionRequest):
     """Toggle chapter selection status"""
     try:
         app_state = get_app_state()
@@ -198,7 +213,7 @@ async def toggle_chapter_selection(chapter_id: int, request: ToggleSelectionRequ
 
 
 @router.delete("/chapters/{chapter_id}")
-async def delete_chapter(chapter_id: int):
+async def delete_chapter(chapter_id: str):
     """Delete a chapter"""
     try:
         app_state = get_app_state()
@@ -206,19 +221,9 @@ async def delete_chapter(chapter_id: int):
         if not app_state.pipeline:
             raise HTTPException(status_code=404, detail="Pipeline not found")
 
-        # Find the chapter
-        chapter = next((ch for ch in app_state.pipeline.chapters if ch.id == chapter_id), None)
-
-        if chapter is None:
-            raise HTTPException(status_code=404, detail="Chapter not found")
-
-        # Save to history
-        app_state.pipeline.add_to_history(
-            ActionType.DELETE,
-            {"chapter_id": chapter.id},
-        )
-
-        chapter.deleted = True
+        operation = DeleteChapterOperation(chapter_id=chapter_id)
+        operation.apply(app_state.pipeline)
+        app_state.pipeline.add_to_history(operation)
 
         # Broadcast updates
         await app_state.broadcast_chapter_update()
@@ -427,58 +432,13 @@ async def undo_action(request: UndoRedoRequest):
             raise HTTPException(status_code=400, detail="Nothing to undo")
 
         # Perform undo
-        action = app_state.pipeline.undo()
-        if not action:
-            raise HTTPException(status_code=500, detail="Undo operation failed")
-
-        # Apply the reverse action
-        if action["action_type"] == "edit_title":
-            # Find and restore old title
-            chapter_id = action["data"]["chapter_id"]
-            old_title = action["data"]["old_title"]
-            for chapter in app_state.pipeline.chapters:
-                if chapter.id == chapter_id:
-                    chapter.current_title = old_title
-                    break
-
-        elif action["action_type"] == "delete":
-            # Restore deleted chapter
-            chapter_id = action["data"]["chapter_id"]
-            chapter = next((ch for ch in app_state.pipeline.chapters if ch.id == chapter_id), None)
-
-            if chapter is None:
-                raise HTTPException(status_code=404, detail="Chapter not found")
-
-            chapter.deleted = False
-
-        elif action["action_type"] == "ai_cleanup":
-            # Reverse the AI cleanup changes
-            title_changes = action["data"].get("title_changes", [])
-            selection_changes = action["data"].get("selection_changes", [])
-
-            # Reverse title changes
-            for change in title_changes:
-                chapter_id = change["chapter_id"]
-                old_title = change["old_title"]
-                for chapter in app_state.pipeline.chapters:
-                    if chapter.id == chapter_id:
-                        chapter.current_title = old_title
-                        break
-
-            # Reverse selection changes
-            for change in selection_changes:
-                chapter_id = change["chapter_id"]
-                old_selected = change["old_selected"]
-                for chapter in app_state.pipeline.chapters:
-                    if chapter.id == chapter_id:
-                        chapter.selected = old_selected
-                        break
+        app_state.pipeline.undo()
 
         # Broadcast updates
         await app_state.broadcast_chapter_update()
         await app_state.broadcast_history_update()
 
-        return {"message": "Action undone", "action": action["action_type"]}
+        return {"message": "Action undone"}
 
     except HTTPException as e:
         logger.error(f"Failed to undo action: {e}", exc_info=True)
@@ -501,55 +461,13 @@ async def redo_action(request: UndoRedoRequest):
             raise HTTPException(status_code=400, detail="Nothing to redo")
 
         # Perform redo
-        action = app_state.pipeline.redo()
-        if not action:
-            raise HTTPException(status_code=500, detail="Redo operation failed")
-
-        # Apply the action
-        if action["action_type"] == "edit_title":
-            # Find and apply new title
-            chapter_id = action["data"]["chapter_id"]
-            new_title = action["data"]["new_title"]
-            for chapter in app_state.pipeline.chapters:
-                if chapter.id == chapter_id:
-                    chapter.current_title = new_title
-                    break
-
-        elif action["action_type"] == "delete":
-            # Delete chapter again
-            chapter_id = action["data"]["chapter_id"]
-            chapter = next((ch for ch in app_state.pipeline.chapters if ch.id == chapter_id), None)
-            if chapter:
-                chapter.deleted = True
-
-        elif action["action_type"] == "ai_cleanup":
-            # Re-apply the AI cleanup changes
-            title_changes = action["data"].get("title_changes", [])
-            selection_changes = action["data"].get("selection_changes", [])
-
-            # Re-apply title changes
-            for change in title_changes:
-                chapter_id = change["chapter_id"]
-                new_title = change["new_title"]
-                for chapter in app_state.pipeline.chapters:
-                    if chapter.id == chapter_id:
-                        chapter.current_title = new_title
-                        break
-
-            # Re-apply selection changes
-            for change in selection_changes:
-                chapter_id = change["chapter_id"]
-                new_selected = change["new_selected"]
-                for chapter in app_state.pipeline.chapters:
-                    if chapter.id == chapter_id:
-                        chapter.selected = new_selected
-                        break
+        app_state.pipeline.redo()
 
         # Broadcast updates
         await app_state.broadcast_chapter_update()
         await app_state.broadcast_history_update()
 
-        return {"message": "Action redone", "action": action["action_type"]}
+        return {"message": "Action redone"}
 
     except HTTPException:
         raise
@@ -724,4 +642,129 @@ async def export_chapters_cue():
         raise
     except Exception as e:
         logger.error(f"Failed to export CUE: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/chapters/add-options/{chapter_id}", response_model=AddOptionsResponse)
+async def get_add_options(chapter_id: str):
+    """Get available options for adding a chapter after the specified chapter"""
+    try:
+        app_state = get_app_state()
+
+        if not app_state.pipeline:
+            raise HTTPException(status_code=404, detail="Pipeline not found")
+
+        current_chapter = None
+        chapters = [ch for ch in app_state.pipeline.chapters if not ch.deleted]
+
+        for chapter in chapters:
+            if chapter.id == chapter_id:
+                current_chapter = chapter
+                break
+
+        if not current_chapter:
+            raise HTTPException(status_code=404, detail="Chapter not found")
+
+        next_chapter = None
+        current_found = False
+        for chapter in sorted(chapters, key=lambda ch: ch.timestamp):
+            if current_found and not chapter.deleted:
+                next_chapter = chapter
+                break
+            if chapter.id == chapter_id:
+                current_found = True
+
+        min_timestamp_raw = current_chapter.timestamp
+        max_timestamp_raw = (next_chapter.timestamp) if next_chapter else app_state.pipeline.book.duration
+
+        min_timestamp = min_timestamp_raw + 1
+        max_timestamp = max_timestamp_raw - 1
+
+        detected_cues = []
+        if app_state.pipeline.detected_silences:
+            asr_buffer = app_state.pipeline.smart_detect_config.asr_buffer
+            for silence_start, silence_end in app_state.pipeline.detected_silences:
+                silence_end -= asr_buffer
+                if min_timestamp < silence_end < max_timestamp:
+                    detected_cues.append(DetectedCue(timestamp=silence_end, gap=silence_end - silence_start))
+        else:
+            logger.info("No preserved detection data available in pipeline")
+
+        existing_cues = {}
+        if app_state.pipeline.existing_cue_sources:
+            for source in app_state.pipeline.existing_cue_sources:
+                source_cues = []
+                for cue in source.cues:
+                    if min_timestamp < cue.timestamp < max_timestamp:
+                        source_cues.append(ExistingCue(timestamp=cue.timestamp, title=cue.title or ""))
+                if source_cues:
+                    existing_cues[source.short_name] = source_cues
+
+        deleted_chapters = []
+        for chapter in app_state.pipeline.chapters:
+            if chapter.deleted and min_timestamp < chapter.timestamp < max_timestamp:
+                deleted_chapters.append(
+                    DeletedChapter(timestamp=chapter.timestamp, title=chapter.current_title or chapter.asr_title or "")
+                )
+
+        return AddOptionsResponse(
+            min_timestamp=min_timestamp_raw + 0.25,
+            max_timestamp=max_timestamp_raw - 0.25,
+            detected_cues=detected_cues,
+            existing_cues=existing_cues,
+            deleted=deleted_chapters,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get add options: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/chapters")
+async def add_chapter(request: AddChapterRequest):
+    """Add a new chapter at the specified timestamp"""
+    try:
+        app_state = get_app_state()
+
+        if not app_state.pipeline:
+            raise HTTPException(status_code=404, detail="Pipeline not found")
+
+        existing_deleted = None
+        for chapter in app_state.pipeline.chapters:
+            if chapter.deleted and abs(chapter.timestamp - request.timestamp) < 0.25:
+                existing_deleted = chapter
+                break
+
+        operation: ChapterOperation = None
+
+        if existing_deleted:
+            operation = RestoreChapterOperation(chapter_id=existing_deleted.id)
+            if request.title:
+                operation.new_title = request.title
+
+        else:
+            from ...models.chapter import ChapterData
+            operation = AddChapterOperation(
+                chapter=ChapterData(
+                    timestamp=request.timestamp,
+                    asr_title="",
+                    current_title=request.title or "",
+                    selected=True,
+                )
+            )
+
+        operation.apply(app_state.pipeline)
+        app_state.pipeline.add_to_history(operation)
+
+        await app_state.broadcast_chapter_update()
+        await app_state.broadcast_history_update()
+
+        return {"message": "Chapter added successfully"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to add chapter: {e}")
         raise HTTPException(status_code=500, detail=str(e))

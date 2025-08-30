@@ -24,6 +24,7 @@ function createAudioStore() {
     });
 
     let audioElement = null;
+    let currentPlayPromise = null;
 
     // Create audio element
     const createAudioElement = () => {
@@ -96,8 +97,16 @@ function createAudioStore() {
             }));
 
             try {
-                // Stop current playback first to ensure clean state
-                this.stop();
+                // Cancel any current play promise
+                if (currentPlayPromise) {
+                    currentPlayPromise = null;
+                }
+
+                // Stop current audio if playing
+                if (audioElement && !audioElement.paused) {
+                    audioElement.pause();
+                    audioElement.currentTime = 0;
+                }
 
                 // Force clear audio source and reload to avoid cache issues
                 audio.src = '';
@@ -109,14 +118,13 @@ function createAudioStore() {
                 // Set new source
                 audio.src = streamUrl;
 
-                // Force load to ensure fresh content
-                audio.load();
-
-                // Update state
+                // Update state with new segment
                 update(state => ({
                     ...state,
                     currentSegmentId: segmentId,
-                    audioElement: audio
+                    audioElement: audio,
+                    isPlaying: false,
+                    currentTime: 0
                 }));
 
                 if (chapterTimestamp !== null) {
@@ -138,9 +146,19 @@ function createAudioStore() {
                     audio.currentTime = chapterTimestamp;
                 }
 
-                await audio.play();
+                // Start playback
+                currentPlayPromise = audio.play();
+                await currentPlayPromise;
+                currentPlayPromise = null;
+
+                // Update loading state
+                update(state => ({
+                    ...state,
+                    loading: false
+                }));
 
             } catch (error) {
+                currentPlayPromise = null;
                 const errorMessage = `Failed to play audio: ${error.message}`;
                 update(state => ({
                     ...state,
@@ -155,7 +173,22 @@ function createAudioStore() {
 
         // Changed from pause to stop - resets playback progress
         stop() {
-            if (audioElement) {
+            // Wait for any current play promise to complete before stopping
+            if (currentPlayPromise) {
+                currentPlayPromise.then(() => {
+                    if (audioElement) {
+                        audioElement.pause();
+                        audioElement.currentTime = 0;
+                    }
+                }).catch(() => {
+                    // Ignore errors from interrupted promises
+                    if (audioElement) {
+                        audioElement.pause();
+                        audioElement.currentTime = 0;
+                    }
+                });
+                currentPlayPromise = null;
+            } else if (audioElement) {
                 audioElement.pause();
                 audioElement.currentTime = 0;
             }
@@ -203,11 +236,17 @@ function createAudioStore() {
         // Clear segment cache when chapters change
         clearSegmentCache() {
             // Stop any current playback
-            this.stop();
+            if (audioElement) {
+                audioElement.pause();
+                audioElement.currentTime = 0;
+            }
 
             // Clear cached segment data
             update(state => ({
                 ...state,
+                isPlaying: false,
+                currentTime: 0,
+                currentSegmentId: null,
                 segments: [],
                 segmentUrls: new Map(),
                 error: null

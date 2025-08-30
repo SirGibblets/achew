@@ -248,6 +248,17 @@ export const chapters = {
             mimeType: contentType || 'text/plain'
         };
     },
+
+    async getAddOptions(chapterId) {
+        return apiRequest(`/chapters/add-options/${chapterId}`);
+    },
+
+    async add(chapterData) {
+        return apiRequest('/chapters', {
+            method: 'POST',
+            body: chapterData,
+        });
+    },
 };
 
 // Batch operations API

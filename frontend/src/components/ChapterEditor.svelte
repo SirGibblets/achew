@@ -10,6 +10,7 @@
         session,
     } from "../stores/session.js";
     import {api, handleApiError} from "../utils/api.js";
+    import AddChapterDialog from "./AddChapterDialog.svelte";
     import AICleanupDialog from "./AICleanupDialog.svelte";
     import Icon from "./Icon.svelte";
 
@@ -19,6 +20,7 @@
     import ChevronUp from "@lucide/svelte/icons/chevron-up";
     import Pause from "@lucide/svelte/icons/pause";
     import Play from "@lucide/svelte/icons/play";
+    import Plus from "@lucide/svelte/icons/plus";
     import Redo from "@lucide/svelte/icons/redo";
     import Settings from "@lucide/svelte/icons/settings";
     import Trash2 from "@lucide/svelte/icons/trash-2";
@@ -30,6 +32,8 @@
     let error = $state(null);
     let aiCleanupError = $state(null);
     let showAIConfirmation = $state(false);
+    let showAddChapterDialog = $state(false);
+    let addChapterDialogChapterId = $state(null);
 
     let showSettings = $state(false);
     let editorSettings = $state({
@@ -422,6 +426,21 @@
         }
     }
 
+    function openAddChapterDialog(chapterId) {
+        addChapterDialogChapterId = chapterId;
+        showAddChapterDialog = true;
+    }
+
+    function handleAddChapterConfirm(event) {
+        showAddChapterDialog = false;
+        addChapterDialogChapterId = null;
+    }
+
+    function handleAddChapterCancel() {
+        showAddChapterDialog = false;
+        addChapterDialogChapterId = null;
+    }
+
     // Go to review page
     function goToReview() {
         window.scrollTo({top: 0, behavior: "instant"});
@@ -515,6 +534,7 @@
                     {/if}
                     <th>Title</th>
                     <th width="1">Actions</th>
+                    <th width="1" style="min-width: 1; padding: 0;"></th>
                 </tr>
                 </thead>
                 <tbody>
@@ -585,12 +605,25 @@
                                         <Play size="16"/>
                                     {/if}
                                 </button>
+                                {#if chapter.timestamp > 0.01}
+                                    <button
+                                            class="btn btn-sm btn-danger delete-btn"
+                                            onclick={() => deleteChapter(chapter.id)}
+                                            title="Delete chapter"
+                                    >
+                                        <Trash2 size="16"/>
+                                    </button>
+                                {/if}
+                            </div>
+                        </td>
+                        <td class="add-chapter-cell-container">
+                            <div class="add-chapter-cell">
                                 <button
-                                        class="btn btn-sm btn-danger delete-btn"
-                                        onclick={() => deleteChapter(chapter.id)}
-                                        title="Delete chapter"
-                                >
-                                    <Trash2 size="16"/>
+                                    class="add-chapter-button"
+                                    onclick={() => openAddChapterDialog(chapter.id)}
+                                    title="Add chapter after this one"
+                                    >
+                                    <Plus size="16"/>
                                 </button>
                             </div>
                         </td>
@@ -735,6 +768,15 @@
         on:error={handleAICleanupError}
 />
 
+<!-- Add Chapter Dialog -->
+<AddChapterDialog
+        bind:isOpen={showAddChapterDialog}
+        chapterId={addChapterDialogChapterId}
+        editorSettings={editorSettings}
+        on:confirm={handleAddChapterConfirm}
+        on:cancel={handleAddChapterCancel}
+/>
+
 <style>
     .page-header {
         margin-bottom: 2rem;
@@ -791,8 +833,53 @@
     .table-container {
         background: var(--bg-card);
         border-radius: 0.5rem;
-        overflow: hidden;
+        overflow: visible;
         border: 1px solid var(--border-color);
+    }
+
+    .add-chapter-cell-container {
+        padding: 0;
+        height: 100%;
+        vertical-align: bottom;
+        position: relative;
+        overflow: visible;
+    }
+
+    .add-chapter-cell {
+        position: absolute;
+        bottom: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        width: auto;
+        padding: 0;
+        z-index: 10;
+    }
+
+    .add-chapter-button {
+        position: absolute;
+        width: 1.75rem;
+        height: 1.75rem;
+        top: -0.825rem;
+        left: -0.825rem;
+        border-radius: 50%;
+        border: 1px solid var(--border-color);
+        background: var(--bg-card);
+        color: var(--text-secondary);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+        transition: all 0.2s ease;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .add-chapter-button:hover {
+        background: var(--primary);
+        color: white;
+        border-color: var(--primary);
+        transform: scale(1.1);
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
     }
 
     .table thead th {

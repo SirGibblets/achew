@@ -1,5 +1,5 @@
-from .chapter import ChapterData, ChapterHistory, ChapterBatchHistory
-from .enums import Step, ActionType
+from .chapter import ChapterData
+from .enums import Step
 from .websocket import (
     WSMessage,
     WSMessageType,
@@ -14,9 +14,6 @@ from .websocket import (
 __all__ = [
     "Step",
     "ChapterData",
-    "ChapterHistory",
-    "ChapterBatchHistory",
-    "ActionType",
     "WSMessage",
     "WSMessageType",
     "ProgressUpdateData",
