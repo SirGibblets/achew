@@ -516,7 +516,7 @@ class AudioProcessingService:
                     ]
 
                     try:
-                        process = subprocess.Popen(trim_cmd, stderr=subprocess.PIPE, text=True)
+                        process = subprocess.Popen(trim_cmd)
 
                         self._running_processes.append(process)
 
@@ -529,8 +529,9 @@ class AudioProcessingService:
                             return []
                         elif process.returncode != 0:
                             logger.error(
-                                f"Failed to trim segment {path}:\nExit code {process.returncode}\n{process.stderr.read()}"
+                                f"Failed to trim segment {path}, will use untrimmed copy:\nExit code {process.returncode}\n{process.stderr.read()}"
                             )
+                            shutil.copy2(path, trimmed_path)
                             continue
                     finally:
                         try:
