@@ -492,11 +492,11 @@ class AudioProcessingService:
                 # Use synchronous version for trimming (called from thread)
                 silences = self._sync_get_silence_boundaries(path, min_silence_duration=1.0)
 
-                # Filter out silences before the first 2 seconds
+                # Filter out silences at the beginning
                 # This avoids trimming too early in the audio
                 # and potentially cutting off speech
                 if silences:
-                    silences = [s for s in silences if s[1] >= 2.0]
+                    silences = [s for s in silences if s[0] >= 0.5]
 
                 if silences:
                     # Sort by duration and get the longest silence
