@@ -3,6 +3,7 @@
     import {selectionStats} from "../stores/session.js";
     import {api} from "../utils/api.js";
     import ChapterModal from "./ChapterModal.svelte";
+    import CustomInstructionsList from "./CustomInstructionsList.svelte";
     import Icon from "./Icon.svelte";
 
     // Icons
@@ -220,9 +221,6 @@
 
     async function confirmAICleanup() {
         try {
-            // Save AI options before processing
-            await saveAIOptions();
-            
             // Dispatch confirm event with options
             dispatch('confirm', aiOptions);
             
@@ -329,8 +327,9 @@
             </div>
 
             <div class="ai-modal-body">
-                <div class="ai-options">
-                    <h4>Select Provider and Model</h4>
+                <div class="ai-modal-content">
+                    <div class="ai-options-column">
+                        <h4>Select Provider and Model</h4>
 
                     {#if availableProviders.filter((p) => p.is_enabled && p.is_configured).length === 0}
                         <div class="no-providers-message">
@@ -415,18 +414,20 @@
                             </div>
                         </label>
 
-                        {#if aiOptions.deselectNonChapters}
-                            <label class="checkbox-label nested-checkbox">
-                                <input type="checkbox" bind:checked={aiOptions.keepDeselectedTitles}/>
-                                <span>Preserve Titles</span>
-                                <div
-                                        class="help-icon"
-                                        data-tooltip="When enabled, the titles of deselected chapters will be preserved instead of being cleared."
-                                >
-                                    <CircleQuestionMark size="14"/>
-                                </div>
-                            </label>
-                        {/if}
+                        <label class="checkbox-label nested-checkbox" class:disabled={!aiOptions.deselectNonChapters}>
+                            <input
+                                type="checkbox"
+                                bind:checked={aiOptions.keepDeselectedTitles}
+                                disabled={!aiOptions.deselectNonChapters}
+                            />
+                            <span>Preserve Titles</span>
+                            <div
+                                    class="help-icon"
+                                    data-tooltip="When enabled, the titles of deselected chapters will be preserved instead of being cleared."
+                            >
+                                <CircleQuestionMark size="14"/>
+                            </div>
+                        </label>
 
                         {#if availableChapterSources.length > 0}
                             <label
@@ -481,45 +482,48 @@
                         </div>
                     {/if}
 
-                    <div class="instructions-group">
-                        <label for="additional-instructions">
-                            Additional instructions:
-                            <div
-                                    class="help-icon"
-                                    data-tooltip="Examples:
-                  &quot;Use words for numbers instead of digits&quot;
-                  &quot;Return the results in Spanish&quot;
-                  &quot;Do not include title text&quot;
-                  &quot;Use this format: Chapter [number] - [title]&quot;
-                  &quot;Fix any misspellings of 'A-A-Ron'&quot;"
-                            >
-                                <CircleQuestionMark size="14"/>
-                            </div>
-                        </label>
-                        <textarea
-                                id="additional-instructions"
-                                bind:value={aiOptions.additionalInstructions}
-                                placeholder="Enter any special instructions or clarifications for this audiobook..."
-                                rows="3"
-                        ></textarea>
+                    </div>
+                    
+                    <div class="custom-instructions-column">
+                        <CustomInstructionsList />
+                        
+                        <div class="additional-instructions-section">
+                            <label for="additional-instructions">
+                                Additional instructions:
+                                <div
+                                        class="help-icon"
+                                        data-tooltip="Enter custom instructions for this specific audiobook cleanup. These won't be saved for future use."
+                                >
+                                    <CircleQuestionMark size="14"/>
+                                </div>
+                            </label>
+                            <textarea
+                                    id="additional-instructions"
+                                    bind:value={aiOptions.additionalInstructions}
+                                    placeholder="Enter custom instructions for this audiobook..."
+                                    rows="3"
+                            ></textarea>
+                        </div>
                     </div>
                 </div>
             </div>
-
-            <div class="ai-modal-actions">
-                <button class="btn btn-cancel btn-ai-cancel" onclick={cancelAICleanup}>
-                    Cancel
-                </button>
-                <button
-                        class="btn ai-confirm-btn"
-                        onclick={confirmAICleanup}
-                        disabled={availableProviders.filter(
-            (p) => p.is_enabled && p.is_configured,
-          ).length === 0}
-                >
-                    <Icon name="ai" size="16" style="margin-right: 0.5rem;"/>
-                    Clean Up {$selectionStats.selected} Chapters
-                </button>
+            
+            <div class="ai-modal-footer">
+                <div class="ai-modal-actions">
+                    <button class="btn btn-cancel btn-ai-cancel" onclick={cancelAICleanup}>
+                        Cancel
+                    </button>
+                    <button
+                            class="btn ai-confirm-btn"
+                            onclick={confirmAICleanup}
+                            disabled={availableProviders.filter(
+                (p) => p.is_enabled && p.is_configured,
+              ).length === 0}
+                    >
+                        <Icon name="ai" size="16" style="margin-right: 0.5rem;"/>
+                        Clean Up {$selectionStats.selected} Chapters
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -554,13 +558,27 @@
     .ai-modal {
         background: var(--bg-card);
         border-radius: 1rem;
-        max-width: 500px;
+        max-width: 1000px;
         width: 90%;
         margin: 2rem;
         border: 1px solid var(--border-color);
         animation: slideIn 0.1s ease-out;
-        overflow-y: auto;
         max-height: 90vh;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .ai-modal-body {
+        flex: 1;
+        overflow-y: auto;
+        padding: 1.5rem;
+    }
+    
+    .ai-modal-footer {
+        flex-shrink: 0;
+        border-top: 1px solid var(--border-color);
+        background: var(--bg-card);
+        border-radius: 0 0 1rem 1rem;
     }
 
     .ai-modal-header {
@@ -592,9 +610,6 @@
         padding-right: 48px;
     }
 
-    .ai-modal-body {
-        padding: 1.5rem;
-    }
 
     .ai-modal input {
         accent-color: var(--ai-accent);
@@ -610,6 +625,7 @@
     .ai-features {
         display: flex;
         flex-direction: column;
+        align-items: center;
         gap: 0.75rem;
     }
 
@@ -664,7 +680,7 @@
     }
 
     .ai-modal-actions {
-        padding: 0 1.5rem 1.5rem 1.5rem;
+        padding: 1.5rem;
         display: flex;
         gap: 1rem;
         justify-content: flex-end;
@@ -703,20 +719,83 @@
         }
     }
 
+    /* Two-column layout */
+    .ai-modal-content {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2rem;
+        min-height: 0;
+        flex: 1;
+    }
+    
+    .ai-options-column {
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .custom-instructions-column {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+    }
+    
+    .additional-instructions-section {
+        margin-top: 1.5rem;
+    }
+    
+    .additional-instructions-section label {
+        font-size: 0.875rem;
+        color: var(--text-secondary);
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .additional-instructions-section textarea {
+        width: 100%;
+        min-height: 3rem;
+        padding: 0.75rem;
+        border: 1px solid var(--border-color);
+        border-radius: 0.375rem;
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        font-family: inherit;
+        font-size: 0.875rem;
+        resize: vertical;
+        transition: border-color 0.2s ease;
+    }
+    
+    .additional-instructions-section textarea:focus {
+        outline: none;
+        border-color: var(--ai-accent);
+    }
+    
+    .additional-instructions-section textarea::placeholder {
+        color: var(--text-muted);
+    }
+
     /* Responsive modal */
     @media (max-width: 768px) {
         .ai-modal {
             width: 95%;
             margin: 1rem;
+            max-width: 500px;
+        }
+        
+        .ai-modal-content {
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
         }
 
         .ai-modal-header,
-        .ai-modal-body,
-        .ai-modal-actions {
+        .ai-modal-body {
             padding: 1.5rem;
         }
-
+        
         .ai-modal-actions {
+            padding: 1.5rem;
             flex-direction: column;
             gap: 0.75rem;
         }
@@ -728,17 +807,10 @@
         .ai-confirm-btn {
             justify-content: center;
         }
-    }
-
-    .ai-options {
-        margin-top: 0;
-    }
-
-    .ai-options h4 {
-        margin: 0 0 0.75rem 0;
-        color: var(--text-primary);
-        font-size: 0.9rem;
-        font-weight: 600;
+        
+        .additional-instructions-section {
+            margin-top: 1rem;
+        }
     }
 
     .checkbox-group {
@@ -770,40 +842,6 @@
         color: var(--text-secondary);
     }
 
-    .instructions-group {
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-    }
-
-    .instructions-group label {
-        font-size: 0.875rem;
-        color: var(--text-secondary);
-        font-weight: 500;
-    }
-
-    .instructions-group textarea {
-        width: 100%;
-        min-height: 4rem;
-        padding: 0.75rem;
-        border: 1px solid var(--border-color);
-        border-radius: 0.375rem;
-        background: var(--bg-secondary);
-        color: var(--text-primary);
-        font-family: inherit;
-        font-size: 0.875rem;
-        resize: vertical;
-        transition: border-color 0.2s ease;
-    }
-
-    .instructions-group textarea:focus {
-        outline: none;
-        border-color: var(--ai-accent);
-    }
-
-    .instructions-group textarea::placeholder {
-        color: var(--text-muted);
-    }
 
     /* Preferred Titles Options Styling */
     .checkbox-label.disabled {

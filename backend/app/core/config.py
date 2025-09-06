@@ -1,10 +1,11 @@
 import shelve
 import logging
+import uuid
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
 
 # Development CORS origins (Vite) - only used when frontend runs separately
@@ -65,6 +66,23 @@ class EditorSettings(BaseModel):
     show_formatted_time: bool = True
 
 
+class CustomInstruction(BaseModel):
+    """Individual custom instruction for AI cleanup"""
+
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    text: str = ""
+    checked: bool = True
+    order: int = 0
+    created_at: datetime = Field(default_factory=datetime.now)
+
+
+class CustomInstructionsConfig(BaseModel):
+    """Custom instructions configuration section"""
+
+    instructions: List[CustomInstruction] = Field(default_factory=list)
+    last_updated: Optional[datetime] = None
+
+
 class UserPreferences(BaseModel):
     """User preferences configuration section"""
 
@@ -81,6 +99,7 @@ class AppConfig(BaseModel):
     llm: LLMConfig = LLMConfig()
     user_preferences: UserPreferences = UserPreferences()
     asr_options: ASROptions = ASROptions()
+    custom_instructions: CustomInstructionsConfig = CustomInstructionsConfig()
 
 
 class Settings(BaseSettings):
@@ -130,14 +149,26 @@ def load_config() -> AppConfig:
             llm_data = db.get("llm", {})
             user_prefs_data = db.get("user_preferences", {})
             asr_options_data = db.get("asr_options", {})
+            custom_instructions_data = db.get("custom_instructions", {})
 
             # Create config objects with validation
             abs_config = ABSConfig(**abs_data) if abs_data else ABSConfig()
             llm_config = LLMConfig(**llm_data) if llm_data else LLMConfig()
             user_prefs = UserPreferences(**user_prefs_data) if user_prefs_data else UserPreferences()
             asr_options = ASROptions(**asr_options_data) if asr_options_data else ASROptions()
+            custom_instructions = (
+                CustomInstructionsConfig(**custom_instructions_data)
+                if custom_instructions_data
+                else CustomInstructionsConfig()
+            )
 
-            return AppConfig(abs=abs_config, llm=llm_config, user_preferences=user_prefs, asr_options=asr_options)
+            return AppConfig(
+                abs=abs_config,
+                llm=llm_config,
+                user_preferences=user_prefs,
+                asr_options=asr_options,
+                custom_instructions=custom_instructions,
+            )
     except Exception as e:
         logger.warning(f"Failed to load configuration from {config_db_path}: {e}")
         return AppConfig()
@@ -154,6 +185,7 @@ def save_config(config: AppConfig) -> bool:
             db["llm"] = config.llm.model_dump()
             db["user_preferences"] = config.user_preferences.model_dump()
             db["asr_options"] = config.asr_options.model_dump()
+            db["custom_instructions"] = config.custom_instructions.model_dump()
             db.sync()  # Ensure data is written to disk
         return True
     except Exception as e:
@@ -207,6 +239,36 @@ def save_user_preferences(preferences: UserPreferences) -> bool:
     except Exception as e:
         logger.error(f"Failed to save user preferences: {e}")
         return False
+
+
+def save_custom_instructions(custom_instructions: CustomInstructionsConfig) -> bool:
+    """Save only custom instructions section"""
+    try:
+        config = load_config()
+        config.custom_instructions = custom_instructions
+        return save_config(config)
+    except Exception as e:
+        logger.error(f"Failed to save custom instructions: {e}")
+        return False
+
+
+def get_default_custom_instructions() -> List[CustomInstruction]:
+    """Get default example custom instructions"""
+    examples = [
+        "Fix any misspellings of...",
+        "Use this format: Chapter [number] - [title]",
+        "Use Roman Numerals for chapter numbers",
+        "Return the results in Spanish",
+        "Do not include title text",
+    ]
+
+    default_instructions = []
+    for i, text in enumerate(examples):
+        default_instructions.append(
+            CustomInstruction(text=text, checked=False, order=i)
+        )
+
+    return default_instructions
 
 
 # Global configuration cache

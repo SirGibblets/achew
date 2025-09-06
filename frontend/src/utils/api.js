@@ -296,6 +296,17 @@ export const batch = {
             body: aiOptions,
         });
     },
+
+    async getCustomInstructions() {
+        return apiRequest('/chapters/custom-instructions');
+    },
+
+    async saveCustomInstructions(instructions) {
+        return apiRequest('/chapters/custom-instructions', {
+            method: 'PUT',
+            body: { instructions },
+        });
+    },
 };
 
 // Audio API

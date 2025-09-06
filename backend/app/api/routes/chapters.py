@@ -12,6 +12,7 @@ from app.models.chapter_operation import (
     EditTitleOperation,
     RestoreChapterOperation,
 )
+from app.models.enums import Step
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
@@ -113,6 +114,21 @@ class AddOptionsResponse(BaseModel):
 class AddChapterRequest(BaseModel):
     timestamp: float
     title: str = ""
+
+
+class CustomInstructionRequest(BaseModel):
+    id: str
+    text: str
+    checked: bool
+    order: int
+
+
+class CustomInstructionsListRequest(BaseModel):
+    instructions: List[CustomInstructionRequest]
+
+
+class CustomInstructionsResponse(BaseModel):
+    instructions: List[CustomInstructionRequest]
 
 
 @router.get("/chapters", response_model=ChaptersListResponse)
@@ -310,6 +326,13 @@ async def ai_cleanup(request: ProcessSelectedRequest):
 
         if not app_state.pipeline:
             raise HTTPException(status_code=404, detail="Pipeline not found")
+
+        # Change step immediately
+        app_state.pipeline.step = Step.AI_CLEANUP
+        await app_state.broadcast_step_change(Step.AI_CLEANUP)
+
+        # Save configured AI options
+        await update_ai_options(request.ai_options)
 
         # Get selected chapters
         selected_chapters = [ch for ch in app_state.pipeline.chapters if ch.selected]
@@ -746,6 +769,7 @@ async def add_chapter(request: AddChapterRequest):
 
         else:
             from ...models.chapter import ChapterData
+
             operation = AddChapterOperation(
                 chapter=ChapterData(
                     timestamp=request.timestamp,
@@ -767,4 +791,81 @@ async def add_chapter(request: AddChapterRequest):
         raise
     except Exception as e:
         logger.error(f"Failed to add chapter: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/chapters/custom-instructions", response_model=CustomInstructionsResponse)
+async def get_custom_instructions():
+    """Get saved custom instructions or default examples if none exist"""
+    try:
+        from ...core.config import get_app_config, get_default_custom_instructions
+
+        config = get_app_config()
+
+        if not config.custom_instructions.instructions:
+            default_instructions = get_default_custom_instructions()
+            instructions_data = []
+            for instruction in default_instructions:
+                instructions_data.append(
+                    CustomInstructionRequest(
+                        id=instruction.id, text=instruction.text, checked=instruction.checked, order=instruction.order
+                    )
+                )
+            return CustomInstructionsResponse(instructions=instructions_data)
+
+        instructions_data = []
+        for instruction in config.custom_instructions.instructions:
+            instructions_data.append(
+                CustomInstructionRequest(
+                    id=instruction.id, text=instruction.text, checked=instruction.checked, order=instruction.order
+                )
+            )
+
+        return CustomInstructionsResponse(instructions=instructions_data)
+
+    except Exception as e:
+        logger.error(f"Failed to get custom instructions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/chapters/custom-instructions", response_model=CustomInstructionsResponse)
+async def save_custom_instructions(request: CustomInstructionsListRequest):
+    """Save custom instructions list"""
+    try:
+        from ...core.config import get_app_config, save_custom_instructions, CustomInstruction, CustomInstructionsConfig
+        from datetime import datetime
+
+        config = get_app_config()
+
+        instructions = []
+        for i, instruction_req in enumerate(request.instructions):
+            instruction = CustomInstruction(
+                id=instruction_req.id,
+                text=instruction_req.text,
+                checked=instruction_req.checked,
+                order=i,
+                created_at=datetime.now(),
+            )
+            instructions.append(instruction)
+
+        config.custom_instructions = CustomInstructionsConfig(instructions=instructions, last_updated=datetime.now())
+
+        success = save_custom_instructions(config.custom_instructions)
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to save custom instructions")
+
+        instructions_data = []
+        for instruction in instructions:
+            instructions_data.append(
+                CustomInstructionRequest(
+                    id=instruction.id, text=instruction.text, checked=instruction.checked, order=instruction.order
+                )
+            )
+
+        return CustomInstructionsResponse(instructions=instructions_data)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to save custom instructions: {e}")
         raise HTTPException(status_code=500, detail=str(e))

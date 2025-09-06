@@ -1326,6 +1326,14 @@ class ProcessingPipeline:
 
             # Prepare additional instructions list
             instructions_list = []
+            
+            # Add checked custom instructions
+            config = get_app_config()
+            for instruction in config.custom_instructions.instructions:
+                if instruction.checked and instruction.text.strip():
+                    instructions_list.append(instruction.text.strip())
+            
+            # Add non-persistent additional_instructions at the end
             if additional_instructions.strip():
                 instructions_list.append(additional_instructions.strip())
 
