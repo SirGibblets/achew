@@ -114,3 +114,18 @@ class AICleanupOperation(ChapterOperation):
         chapter = self.find_chapter(pipeline, self.chapter_id)
         chapter.current_title = self.old_title
         chapter.selected = True
+
+
+class EditTimestampOperation(ChapterOperation):
+    chapter_id: str
+    old_timestamp: float = 0.0
+    new_timestamp: float
+
+    def apply(self, pipeline: "ProcessingPipeline"):
+        chapter = self.find_chapter(pipeline, self.chapter_id)
+        self.old_timestamp = chapter.timestamp
+        chapter.timestamp = self.new_timestamp
+
+    def undo(self, pipeline: "ProcessingPipeline"):
+        chapter = self.find_chapter(pipeline, self.chapter_id)
+        chapter.timestamp = self.old_timestamp

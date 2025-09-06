@@ -9,6 +9,7 @@ from app.models.chapter_operation import (
     AddChapterOperation,
     ChapterOperation,
     DeleteChapterOperation,
+    EditTimestampOperation,
     EditTitleOperation,
     RestoreChapterOperation,
 )
@@ -40,6 +41,10 @@ class ChaptersListResponse(BaseModel):
 
 class UpdateTitleRequest(BaseModel):
     title: str
+
+
+class UpdateTimestampRequest(BaseModel):
+    timestamp: float
 
 
 class ToggleSelectionRequest(BaseModel):
@@ -191,6 +196,35 @@ async def update_chapter_title(chapter_id: str, request: UpdateTitleRequest):
         raise
     except Exception as e:
         logger.error(f"Failed to update chapter title: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/chapters/{chapter_id}/timestamp")
+async def update_chapter_timestamp(chapter_id: str, request: UpdateTimestampRequest):
+    """Update a chapter's timestamp"""
+    try:
+        app_state = get_app_state()
+
+        if not app_state.pipeline:
+            raise HTTPException(status_code=404, detail="Pipeline not found")
+
+        operation = EditTimestampOperation(
+            chapter_id=chapter_id,
+            new_timestamp=request.timestamp,
+        )
+        operation.apply(app_state.pipeline)
+        app_state.pipeline.add_to_history(operation)
+
+        # Broadcast updates
+        await app_state.broadcast_chapter_update()
+        await app_state.broadcast_history_update()
+
+        return {"message": "Chapter timestamp updated"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update chapter timestamp: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

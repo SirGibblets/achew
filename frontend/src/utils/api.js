@@ -191,6 +191,13 @@ export const chapters = {
         });
     },
 
+    async updateTimestamp(chapterId, timestamp) {
+        return apiRequest(`/chapters/${chapterId}/timestamp`, {
+            method: 'PUT',
+            body: {timestamp},
+        });
+    },
+
     async toggleSelection(chapterId, selected) {
         return apiRequest(`/chapters/${chapterId}/select`, {
             method: 'PUT',

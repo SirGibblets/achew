@@ -17,6 +17,7 @@
     // Icons
     import ArrowRight from "@lucide/svelte/icons/arrow-right";
     import BookMarked from "@lucide/svelte/icons/book-marked";
+    import Check from "@lucide/svelte/icons/check";
     import ChevronUp from "@lucide/svelte/icons/chevron-up";
     import Pause from "@lucide/svelte/icons/pause";
     import Play from "@lucide/svelte/icons/play";
@@ -26,6 +27,7 @@
     import Trash2 from "@lucide/svelte/icons/trash-2";
     import TriangleAlert from "@lucide/svelte/icons/triangle-alert";
     import Undo from "@lucide/svelte/icons/undo";
+    import X from "@lucide/svelte/icons/x";
 
     let mounted = false;
     let loading = $state(false);
@@ -41,6 +43,12 @@
         hide_transcriptions: false,
         show_formatted_time: true
     });
+
+    // Timestamp editing state
+    let editingTimestampId = $state(null);
+    let timestampInputValue = $state("");
+    let timestampValidationError = $state(null);
+    let showEditButton = $state(null);
 
     // Store textarea references for auto-resizing
     let textareaRefs = new Map();
@@ -393,6 +401,12 @@
         };
     }
 
+    // Action to focus input elements
+    function focusInput(node) {
+        node.focus();
+        node.select();
+    }
+
     // AI cleanup
     async function processSelectedWithAI() {
         if ($selectionStats.selected === 0) return;
@@ -450,6 +464,146 @@
             .catch((err) => {
                 error = handleApiError(err);
             });
+    }
+
+    // Timestamp editing functions
+    function startTimestampEdit(chapterId, currentTimestamp) {
+        editingTimestampId = chapterId;
+        timestampInputValue = formatTimestamp(currentTimestamp);
+        timestampValidationError = null;
+    }
+
+    function cancelTimestampEdit() {
+        editingTimestampId = null;
+        timestampInputValue = "";
+        timestampValidationError = null;
+    }
+
+    function parseTimestampInput(input) {
+        // Remove any non-numeric characters except : and .
+        const cleaned = input.replace(/[^0-9:.\s]/g, '').trim();
+
+        // Split by colon and parse as numbers
+        const parts = cleaned.split(':').map(Number);
+
+        if (parts.length === 2) {
+            // mm:ss format
+            const [minutes, seconds] = parts;
+            return minutes * 60 + seconds;
+        }
+
+        if (parts.length === 3) {
+            // hh:mm:ss format
+            const [hours, minutes, seconds] = parts;
+            return hours * 3600 + minutes * 60 + seconds;
+        }
+
+        // Try to parse as seconds
+        const seconds = parseFloat(cleaned);
+        if (!isNaN(seconds) && seconds >= 0) {
+            return seconds;
+        }
+
+        return null;
+    }
+
+    function validateTimestamp(chapterId, timestamp) {
+        const currentChapterIndex = $chapters.findIndex(ch => ch.id === chapterId);
+
+        if (currentChapterIndex === -1) return null;
+
+        const prevChapter = currentChapterIndex > 0 ? $chapters[currentChapterIndex - 1] : null;
+        const nextChapter = currentChapterIndex < $chapters.length - 1 ? $chapters[currentChapterIndex + 1] : null;
+
+        const minTimestamp = prevChapter ? prevChapter.timestamp + 1 : 0;
+        const maxTimestamp = nextChapter ? nextChapter.timestamp - 1 : $session.book?.duration - 1 || Infinity;
+
+        if (timestamp < minTimestamp) {
+            return `Timestamp must be at least ${formatTimestamp(minTimestamp)}`;
+        }
+
+        if (timestamp > maxTimestamp) {
+            return `Timestamp must be at most ${formatTimestamp(maxTimestamp)}`;
+        }
+
+        return null;
+    }
+
+    async function saveTimestampEdit(chapterId) {
+        if (timestampValidationError) {
+            return;
+        }
+
+        const parsedTimestamp = parseTimestampInput(timestampInputValue);
+        if (parsedTimestamp === null) {
+            timestampValidationError = "Invalid timestamp format. Use hh:mm:ss, mm:ss, or seconds.";
+            return;
+        }
+
+        try {
+            await api.chapters.updateTimestamp(chapterId, parsedTimestamp);
+            cancelTimestampEdit();
+        } catch (err) {
+            timestampValidationError = handleApiError(err);
+        }
+    }
+
+    function handleTimestampInputKeydown(event, chapterId) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            saveTimestampEdit(chapterId);
+        } else if (event.key === 'Escape') {
+            event.preventDefault();
+            cancelTimestampEdit();
+        } else if (event.key === ' ') {
+            event.preventDefault();
+            if (!timestampValidationError) {
+                playFromEditedTimestamp(chapterId);
+            }
+        } else if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            if ($currentSegmentId && $currentSegmentId.startsWith('timestamp-edit-')) {
+                audio.stop();
+            }
+            const current = parseTimestampInput(timestampInputValue) || 0;
+            timestampInputValue = formatTimestamp(current + 1);
+        } else if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            if ($currentSegmentId && $currentSegmentId.startsWith('timestamp-edit-')) {
+                audio.stop();
+            }
+            const current = parseTimestampInput(timestampInputValue) || 0;
+            timestampInputValue = formatTimestamp(Math.max(0, current - 1));
+        }
+    }
+
+    function handleTimestampInputChange() {
+        if ($currentSegmentId && $currentSegmentId.startsWith('timestamp-edit-')) {
+            audio.stop();
+        }
+
+        const parsedTimestamp = parseTimestampInput(timestampInputValue);
+        if (parsedTimestamp !== null) {
+            timestampValidationError = validateTimestamp(editingTimestampId, parsedTimestamp);
+        } else {
+            timestampValidationError = "Invalid timestamp format. Use hh:mm:ss, mm:ss, or seconds.";
+        }
+    }
+
+    function playFromEditedTimestamp(chapterId) {
+        const parsedTimestamp = parseTimestampInput(timestampInputValue);
+        if (parsedTimestamp !== null && !timestampValidationError) {
+            try {
+                const previewId = `timestamp-edit-${chapterId}`;
+                if ($currentSegmentId === previewId && $isPlaying) {
+                    audio.stop();
+                } else {
+                    audio.play(previewId, parsedTimestamp);
+                }
+            } catch (err) {
+                error = `Failed to play audio: ${err.message}`;
+            }
+        }
     }
 </script>
 
@@ -548,8 +702,65 @@
                     toggleChapterSelection(chapter.id, e.target.checked)}
                             />
                         </td>
-                        <td class="timestamp">
-                            {formatTimestamp(chapter.timestamp)}
+                        <td class="timestamp" class:editing={editingTimestampId === chapter.id}>
+                            {#if editingTimestampId === chapter.id}
+                                <div class="timestamp-edit-overlay">
+                                    <button
+                                        class="timestamp-play-btn"
+                                        class:disabled={timestampValidationError}
+                                        class:playing={$currentSegmentId === `timestamp-edit-${chapter.id}` && $isPlaying}
+                                        onclick={() => playFromEditedTimestamp(chapter.id)}
+                                        title={timestampValidationError ? "Cannot play: invalid timestamp" : "Play from edited timestamp"}
+                                        disabled={timestampValidationError}
+                                    >
+                                        {#if $currentSegmentId === `timestamp-edit-${chapter.id}` && $isPlaying}
+                                            <Pause size="14"/>
+                                        {:else}
+                                            <Play size="14"/>
+                                        {/if}
+                                    </button>
+                                    <input
+                                        class="timestamp-input"
+                                        class:error={timestampValidationError}
+                                        bind:value={timestampInputValue}
+                                        onkeydown={(e) => handleTimestampInputKeydown(e, chapter.id)}
+                                        oninput={handleTimestampInputChange}
+                                        placeholder="hh:mm:ss or seconds"
+                                        use:focusInput
+                                    />
+                                    {#if timestampValidationError}
+                                        <button
+                                            class="timestamp-warning-btn"
+                                            data-tooltip={timestampValidationError}
+                                        >
+                                            <TriangleAlert size="14"/>
+                                        </button>
+                                    {:else}
+                                        <button
+                                            class="timestamp-save-btn"
+                                            onclick={() => saveTimestampEdit(chapter.id)}
+                                            title="Save timestamp"
+                                        >
+                                            <Check size="14"/>
+                                        </button>
+                                    {/if}
+                                    <button
+                                        class="timestamp-cancel-btn"
+                                        onclick={cancelTimestampEdit}
+                                        title="Cancel editing"
+                                    >
+                                        <X size="14"/>
+                                    </button>
+                                </div>
+                            {:else}
+                                <button
+                                    class="timestamp-display"
+                                    onclick={() => startTimestampEdit(chapter.id, chapter.timestamp)}
+                                    title="Edit timestamp"
+                                >
+                                    {formatTimestamp(chapter.timestamp)}
+                                </button>
+                            {/if}
                         </td>
                         {#if showTranscriptions}
                             <td class="original-title-cell">
@@ -906,6 +1117,184 @@
         font-family: monospace;
         color: var(--text-secondary);
         font-size: 0.875rem;
+        position: relative;
+        min-height: 1.5rem;
+    }
+
+    .timestamp-display {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 1.5rem;
+        background: none;
+        border: none;
+        color: var(--text-secondary);
+        cursor: pointer;
+        padding: 0;
+        font-family: monospace;
+        font-size: 0.875rem;
+        width: 100%;
+        text-align: left;
+        transition: all 0.2s ease;
+    }
+
+    .timestamp-display:hover {
+        color: var(--text-primary);
+        background-color: var(--hover-bg);
+        border-radius: 0.25rem;
+        padding: 0.25rem;
+        margin: -0.25rem;
+    }
+
+
+
+    .timestamp-edit-overlay {
+        position: absolute;
+        top: 0.5rem;
+        left: -4rem;
+        bottom: 0.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: var(--bg-primary);
+        border: 1px solid var(--primary);
+        border-radius: 0.25rem;
+        padding: 0.25rem 0.5rem;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        z-index: 1000;
+        min-width: 230px;
+    }
+
+    .timestamp-play-btn {
+        width: 1.5rem;
+        height: 1.5rem;
+        border-radius: 50%;
+        border: none;
+        background: transparent;
+        color: var(--primary);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+        transition: all 0.2s ease;
+        flex-shrink: 0;
+        margin-left: 1.3rem;
+        margin-right: 0.4rem;
+    }
+
+    .timestamp-play-btn:hover:not(:disabled) {
+        background-color: var(--primary);
+        color: white;
+        transform: scale(1.1);
+    }
+
+    .timestamp-play-btn:disabled {
+        color: var(--text-muted);
+        cursor: not-allowed;
+        opacity: 0.5;
+    }
+
+    .timestamp-play-btn.playing {
+        background-color: var(--primary);
+        color: white;
+    }
+
+    .timestamp-input {
+        flex: 1;
+        border: none;
+        border-radius: 0.25rem;
+        padding: 0.25rem 0.5rem;
+        font-size: 0.875rem;
+        font-family: monospace;
+        color: var(--text-primary);
+        background: var(--bg-secondary);
+        transition: all 0.2s ease;
+        min-width: 0;
+        width: 100%;
+    }
+
+    .timestamp-input:focus {
+        outline: none;
+        background: var(--bg-primary);
+    }
+
+    .timestamp-input.error {
+        background: rgba(255, 193, 7, 0.1);
+    }
+
+    .timestamp-save-btn,
+    .timestamp-cancel-btn,
+    .timestamp-warning-btn {
+        width: 1.5rem;
+        height: 1.5rem;
+        border-radius: 0.25rem;
+        border: none;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+        transition: all 0.2s ease;
+        flex-shrink: 0;
+        background: transparent;
+    }
+
+    .timestamp-save-btn {
+        color: var(--success);
+    }
+
+    .timestamp-save-btn:hover {
+        background-color: var(--success);
+        color: white;
+        transform: scale(1.1);
+    }
+
+    .timestamp-cancel-btn {
+        color: var(--danger);
+    }
+
+    .timestamp-cancel-btn:hover {
+        background-color: var(--danger);
+        color: white;
+        transform: scale(1.1);
+    }
+
+    .timestamp-warning-btn {
+        color: var(--warning);
+        cursor: help;
+        position: relative;
+    }
+
+    .timestamp-warning-btn[data-tooltip]:hover::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        transform: translateY(calc(-50% - 18px));
+        padding: 8px 12px;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        font-size: 0.875rem;
+        line-height: 1.4;
+        white-space: pre-line;
+        max-width: 320px;
+        width: max-content;
+        z-index: 10001;
+        pointer-events: none;
+    }
+
+    .timestamp-warning-btn[data-tooltip]:hover::before {
+        content: "";
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        margin-bottom: -5px;
+        border: 6px solid transparent;
+        border-top-color: var(--border-color);
+        z-index: 10002;
     }
 
     .original-title-cell {
