@@ -105,7 +105,7 @@
     async function handleCancel() {
         try {
             loading = true;
-            await fetch("/api/config/abs/setup", {
+            const response = await fetch("/api/config/abs/setup", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -116,6 +116,10 @@
                     api_key: "",
                 }),
             });
+
+            if (response.ok) {
+                dispatch("abs-configured");
+            }
         } catch (error) {
             console.error("Error cancelling ABS setup:", error);
         } finally {
