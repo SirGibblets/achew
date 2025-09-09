@@ -73,6 +73,7 @@
     });
 
     onDestroy(() => {
+        audio.stop();
         window.removeEventListener("keydown", handleKeydown);
     });
 
