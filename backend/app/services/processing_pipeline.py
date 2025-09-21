@@ -338,7 +338,6 @@ class ProcessingPipeline:
             self.cleanup_segment_files()
             self.cues = []
             self.include_unaligned = []
-            self.detected_silences = []
             self.step = Step.CUE_SET_SELECTION
 
         if step_num <= RestartStep.SELECT_CUE_SOURCE.ordinal:
