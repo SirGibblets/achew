@@ -4,6 +4,7 @@ from typing import List, Optional
 
 from google import genai
 from google.genai import types
+from google.genai.errors import ClientError, ServerError, APIError
 
 
 from .base import AIService, ProviderInfo, ModelInfo, IncrementalJSONParser, ChapterList
@@ -310,6 +311,11 @@ class GeminiService(AIService):
             stream_count = 0
             content_received = ""
 
+            # Enable thinking only for gemini-2.5 models
+            thinking_budget = 0
+            if "gemini-2.5" in model_id:
+                thinking_budget = 1024
+
             # Stream the response for progress updates
             async for chunk in await processing_client.aio.models.generate_content_stream(
                 model=model_id,
@@ -317,24 +323,33 @@ class GeminiService(AIService):
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json",
                     response_schema=ChapterList,
-                    thinking_config=types.ThinkingConfig(thinking_budget=0),  # Disables thinking
+                    thinking_config=types.ThinkingConfig(
+                        thinking_budget=thinking_budget,
+                        include_thoughts=True,
+                    ),
                 ),
             ):
                 stream_count += 1
                 logger.debug(f"Gemini Received chunk {stream_count}: {chunk}")
 
-                if chunk.text:
-                    content = chunk.text
-                    content_received += content
-                    logger.debug(f"Gemini Content chunk: '{content}'")
+                for part in chunk.candidates[0].content.parts:
+                    if not part.text:
+                        continue
 
-                    result = parser.feed(content)
-                    if result["new_chapters"]:
-                        progress_percent = result["total_parsed"] / total_chapters * 100
-                        self._notify_progress(
-                            progress_percent,
-                            f"Processed {result['total_parsed']}/{total_chapters} chapters",
-                        )
+                    if part.thought:
+                        self._notify_progress(0, "Thinking...")
+                    else:
+                        content = part.text
+                        content_received += content
+                        logger.debug(f"Gemini Content chunk: '{content}'")
+
+                        result = parser.feed(content)
+                        if result["new_chapters"]:
+                            progress_percent = result["total_parsed"] / total_chapters * 100
+                            self._notify_progress(
+                                progress_percent,
+                                f"Processed {result['total_parsed']}/{total_chapters} chapters",
+                            )
 
             if not content_received:
                 logger.error("Gemini No content received from streaming!")
@@ -363,19 +378,19 @@ class GeminiService(AIService):
 
             return chapters
 
-        except genai.errors.GoogleAPIError as e:
+        except ClientError as e:
+            error_msg = f"Gemini Client error: {str(e)}"
+            logger.error(f"Gemini Client error: {e}")
+            self._notify_progress(0, error_msg)
+            raise
+        except ServerError as e:
+            error_msg = f"Gemini server error - please wait and try again: {str(e)}"
+            logger.error(f"Gemini server error: {e}")
+            self._notify_progress(0, error_msg)
+            raise
+        except APIError as e:
             error_msg = f"Google Gemini API error: {str(e)}"
             logger.error(f"Gemini API error: {e}")
-            self._notify_progress(0, error_msg)
-            raise
-        except genai.errors.AuthenticationError as e:
-            error_msg = f"Gemini authentication failed - please check your API key: {str(e)}"
-            logger.error(f"Gemini authentication error: {e}")
-            self._notify_progress(0, error_msg)
-            raise
-        except genai.errors.ResourceExhaustedError as e:
-            error_msg = f"Gemini quota exceeded - please wait and try again: {str(e)}"
-            logger.error(f"Gemini quota error: {e}")
             self._notify_progress(0, error_msg)
             raise
         except json.JSONDecodeError as e:
