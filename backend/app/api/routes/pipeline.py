@@ -77,6 +77,8 @@ async def create_pipeline(request: CreatePipelineRequest, background_tasks: Back
                 result = await pipeline.fetch_item(request.item_id)
                 logger.info(f"Fetched item: {result}")
 
+                await app_state._broadcast_book_update()
+
                 await app_state.broadcast_step_change(
                     Step.SELECT_CUE_SOURCE,
                     extras={"cue_sources": pipeline.existing_cue_sources},
