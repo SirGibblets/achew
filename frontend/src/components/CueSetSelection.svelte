@@ -665,10 +665,9 @@
                             cues near the very start and very end of the timeline.
                         </li>
                         <li>
-                            <strong>More is Better:</strong> It's better to have too many cues
-                            than too few, so select a set or two higher than what you think you'll
-                            need. You can review and delete extra chapters in a later step, but
-                            you won't be able to add more.
+                            <strong>Don't Sweat It:</strong> No need to get it perfect right now; you can add
+                            and delete chapters in a future step. Just aim for a balanced starting point, 
+                            bump it up a notch or two for good measure, and worry about refining it later.
                         </li>
                     </ul>
                 </div>
