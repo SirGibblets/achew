@@ -225,9 +225,9 @@ class ClaudeService(AIService):
                     models.append(model_info)
                     logger.debug(f"Claude Added model: {model_info.name} (id: {model_info.id})")
 
-            # Sort by preference (claude-3-5-sonnet first, then others)
+            # Sort by preference (claude-sonnet-4 first, then others)
             def sort_key(model):
-                if "claude-3-5-sonnet" in model.id:
+                if "claude-sonnet-4" in model.id:
                     return 0
                 else:
                     return 1
