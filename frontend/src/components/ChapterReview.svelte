@@ -22,6 +22,11 @@
     let editorSettings = {
         show_formatted_time: true
     };
+    
+    let formattingKey = 0;
+    $: if (editorSettings) {
+        formattingKey++;
+    }
 
     $: if ($chapters) {
         selectedChapters = $chapters.filter((chapter) => chapter.selected);
@@ -70,10 +75,21 @@
 
     // Calculate total duration
     function getTotalDuration() {
+        return $session.book?.duration || 0;
+    }
+
+    function getChapterLength(index) {
         if (selectedChapters.length === 0) return 0;
 
-        const lastChapter = selectedChapters[selectedChapters.length - 1];
-        return lastChapter.timestamp;
+        if (selectedChapters.length === 1) return getTotalDuration();
+
+        if (index === 0) {
+            return selectedChapters[1].timestamp;
+        } else if (index === selectedChapters.length - 1) {
+            return getTotalDuration() - selectedChapters[index].timestamp;
+        } else {
+            return selectedChapters[index + 1].timestamp - selectedChapters[index].timestamp;
+        }
     }
 
     function goBackToEditor() {
@@ -165,6 +181,7 @@
 
     <div class="summary-card">
         <h3>Summary</h3>
+        {#key formattingKey}
         <div class="summary-grid">
             <div class="summary-item">
                 <span class="value">{selectedChapters.length}</span>
@@ -178,11 +195,12 @@
         <span class="value">
           {selectedChapters.length > 0
               ? formatTimestamp(getTotalDuration() / selectedChapters.length)
-              : "0:00"}
+              : formatTimestamp(0)}
         </span>
                 <span class="label">Avg Chapter Length</span>
             </div>
         </div>
+        {/key}
     </div>
 
     {#if selectedChapters.length === 0}
@@ -199,13 +217,15 @@
                 <table class="table">
                     <thead>
                     <tr>
-                        <th width="1" style="padding-left: 2rem">#</th>
-                        <th width="1">Time</th>
+                        <th width="1" style="padding-left: 1rem; text-align: center">#</th>
+                        <th width="1" style="text-align: center">Start</th>
                         <th>Title</th>
+                        <th style="text-align: center">Duration</th>
                     </tr>
                     </thead>
                     <tbody>
                     {#each selectedChapters as chapter, index (chapter.id)}
+                        {#key formattingKey}
                         <tr
                                 class="chapter-row"
                                 class:empty-chapter={isChapterEmpty(chapter)}
@@ -230,7 +250,11 @@
                                     {chapter.current_title}
                                 {/if}
                             </td>
+                            <td class="chapter-length">
+                                {formatTimestamp(getChapterLength(index))}
+                            </td>
                         </tr>
+                        {/key}
                     {/each}
                     </tbody>
                 </table>
@@ -432,6 +456,7 @@
         border-bottom: none;
         border-top: none;
         text-align: left;
+        font-size: 0.875rem;
     }
 
     .table td {
@@ -454,15 +479,17 @@
 
     .chapter-row.empty-chapter .chapter-number,
     .chapter-row.empty-chapter .timestamp,
-    .chapter-row.empty-chapter .chapter-title {
+    .chapter-row.empty-chapter .chapter-title,
+    .chapter-row.empty-chapter .chapter-length {
         color: var(--warning);
     }
 
     .chapter-number {
         font-weight: 600;
         color: var(--text-primary);
-        padding-left: 2rem;
+        padding-left: 1rem;
         vertical-align: middle;
+        text-align: center;
     }
 
     .timestamp {
@@ -470,6 +497,7 @@
         color: var(--text-secondary);
         font-size: 0.875rem;
         vertical-align: middle;
+        text-align: center;
     }
 
     .chapter-title {
@@ -477,6 +505,14 @@
         word-wrap: break-word;
         font-size: 0.9rem;
         padding-right: 2rem;
+    }
+
+    .chapter-length {
+        font-family: monospace;
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+        vertical-align: middle;
+        text-align: center;
     }
 
     .empty-title-container {
@@ -652,6 +688,10 @@
         }
 
         .chapter-title {
+            font-size: 0.8rem;
+        }
+
+        .chapter-length {
             font-size: 0.8rem;
         }
 
