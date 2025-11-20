@@ -512,10 +512,24 @@ async def get_llm_provider_models(provider_id: str):
         provider_config = {}
         if provider_id == "openai":
             if not config.llm.openai.api_key:
-                raise HTTPException(status_code=400, detail="Provider not configured")
+                raise HTTPException(status_code=400, detail="OpenAI provider not configured")
             provider_config = {"api_key": config.llm.openai.api_key}
+        elif provider_id == "claude":
+            if not config.llm.claude.api_key:
+                raise HTTPException(status_code=400, detail="Claude provider not configured")
+            provider_config = {"api_key": config.llm.claude.api_key}
+        elif provider_id == "gemini":
+            if not config.llm.gemini.api_key:
+                raise HTTPException(status_code=400, detail="Gemini provider not configured")
+            provider_config = {"api_key": config.llm.gemini.api_key}
+        elif provider_id == "openrouter":
+            if not config.llm.openrouter.api_key:
+                raise HTTPException(status_code=400, detail="OpenRouter provider not configured")
+            provider_config = {"api_key": config.llm.openrouter.api_key}
         elif provider_id == "ollama":
             provider_config = {"host": config.llm.ollama.host or "http://localhost:11434"}
+        elif provider_id == "lm_studio":
+            provider_config = {"host": config.llm.lm_studio.host or "http://localhost:1234"}
 
         models = await get_provider_models(provider_id, **provider_config)
         return LLMModelsResponse(models=models)
@@ -614,9 +628,21 @@ async def cancel_llm_provider_changes(provider_id: str):
         if provider_id == "openai":
             config.llm.openai.config_changed = False
             save_llm_provider_config("openai", config.llm.openai)
+        elif provider_id == "claude":
+            config.llm.claude.config_changed = False
+            save_llm_provider_config("claude", config.llm.claude)
+        elif provider_id == "gemini":
+            config.llm.gemini.config_changed = False
+            save_llm_provider_config("gemini", config.llm.gemini)
+        elif provider_id == "openrouter":
+            config.llm.openrouter.config_changed = False
+            save_llm_provider_config("openrouter", config.llm.openrouter)
         elif provider_id == "ollama":
             config.llm.ollama.config_changed = False
             save_llm_provider_config("ollama", config.llm.ollama)
+        elif provider_id == "lm_studio":
+            config.llm.lm_studio.config_changed = False
+            save_llm_provider_config("lm_studio", config.llm.lm_studio)
 
         # Refresh global config cache
         refresh_app_config()

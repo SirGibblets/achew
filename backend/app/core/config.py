@@ -42,6 +42,7 @@ class LLMConfig(BaseModel):
     openai: LLMProviderConfig = LLMProviderConfig()
     claude: LLMProviderConfig = LLMProviderConfig()
     gemini: LLMProviderConfig = LLMProviderConfig()
+    openrouter: LLMProviderConfig = LLMProviderConfig()
     ollama: LLMProviderConfig = LLMProviderConfig()
     lm_studio: LLMProviderConfig = LLMProviderConfig()
 
@@ -301,6 +302,7 @@ def get_app_config() -> AppConfig:
         logger.info(f"Loaded app config - OPENAI_API_KEY: {'***' if _app_config.llm.openai.api_key else 'EMPTY'}")
         logger.info(f"Loaded app config - GEMINI_API_KEY: {'***' if _app_config.llm.gemini.api_key else 'EMPTY'}")
         logger.info(f"Loaded app config - CLAUDE_API_KEY: {'***' if _app_config.llm.claude.api_key else 'EMPTY'}")
+        logger.info(f"Loaded app config - OPENROUTER_API_KEY: {'***' if _app_config.llm.openrouter.api_key else 'EMPTY'}")
     return _app_config
 
 

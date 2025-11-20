@@ -14,6 +14,7 @@
     import Delete from "@lucide/svelte/icons/delete";
     import Eye from "@lucide/svelte/icons/eye";
     import List from "@lucide/svelte/icons/list";
+    import Search from "@lucide/svelte/icons/search";
     import TriangleAlert from "@lucide/svelte/icons/triangle-alert";
 
     // Props
@@ -56,6 +57,11 @@
     let availableProviders = $state([]);
     let availableModels = $state([]);
     let loadingModels = $state(false);
+    
+    // Model search/filter state
+    let modelSearchQuery = $state("");
+    let filteredModels = $state([]);
+    let showModelDropdown = $state(false);
 
     // Load AI options when component mounts or when dialog opens
     $effect(() => {
@@ -90,6 +96,21 @@
         }
     });
 
+    // Close dropdown when clicking outside
+    $effect(() => {
+        function handleClickOutside(event) {
+            if (showModelDropdown && !event.target.closest('.model-dropdown-container')) {
+                showModelDropdown = false;
+                modelSearchQuery = "";
+            }
+        }
+
+        if (showModelDropdown) {
+            document.addEventListener('click', handleClickOutside);
+            return () => document.removeEventListener('click', handleClickOutside);
+        }
+    });
+
     async function loadAIOptions() {
         if (sessionStep !== "chapter_editing") return;
 
@@ -120,8 +141,6 @@
         if (sessionStep !== "chapter_editing") return;
 
         availableChapterSources = [];
-
-        console.log("Existing Cue Sources:", cueSources);
 
         if (cueSources.length > 0) {
             availableChapterSources = cueSources.map((source) => ({
@@ -176,6 +195,20 @@
         }
     }
 
+    // Reactive statement to filter models based on search query
+    $effect(() => {
+        if (modelSearchQuery.trim() === "") {
+            filteredModels = availableModels;
+        } else {
+            const query = modelSearchQuery.toLowerCase();
+            filteredModels = availableModels.filter(model =>
+                model.name.toLowerCase().includes(query) ||
+                model.id.toLowerCase().includes(query) ||
+                (model.description && model.description.toLowerCase().includes(query))
+            );
+        }
+    });
+
     async function loadAvailableModels(providerId) {
         if (!providerId) return;
 
@@ -183,6 +216,9 @@
             loadingModels = true;
             const data = await api.llm.getModels(providerId);
             availableModels = data.models;
+
+            // Reset search when switching providers
+            modelSearchQuery = "";
 
             // Set default model if current one is not available
             if (!availableModels.find((m) => m.id === aiOptions.model_id)) {
@@ -214,13 +250,42 @@
         }
     }
 
+    async function selectModel(modelId) {
+        aiOptions.model_id = modelId;
+        showModelDropdown = false;
+        modelSearchQuery = "";
+        
+        // Save the selection immediately
+        await saveAIOptions();
+    }
+
+    function getSelectedModelName() {
+        if (!aiOptions.model_id) {
+            return "Select a model...";
+        }
+        
+        const selectedModel = availableModels.find(m => m.id === aiOptions.model_id);
+        return selectedModel ? selectedModel.name : aiOptions.model_id;
+    }
+
     async function handleProviderChange(newProviderId) {
+        // Close any open dropdown
+        showModelDropdown = false;
+        modelSearchQuery = "";
+        
         aiOptions.provider_id = newProviderId;
         await loadAvailableModels(newProviderId);
+        
+        // Save the provider selection
+        await saveAIOptions();
     }
 
     async function confirmAICleanup() {
         try {
+            // Close dropdown and reset search
+            showModelDropdown = false;
+            modelSearchQuery = "";
+            
             // Dispatch confirm event with options
             dispatch('confirm', aiOptions);
             
@@ -233,6 +298,10 @@
     }
 
     function cancelAICleanup() {
+        // Close dropdown and reset search
+        showModelDropdown = false;
+        modelSearchQuery = "";
+        
         dispatch('cancel');
         isOpen = false;
     }
@@ -355,22 +424,73 @@
                             </div>
 
                             <div class="model-selection">
-                                <select
-                                        id="model-select"
-                                        class="model-select"
-                                        bind:value={aiOptions.model_id}
-                                        disabled={loadingModels || availableModels.length === 0}
-                                >
-                                    {#if loadingModels}
-                                        <option>Loading models...</option>
-                                    {:else if availableModels.length === 0}
-                                        <option>No models available</option>
-                                    {:else}
-                                        {#each availableModels as model}
-                                            <option value={model.id}>{model.name}</option>
-                                        {/each}
-                                    {/if}
-                                </select>
+                                {#if availableModels.length > 16}
+                                    <!-- Searchable dropdown for providers with a large number of models -->
+                                    <div class="model-dropdown-container">
+                                        <button
+                                            type="button"
+                                            class="model-dropdown-trigger"
+                                            onclick={() => showModelDropdown = !showModelDropdown}
+                                            disabled={loadingModels || availableModels.length === 0}
+                                        >
+                                            <span class="selected-model-name">{getSelectedModelName()}</span>
+                                            <ChevronDown size="16" />
+                                        </button>
+                                        
+                                        {#if showModelDropdown}
+                                            <div class="model-dropdown-content">
+                                                <div class="model-search-container">
+                                                    <Search size="16" />
+                                                    <input
+                                                        type="text"
+                                                        class="model-search-input"
+                                                        placeholder="Search models..."
+                                                        bind:value={modelSearchQuery}
+                                                    />
+                                                </div>
+                                                
+                                                <div class="model-options-container">
+                                                    {#if loadingModels}
+                                                        <div class="model-option loading">Loading models...</div>
+                                                    {:else if filteredModels.length === 0}
+                                                        <div class="model-option no-results">
+                                                            {modelSearchQuery.trim() ? 'No models found' : 'No models available'}
+                                                        </div>
+                                                    {:else}
+                                                        {#each filteredModels as model}
+                                                            <button
+                                                                type="button"
+                                                                class="model-option"
+                                                                class:selected={model.id === aiOptions.model_id}
+                                                                onclick={() => selectModel(model.id)}
+                                                            >
+                                                                <div class="model-name">{model.name}</div>
+                                                            </button>
+                                                        {/each}
+                                                    {/if}
+                                                </div>
+                                            </div>
+                                        {/if}
+                                    </div>
+                                {:else}
+                                    <!-- Regular dropdown for other providers -->
+                                    <select
+                                            id="model-select"
+                                            class="model-select"
+                                            bind:value={aiOptions.model_id}
+                                            disabled={loadingModels || availableModels.length === 0}
+                                    >
+                                        {#if loadingModels}
+                                            <option>Loading models...</option>
+                                        {:else if availableModels.length === 0}
+                                            <option>No models available</option>
+                                        {:else}
+                                            {#each availableModels as model}
+                                                <option value={model.id}>{model.name}</option>
+                                            {/each}
+                                        {/if}
+                                    </select>
+                                {/if}
                             </div>
                         </div>
                     {/if}
@@ -952,11 +1072,11 @@
     }
 
     .llm-selection-row .provider-selection {
-        flex-basis: 25%;
+        flex-basis: 30%;
     }
 
     .llm-selection-row .model-selection {
-        flex-basis: 75%;
+        flex-basis: 70%;
     }
 
     .provider-select,
@@ -1075,5 +1195,143 @@
     .btn-ai-cancel {
         padding: 0.375rem 0.75rem;
         font-size: 0.875rem;
+    }
+
+    .model-dropdown-container {
+        position: relative;
+        width: 100%;
+    }
+
+    .model-dropdown-trigger {
+        width: 100%;
+        padding: 0.5rem 0.75rem;
+        border: 1px solid var(--border-color);
+        border-radius: 0.375rem;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        font-size: 0.875rem;
+        transition: border-color 0.2s ease;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        cursor: pointer;
+        text-align: left;
+    }
+
+    .model-dropdown-trigger:hover:not(:disabled) {
+        border-color: var(--ai-accent);
+    }
+
+    .model-dropdown-trigger:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .selected-model-name {
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .model-dropdown-content {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: var(--bg-primary);
+        border: 1px solid var(--border-color);
+        border-radius: 0.375rem;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        z-index: 1001;
+        max-height: 300px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        margin-top: 2px;
+    }
+
+    .model-search-container {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 0.75rem;
+        border-bottom: 1px solid var(--border-color);
+        background: var(--bg-secondary);
+    }
+
+    .model-search-input {
+        flex: 1;
+        border: none;
+        outline: none;
+        background: transparent;
+        color: var(--text-primary);
+        font-size: 0.875rem;
+    }
+
+    .model-search-input::placeholder {
+        color: var(--text-muted);
+    }
+
+    .model-options-container {
+        overflow-y: auto;
+        max-height: 250px;
+    }
+
+    .model-option {
+        width: 100%;
+        padding: 0.75rem;
+        border: none;
+        background: transparent;
+        color: var(--text-primary);
+        cursor: pointer;
+        text-align: left;
+        transition: background-color 0.2s ease;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .model-option:last-child {
+        border-bottom: none;
+    }
+
+    .model-option:hover {
+        background: var(--bg-secondary);
+    }
+
+    .model-option.selected {
+        background: var(--ai-accent);
+        color: white;
+    }
+
+    .model-option.loading,
+    .model-option.no-results {
+        opacity: 0.7;
+        cursor: default;
+        font-style: italic;
+        text-align: center;
+    }
+
+    .model-option.loading:hover,
+    .model-option.no-results:hover {
+        background: transparent;
+    }
+
+    .model-name {
+        font-weight: 500;
+        color: inherit;
+    }
+
+    @media (max-width: 768px) {
+        .model-dropdown-content {
+            max-height: 200px;
+        }
+        
+        .model-options-container {
+            max-height: 150px;
+        }
+        
+        .model-option {
+            padding: 0.5rem;
+        }
     }
 </style>
