@@ -21,6 +21,7 @@
     import ChevronLeft from "@lucide/svelte/icons/chevron-left";
     import CircleDot from "@lucide/svelte/icons/circle-dot";
     import CircleQuestionMark from "@lucide/svelte/icons/circle-question-mark";
+    import Download from "@lucide/svelte/icons/download";
     import Headphones from "@lucide/svelte/icons/headphones";
     import Mic from "@lucide/svelte/icons/mic";
     import Moon from "@lucide/svelte/icons/moon";
@@ -35,6 +36,9 @@
     let showSettingsMenu = false;
     let checkingConfig = true;
     let previousStep = null;
+
+    let latestVersion = null;
+    let updateUrl = null;
 
     // Theme management
     function toggleTheme() {
@@ -129,6 +133,31 @@
         previousStep = $session.step;
     }
 
+    async function checkForUpdates() {
+        try {
+            const response = await fetch('https://api.github.com/repos/sirgibblets/achew/releases/latest');
+            if (!response.ok) return;
+            const data = await response.json();
+            latestVersion = data.tag_name.replace('v', '');
+            updateUrl = data.html_url;
+        } catch (error) {
+            console.error('Failed to check for updates:', error);
+        }
+    }
+
+    function isNewerVersion(current, latest) {
+        if (!current || !latest) return false;
+        const currentParts = current.split('.').map(Number);
+        const latestParts = latest.split('.').map(Number);
+        for (let i = 0; i < Math.max(currentParts.length, latestParts.length); i++) {
+            const currentPart = currentParts[i] || 0;
+            const latestPart = latestParts[i] || 0;
+            if (latestPart > currentPart) return true;
+            if (latestPart < currentPart) return false;
+        }
+        return false;
+    }
+
     onMount(async () => {
         mounted = true;
 
@@ -146,6 +175,8 @@
         } finally {
             checkingConfig = false;
         }
+
+        checkForUpdates();
     });
 
     onDestroy(() => {
@@ -318,6 +349,8 @@
     $: isConnectingView = currentComponent === Connecting;
     $: shouldShowSettings =
         !["abs_setup", "llm_setup"].includes($session.step) && !isConnectingView;
+
+    $: updateAvailable = isNewerVersion($session.version, latestVersion);
 </script>
 
 <!-- svelte-ignore a11y-click-events-have-key-events -->
@@ -473,15 +506,28 @@
 
     <!-- Version display in bottom right corner -->
     {#if $session.version}
-        <a
-                href="https://github.com/SirGibblets/achew/releases/tag/v{$session.version}"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="version-display"
-                title="View release notes on GitHub"
-        >
-            v{$session.version}
-        </a>
+        <div class="version-container">
+            <a
+                    href="https://github.com/SirGibblets/achew/releases/tag/v{$session.version}"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="version-display"
+                    title="View release notes on GitHub"
+            >
+                v{$session.version}
+            </a>
+            {#if updateAvailable}
+                <a
+                        href={updateUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="update-button"
+                        title="New version available: v{latestVersion}"
+                >
+                    <Download size={14} />
+                </a>
+            {/if}
+        </div>
     {/if}
 </main>
 
@@ -868,15 +914,11 @@
     }
 
     .version-display {
-        position: fixed;
-        bottom: 0.25rem;
-        right: 0.5rem;
         font-size: 0.75rem;
         color: var(--text-secondary);
         opacity: 0.6;
         font-family: monospace;
         text-decoration: none;
-        z-index: 10;
         transition: all 0.2s ease;
         cursor: pointer;
     }
@@ -887,9 +929,31 @@
         text-decoration: underline;
     }
 
+    .version-container {
+        position: fixed;
+        bottom: 0.25rem;
+        right: 0.75rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        z-index: 10;
+    }
+
+    .update-button {
+        color: var(--primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-decoration: none;
+        cursor: pointer;
+    }
+
     /* Hide on small screens to avoid clutter */
     @media (max-width: 480px) {
         .version-display {
+            display: none;
+        }
+        .version-container {
             display: none;
         }
     }
