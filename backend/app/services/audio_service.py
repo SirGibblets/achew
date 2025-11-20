@@ -696,7 +696,7 @@ class AudioProcessingService:
             with open(filelist_path, "w", encoding="utf-8") as f:
                 for path in input_files:
                     # Escape single quotes in filenames
-                    escaped_path = path.replace("'", "\\'")
+                    escaped_path = path.replace("'", "'\\''")
                     f.write(f"file '{escaped_path}'\n")
 
             cmd = [
@@ -721,12 +721,15 @@ class AudioProcessingService:
             process = subprocess.Popen(cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
             self._running_processes.append(process)
 
+            stderr_output = []
+
             # Parse progress output in real-time
             current_time = 0.0
             last_progress_update = 0.0
 
             for line in process.stderr:
                 line = line.strip()
+                stderr_output.append(line)
 
                 # Parse time progress from ffmpeg output
                 if total_duration and line.startswith("out_time_ms="):
@@ -783,11 +786,11 @@ class AudioProcessingService:
             process.wait()
 
             if process.returncode != 0:
-                logger.error(f"ffmpeg concat failed with return code {process.returncode}")
+                logger.error(f"ffmpeg concat failed with return code {process.returncode}.\nffmpeg output:\n" + "\n".join(stderr_output))
                 return None
 
             if not os.path.exists(output_file) or os.path.getsize(output_file) == 0:
-                logger.error(f"Concatenated output file was not created or is empty: {output_file}")
+                logger.error(f"Concatenated output file was not created or is empty: {output_file}.\nffmpeg output:\n" + "\n".join(stderr_output))
                 return None
 
             return output_file

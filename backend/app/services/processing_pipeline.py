@@ -717,20 +717,21 @@ class ProcessingPipeline:
                     )
                     concatenated_file = await audio_service.concat_files(audio_file_paths, total_duration)
 
-                    if concatenated_file and os.path.exists(concatenated_file):
-                        # Delete original audio files
-                        for audio_file in audio_file_paths:
-                            try:
-                                if os.path.exists(audio_file):
-                                    os.remove(audio_file)
-                            except Exception as e:
-                                logger.warning(f"Failed to delete original audio file {audio_file}: {e}")
+                    if not concatenated_file or not os.path.exists(concatenated_file):
+                        error_msg = "Failed to merge audio files for processing. This may be due to incompatible audio formats, corrupted files, or insufficient disk space. Please check the application logs for detailed error information."
+                        raise RuntimeError(error_msg)
 
-                        self.audio_file_path = concatenated_file
+                    # Delete original audio files
+                    for audio_file in audio_file_paths:
+                        try:
+                            if os.path.exists(audio_file):
+                                os.remove(audio_file)
+                        except Exception as e:
+                            logger.warning(f"Failed to delete original audio file {audio_file}: {e}")
 
-                        logger.info(f"Successfully concatenated {original_file_count} files into: {concatenated_file}")
-                    else:
-                        logger.warning("File concatenation failed, continuing with original files")
+                    self.audio_file_path = concatenated_file
+
+                    logger.info(f"Successfully concatenated {original_file_count} files into: {concatenated_file}")
 
                 self.step = Step.SELECT_CUE_SOURCE
 
