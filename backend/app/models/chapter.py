@@ -5,6 +5,10 @@ import uuid
 
 from pydantic import BaseModel, Field, computed_field
 
+class RealignmentData(BaseModel):
+    original_timestamp: float
+    confidence: float
+    is_guess: bool
 
 class ChapterData(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -15,6 +19,7 @@ class ChapterData(BaseModel):
     audio_segment_path: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.now)
     modified_at: datetime = Field(default_factory=datetime.now)
+    realignment: Optional[RealignmentData] = None
     _selected: bool = True
 
     @computed_field

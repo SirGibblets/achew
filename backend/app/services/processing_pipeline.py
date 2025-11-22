@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import os
 import shutil
@@ -16,10 +17,11 @@ from .audio_service import AudioProcessingService
 from .smart_detection_service import SmartDetectionService
 from .vad_detection_service import VadDetectionService
 from ..core.config import get_app_config
-from ..models.chapter import ChapterData
+from ..models.chapter import ChapterData, RealignmentData
 from ..models.enums import RestartStep, Step
 from ..models.progress import ProgressCallback
 from ..models.chapter_operation import AICleanupOperation, BatchChapterOperation, ChapterOperation
+from .chapter_aligner import ChapterAligner
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +50,7 @@ class ExistingCueSource(BaseModel):
     short_name: str
     description: str
     cues: List[SimpleChapter]
+    duration: float
 
 
 class SmartDetectConfig:
@@ -120,6 +123,7 @@ class ProcessingPipeline:
         self._trimming_task = None
         self._download_task = None
         self._vad_task = None
+        self.is_realignment: bool = False
 
         # Create temporary directory
         sys_tmp_dir = tempfile.gettempdir()
@@ -343,6 +347,7 @@ class ProcessingPipeline:
         if step_num <= RestartStep.SELECT_CUE_SOURCE.ordinal:
             self.cue_sets = {}
             self.detected_silences = []
+            self.is_realignment = False
             self.step = Step.SELECT_CUE_SOURCE
 
         # Background tasks have been properly cancelled, safe to broadcast step change
@@ -600,8 +605,9 @@ class ProcessingPipeline:
                                 id="abs",
                                 name="Audiobookshelf Chapters",
                                 short_name="ABS",
-                                description="Uses cues from the existing Audiobookshelf chapter data for this book.",
+                                description="Uses the existing Audiobookshelf chapter data for this book",
                                 cues=abs_cues,
+                                duration=book.duration,
                             )
                         )
 
@@ -623,8 +629,9 @@ class ProcessingPipeline:
                                 id="embedded",
                                 name="Embedded Chapters",
                                 short_name="Embedded",
-                                description="Uses cues from the book's embedded chapter metadata.",
+                                description="Uses chapter data from the book's embedded metadata",
                                 cues=embedded_cues,
+                                duration=book.duration,
                             )
                         )
 
@@ -647,8 +654,9 @@ class ProcessingPipeline:
                                 id="audnexus",
                                 name="Audnexus Chapters",
                                 short_name="Audnexus",
-                                description="Uses cues from the Audnexus chapter data for this book.",
+                                description="Uses the Audnexus chapter data associated with the ASIN assigned to this book",
                                 cues=audnexus_cues,
+                                duration=float(audnexus_chapter_data.runtimeLengthMs) / 1000,
                             )
                         )
 
@@ -668,10 +676,11 @@ class ProcessingPipeline:
                         self.existing_cue_sources.append(
                             ExistingCueSource(
                                 id="file_starts",
-                                name="File Start Times",
+                                name="File Info",
                                 short_name="Files",
-                                description="Uses the start of each file as a cue.",
+                                description="Uses the audiobook file names and start times as chapter data",
                                 cues=file_start_cues,
+                                duration=book.duration,
                             )
                         )
 
@@ -777,6 +786,144 @@ class ProcessingPipeline:
             await self.restart_at_step(RestartStep.SELECT_CUE_SOURCE, f"Processing failed: {str(e)}")
             raise
 
+    async def realign_chapters(self, source_id: str, dramatized: bool = False):
+        """Realign chapter timestamps from the user-selected source"""
+
+        try:
+            existing_source = next((src for src in self.existing_cue_sources if src.id == source_id), None)
+
+            if not existing_source:
+                raise ValueError(f"Invalid realignment source: {source_id}")
+            
+            self.is_realignment = True
+
+            self.smart_detect_config = SmartDetectConfig(
+                asr_buffer=0.5,
+                min_silence_duration=1.5,
+            )
+
+            self._notify_progress(
+                Step.AUDIO_EXTRACTION,
+                0,
+                f"Calculating audio extraction targets...",
+            )
+
+            padding: float = max(30, abs(self.book.duration - existing_source.duration) * 1.5)
+
+            raw_segments = []
+            for chapter in existing_source.cues:
+                start = max(0, chapter.timestamp - padding)
+                end = min(self.book.duration, chapter.timestamp + padding)
+
+                if start > self.book.duration:
+                    continue
+
+                raw_segments.append((start, end))
+
+            segment_times: List[Tuple[float, float]] = []
+
+            if raw_segments:
+                raw_segments.sort(key=lambda x: x[0])
+                current_start, current_end = raw_segments[0]
+
+                for next_start, next_end in raw_segments[1:]:
+                    if next_start <= current_end:
+                        current_end = max(current_end, next_end)
+                    else:
+                        segment_times.append((current_start, current_end))
+                        current_start, current_end = next_start, next_end
+
+                segment_times.append((current_start, current_end))
+
+            self._extraction_task = asyncio.create_task(self._extract_realignment_segments(segment_times))
+            await self._extraction_task
+
+            if self.segment_files is None or self.step != Step.AUDIO_EXTRACTION:
+                # Extraction was canceled
+                return
+
+            if len(self.segment_files) != len(segment_times):
+                raise RuntimeError("Mismatch between extracted segments and expected segments for realignment")
+
+            segment_starts, _ = zip(*segment_times)
+            segments = list(zip(segment_starts, self.segment_files))
+
+            if dramatized:
+                await self._detect_realignment_cues_vad(segments)
+            else:
+                await self._detect_realignment_cues(segments)
+
+            if self.detected_silences is None or self.step not in [Step.AUDIO_ANALYSIS, Step.VAD_ANALYSIS]:
+                # Detection was canceled
+                return
+
+            if self.detected_silences:
+                self.detected_silences = [(start, end - 0.25) for start, end in self.detected_silences]
+            
+            await self._realign_chapters(existing_source)
+
+        except Exception as e:
+            logger.error(f"Failed to align chapters: {e}", exc_info=True)
+            await self.restart_at_step(RestartStep.SELECT_CUE_SOURCE, f"Processing failed: {str(e)}")
+            raise
+
+    async def _realign_chapters(self, source: ExistingCueSource):
+        """Realign chapters using the detected silences and the source chapters"""
+        self._notify_progress(Step.AUDIO_ANALYSIS, 100, "Aligning chapters...")
+
+        try:
+            source_chapters = [{'time': c.timestamp, 'title': c.title} for c in source.cues]
+            
+            detected_cues = []
+            for start, end in self.detected_silences:
+                detected_cues.append({
+                    'time': end,
+                    'silence_duration': end - start
+                })
+
+            aligner = ChapterAligner()
+            
+            aligned_chapters, _ = aligner.align(
+                source_chapters, 
+                detected_cues, 
+                source.duration, 
+                self.book.duration
+            )
+
+            new_chapters = []
+            for i, ch in enumerate(aligned_chapters):
+                timestamp = ch['timestamp']
+                confidence = ch['confidence']
+                is_guess = ch['is_guess']
+
+                if i == 0:
+                    timestamp = 0.0
+                    confidence = 1.0
+                    is_guess = False
+
+                original_chapter = source.cues[i]
+                
+                chapter_data = ChapterData(
+                    timestamp=timestamp,
+                    asr_title=ch['title'],
+                    current_title=ch['title'],
+                    realignment=RealignmentData(
+                        original_timestamp=original_chapter.timestamp,
+                        confidence=confidence,
+                        is_guess=is_guess,
+                    )
+                )
+                new_chapters.append(chapter_data)
+
+            self.chapters = new_chapters
+            
+            self._notify_progress(Step.CHAPTER_EDITING, 0, f"Realigned {len(self.chapters)} chapters")
+
+        except Exception as e:
+            logger.error(f"Error during chapter alignment: {e}", exc_info=True)
+            await self.restart_at_step(RestartStep.SELECT_CUE_SOURCE, f"Alignment failed: {str(e)}")
+            raise
+
     @staticmethod
     def _format_duration_difference(diff_percent: float, diff_seconds: float) -> str:
         """Format duration difference for display"""
@@ -864,6 +1011,66 @@ class ProcessingPipeline:
             await self.restart_at_step(RestartStep.SELECT_CUE_SOURCE, f"VAD detection failed: {str(e)}")
             raise ProcessingError(f"Error during VAD detection: {str(e)}")
 
+    async def _detect_realignment_cues(self, segments: List[Tuple[float, str]]):
+        """Detect chapter cues for realignment"""
+
+        audio_service = AudioProcessingService(self._notify_progress, self.smart_detect_config, self._running_processes)
+
+        self._notify_progress(Step.AUDIO_ANALYSIS, 0, "Analyzing audio...")
+
+        silences: List[Tuple[float, float]] = []
+
+        for idx, (segment_start, segment_file) in enumerate(segments):
+            segment_silences = await audio_service.get_silence_boundaries(
+                segment_file,
+                min_silence_duration=1.5,
+                publish_progress=False,
+            )
+            if segment_silences:
+                adjusted_silences = [(start + segment_start, end + segment_start) for start, end in segment_silences]
+                silences.extend(adjusted_silences)
+            progress = (idx + 1) / len(segments) * 100
+            self._notify_progress(Step.AUDIO_ANALYSIS, progress, "Performing focused audio analysis...")
+
+        if silences is None or self.step != Step.AUDIO_ANALYSIS:
+            logger.info("Processing was cancelled during audio analysis, stopping cue detection")
+            return
+
+        self.detected_silences = silences.copy()
+
+    async def _detect_realignment_cues_vad(self, segments: List[Tuple[float, str]]):
+        """Detect potential chapter boundaries using VAD (Voice Activity Detection)."""
+        try:
+            self._notify_progress(Step.VAD_ANALYSIS, 0, "Preparing to analyze files...")
+
+            service = VadDetectionService(
+                progress_callback=self._notify_progress,
+                smart_detect_config=self.smart_detect_config,
+                running_processes=self._running_processes,
+            )
+
+            self._vad_task = asyncio.create_task(
+                service.get_vad_silence_boundaries_from_segments(segments)
+            )
+            silences = await self._vad_task
+            self._vad_task = None
+
+            if silences is None or self.step not in [Step.VAD_PREP, Step.VAD_ANALYSIS]:
+                logger.info("Processing was cancelled during VAD analysis, stopping cue detection")
+                return
+
+            self.detected_silences = silences.copy() if silences else []
+
+        except asyncio.CancelledError:
+            logger.info("VAD detection was cancelled")
+            self._vad_task = None
+            raise
+        except Exception as e:
+            logger.error(f"VAD detection failed: {e}", exc_info=True)
+            self._vad_task = None
+            await self.restart_at_step(RestartStep.SELECT_CUE_SOURCE, f"VAD detection failed: {str(e)}")
+            raise ProcessingError(f"Error during VAD detection: {str(e)}")
+
     async def _cluster_and_set_cues(self, service):
         """Generate cue sets from detection service and store for user selection"""
         # Generate cue sets
@@ -903,6 +1110,27 @@ class ProcessingPipeline:
         self._notify_progress(Step.AUDIO_EXTRACTION, 100, f"Extracted {len(self.segment_files)} chapter segments")
 
         logger.info(f"Extracted {len(self.segment_files)} segments")
+
+    async def _extract_realignment_segments(self, segment_times: List[Tuple[float, float]]):
+        """Extract audio segments for realignment detection"""
+
+        self._notify_progress(Step.AUDIO_EXTRACTION, 0, "Performing targeted audio extraction...")
+
+        audio_service = AudioProcessingService(self._notify_progress, self.smart_detect_config, self._running_processes)
+
+        self.segment_files = await audio_service.extract_segments(
+            audio_file=self.audio_file_path,
+            timestamps=segment_times,
+            output_dir=self.temp_dir,
+        )
+
+        if self.segment_files is None or self.step != Step.AUDIO_EXTRACTION:
+            logger.info("Processing was cancelled during audio extraction, stopping extraction")
+            return
+
+        self._notify_progress(Step.AUDIO_EXTRACTION, 100, f"Extracted {len(self.segment_files)} target segments")
+
+        logger.info(f"Extracted {len(self.segment_files)} target segments")
 
     async def _create_trimmed_segments(self):
         """Create trimmed segments for transcription based on ASR options"""
@@ -1326,13 +1554,13 @@ class ProcessingPipeline:
 
             # Prepare additional instructions list
             instructions_list = []
-            
+
             # Add checked custom instructions
             config = get_app_config()
             for instruction in config.custom_instructions.instructions:
                 if instruction.checked and instruction.text.strip():
                     instructions_list.append(instruction.text.strip())
-            
+
             # Add non-persistent additional_instructions at the end
             if additional_instructions.strip():
                 instructions_list.append(additional_instructions.strip())
@@ -1456,13 +1684,15 @@ class ProcessingPipeline:
                 restart_options.append(RestartStep.SELECT_CUE_SOURCE)
                 if has_cue_sets:
                     restart_options.append(RestartStep.CUE_SET_SELECTION)
-                restart_options.append(RestartStep.CONFIGURE_ASR)
+                if not self.is_realignment:
+                    restart_options.append(RestartStep.CONFIGURE_ASR)
             case Step.REVIEWING | Step.COMPLETED:
                 restart_options.append(RestartStep.IDLE)
                 restart_options.append(RestartStep.SELECT_CUE_SOURCE)
                 if has_cue_sets:
                     restart_options.append(RestartStep.CUE_SET_SELECTION)
-                restart_options.append(RestartStep.CONFIGURE_ASR)
+                if not self.is_realignment:
+                    restart_options.append(RestartStep.CONFIGURE_ASR)
                 restart_options.append(RestartStep.CHAPTER_EDITING)
             case _:
                 pass

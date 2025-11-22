@@ -184,5 +184,5 @@ If AI Cleanup isn’t an option for you, try using one of the Whisper models wit
 
 <summary>I frequently get too many or too few cues when using Smart Detect</summary>
 
-You can fine-tune this by adjusting the Minimum Chapter Gap value, found in the Smart Detect Settings in the Select Cue Source page. If you are getting too few cue options, drop this down to 1.75s or 1.5s. Conversely, if you're getting too many cues, try raising it up to 2.5 or 3s.
+You can fine-tune this by adjusting the Minimum Chapter Gap value, found in the Detection Settings before starting the Smart Detect workflow. If you are getting too few cue options, drop this down to 1.75s or 1.5s. Conversely, if you're getting too many cues, try raising it up to 2.5 or 3s.
 </details>

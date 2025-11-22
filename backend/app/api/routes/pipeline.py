@@ -45,6 +45,11 @@ class ConfigureASRRequest(BaseModel):
     action: str  # "transcribe" or "skip"
 
 
+class RealignChapterRequest(BaseModel):
+    source_id: str
+    dramatized: bool
+
+
 class PipelineStateResponse(BaseModel):
     item_id: str
     step: str
@@ -633,4 +638,40 @@ async def get_smart_detect_config():
         raise
     except Exception as e:
         logger.error(f"Failed to get smart detect config for pipeline: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/pipeline/realign")
+async def realign_chapter(request: RealignChapterRequest, background_tasks: BackgroundTasks):
+    """Realign chapter cues (Stub)"""
+    try:
+        app_state = get_app_state()
+
+        if not app_state.pipeline:
+            raise HTTPException(status_code=404, detail="Pipeline not found")
+        
+        if app_state.step != Step.SELECT_CUE_SOURCE:
+            raise HTTPException(
+                status_code=400,
+                detail="Pipeline must be in select_cue_source step to select option",
+            )
+
+        async def realign_chapters():
+            try:
+                await app_state.pipeline.realign_chapters(request.source_id, request.dramatized)
+            except Exception as e:
+                logger.error(f"Failed to realign chapters: {e}")
+
+        background_tasks.add_task(realign_chapters)
+
+        return {
+            "message": f"Realignment started for source '{request.source_id}'",
+            "source_id": request.source_id,
+            "dramatized": request.dramatized
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to start realignment: {e}")
         raise HTTPException(status_code=500, detail=str(e))

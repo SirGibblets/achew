@@ -106,6 +106,13 @@ export const session = {
         });
     },
 
+    async realignChapter(sourceId, dramatized) {
+        return apiRequest('/pipeline/realign', {
+            method: 'POST',
+            body: { source_id: sourceId, dramatized },
+        });
+    },
+
     async getCueSets() {
         return apiRequest('/pipeline/cue-sets');
     },

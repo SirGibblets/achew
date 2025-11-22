@@ -186,6 +186,7 @@ class VadDetectionService:
         chunk_batch: List[Tuple[int, str]],
         vad_worker_path: str,
         progress_tracker: dict,
+        segment_duration: float = None,
     ) -> List[Tuple[int, List[Tuple[float, float]]]]:
         """Process a batch of audio chunks with VAD using a single subprocess for efficiency"""
         try:
@@ -197,12 +198,14 @@ class VadDetectionService:
             worker_chunk_data = [[chunk_file, chunk_index] for chunk_index, chunk_file in chunk_batch]
             chunk_data = json.dumps(worker_chunk_data)
 
+            duration_to_use = segment_duration if segment_duration is not None else self.segment_duration
+
             # Create subprocess command with progress enabled
             cmd = [
                 sys.executable,  # Current Python interpreter
                 vad_worker_path,
                 chunk_data,  # JSON array of [chunk_file, chunk_index] pairs
-                str(self.segment_duration),
+                str(duration_to_use),
                 str(self.min_silence_duration),
                 "true",  # Enable progress tracking
             ]
@@ -785,3 +788,96 @@ class VadDetectionService:
                     break
 
         return filtered_clusters
+
+    async def get_vad_silence_boundaries_from_segments(
+        self,
+        segments: List[Tuple[float, str]],
+    ) -> Optional[List[Tuple[float, float]]]:
+        """
+        Detect silence boundaries from a list of audio segments.
+        Uses a single subprocess for processing all segments.
+        Returns a list of tuples containing (silence_start, silence_end) timestamps.
+        """
+        try:
+            self._check_cancellation()
+            self._notify_progress(Step.VAD_PREP, 0, "Preparing segments...")
+
+            vad_worker_path = self._get_vad_worker_path()
+
+            chunk_batch = [(i, file_path) for i, (_, file_path) in enumerate(segments)]
+
+            progress_tracker = {i: 0 for i in range(len(segments))}
+
+            progress_task = asyncio.create_task(
+                self._monitor_segment_progress(progress_tracker, len(segments))
+            )
+
+            self._notify_progress(Step.VAD_ANALYSIS, 0, "Starting analysis...")
+
+            worker_results = await self._process_chunk_batch_subprocess(
+                chunk_batch,
+                vad_worker_path,
+                progress_tracker,
+                segment_duration=0.0,
+            )
+
+            progress_task.cancel()
+
+            self._check_cancellation()
+
+            all_gaps = []
+            for chunk_index, gaps in worker_results:
+                start_offset = segments[chunk_index][0]
+
+                adjusted_gaps = [(start + start_offset, end + start_offset) for start, end in gaps]
+                all_gaps.extend(adjusted_gaps)
+
+            self._notify_progress(Step.VAD_ANALYSIS, 100, "Finalizing results...")
+            final_gaps = self._merge_overlapping_gaps(all_gaps)
+
+            logger.info(
+                f"VAD segment processing complete: found {len(final_gaps)} silence segments from {len(segments)} segments"
+            )
+            return final_gaps
+
+        except asyncio.CancelledError:
+            logger.info("VAD segment processing was cancelled")
+            await self.cancel_vad_processes()
+            return None
+        except Exception as e:
+            logger.error(f"VAD segment processing failed: {e}", exc_info=True)
+            return None
+
+    async def _monitor_segment_progress(
+        self,
+        progress_tracker: dict,
+        total_segments: int,
+    ):
+        """Monitor and report progress for segment-based processing"""
+        last_update_time = 0
+
+        try:
+            while True:
+                if self._is_cancelled:
+                    break
+
+                current_time = asyncio.get_event_loop().time()
+
+                if current_time - last_update_time >= 0.1:
+                    if progress_tracker:
+                        completed_count: float = sum(1 for v in progress_tracker.values() if v > 0)
+                        progress = completed_count / total_segments * 100.0
+
+                        self._notify_progress(
+                            Step.VAD_ANALYSIS,
+                            progress,
+                            f"Performing focused audio analysis...",
+                            {"completed": completed_count, "total": total_segments},
+                        )
+
+                        last_update_time = current_time
+
+                await asyncio.sleep(0.05)
+
+        except asyncio.CancelledError:
+            pass

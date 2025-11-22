@@ -5,6 +5,7 @@ import json
 import io
 from datetime import datetime
 
+from app.models.chapter import ChapterData
 from app.models.chapter_operation import (
     AddChapterOperation,
     ChapterOperation,
@@ -25,16 +26,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-class ChapterResponse(BaseModel):
-    id: str
-    timestamp: float
-    asr_title: str
-    current_title: str
-    selected: bool
-
-
 class ChaptersListResponse(BaseModel):
-    chapters: List[ChapterResponse]
+    chapters: List[ChapterData]
     selection_stats: Dict[str, int]
     total_count: int
 
@@ -145,19 +138,7 @@ async def get_chapters():
         if not app_state.pipeline:
             raise HTTPException(status_code=404, detail="Pipeline not found")
 
-        chapters_data = []
-        for chapter in app_state.pipeline.chapters:
-            if not chapter.deleted:
-                chapters_data.append(
-                    ChapterResponse(
-                        id=chapter.id,
-                        timestamp=chapter.timestamp,
-                        asr_title=chapter.asr_title,
-                        current_title=chapter.current_title,
-                        selected=chapter.selected,
-                    )
-                )
-
+        chapters_data = [chapter for chapter in app_state.pipeline.chapters if not chapter.deleted]
         stats = app_state.pipeline.get_selection_stats()
 
         return ChaptersListResponse(

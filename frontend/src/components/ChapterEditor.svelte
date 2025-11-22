@@ -28,6 +28,7 @@
     import TriangleAlert from "@lucide/svelte/icons/triangle-alert";
     import Undo from "@lucide/svelte/icons/undo";
     import X from "@lucide/svelte/icons/x";
+    import CircleHelp from "@lucide/svelte/icons/circle-help";
 
     let mounted = false;
     let loading = $state(false);
@@ -58,6 +59,12 @@
         $chapters.some(
             (chapter) => chapter.asr_title && chapter.asr_title.trim() !== "",
         ),
+    );
+
+    let hasAlignmentData = $derived(
+        $chapters.some(
+            (chapter) => chapter.realignment !== undefined
+        )
     );
 
     let showTranscriptions = $derived(
@@ -683,6 +690,16 @@
                     <th width="1" class="time-header">
                         Time
                     </th>
+                    {#if hasAlignmentData}
+                        <th width="1" class="offset-header">
+                            <div class="header-with-icon">
+                                Offset
+                                <div class="help-icon" data-tooltip="The time difference between the source chapter timestamp and the realigned timestamp.">
+                                    <CircleHelp size="14" />
+                                </div>
+                            </div>
+                        </th>
+                    {/if}
                     {#if showTranscriptions}
                         <th width="1">Transcription</th>
                         <th width="1"></th>
@@ -763,6 +780,26 @@
                                 </button>
                             {/if}
                         </td>
+                        {#if hasAlignmentData}
+                            <td class="offset-cell">
+                                {#if chapter.realignment != null}
+                                    {@const offset = chapter.timestamp - chapter.realignment.original_timestamp}
+                                    {@const isGuess = chapter.realignment.is_guess}
+                                    {@const lowConfidence = chapter.realignment.confidence < 0.75}
+                                    <div class="offset-display" class:warning={isGuess || lowConfidence}>
+                                        <span class="offset-value">
+                                            {offset > 0 ? '+' : ''}{offset.toFixed(1)}s
+                                        </span>
+                                        {#if isGuess || lowConfidence}
+                                            <div class="warning-icon" 
+                                                 data-tooltip={isGuess ? "This timestamp is an estimate. Please verify." : "Low confidence alignment. Please verify."}>
+                                                <TriangleAlert size="14" />
+                                            </div>
+                                        {/if}
+                                    </div>
+                                {/if}
+                            </td>
+                        {/if}
                         {#if showTranscriptions}
                             <td class="original-title-cell">
                    <span class="asr-title" title={chapter.asr_title}>
@@ -1630,5 +1667,115 @@
     .chevron-indicator.expanded {
         top: 16px;
         transform: translateX(-10px) rotate(180deg);
+    }
+
+    .offset-cell {
+        white-space: nowrap;
+        font-family: monospace;
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+        padding: 0.5rem;
+    }
+
+    .offset-display {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    .offset-display.warning {
+        color: var(--warning-color, #f59e0b);
+    }
+
+    .warning-icon {
+        display: flex;
+        align-items: center;
+        cursor: help;
+        position: relative;
+    }
+
+    .warning-icon[data-tooltip]:hover::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        margin-bottom: 11px;
+        padding: 8px 12px;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        font-size: 0.75rem;
+        line-height: 1.4;
+        white-space: pre-line;
+        width: max-content;
+        max-width: 200px;
+        z-index: 10001;
+        pointer-events: none;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .warning-icon[data-tooltip]:hover::before {
+        content: "";
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        border: 6px solid transparent;
+        border-top-color: var(--border-color);
+        z-index: 10002;
+    }
+
+    .header-with-icon {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    .help-icon {
+        display: flex;
+        align-items: center;
+        color: var(--text-secondary);
+        cursor: help;
+        position: relative;
+    }
+
+    .help-icon:hover {
+        color: var(--text-primary);
+    }
+
+    .help-icon[data-tooltip]:hover::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        margin-bottom: 11px;
+        padding: 8px 12px;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        font-size: 0.75rem;
+        line-height: 1.4;
+        white-space: pre-line;
+        width: max-content;
+        max-width: 200px;
+        z-index: 10001;
+        pointer-events: none;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        font-weight: normal;
+    }
+
+    .help-icon[data-tooltip]:hover::before {
+        content: "";
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        border: 6px solid transparent;
+        border-top-color: var(--border-color);
+        z-index: 10002;
     }
 </style>

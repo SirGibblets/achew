@@ -1,4 +1,4 @@
-from ..models.chapter import ChapterData
+from ..models.chapter import ChapterData, RealignmentData
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
@@ -120,12 +120,24 @@ class EditTimestampOperation(ChapterOperation):
     chapter_id: str
     old_timestamp: float = 0.0
     new_timestamp: float
+    old_realignment: Optional[RealignmentData] = None
 
     def apply(self, pipeline: "ProcessingPipeline"):
         chapter = self.find_chapter(pipeline, self.chapter_id)
+
         self.old_timestamp = chapter.timestamp
         chapter.timestamp = self.new_timestamp
+        
+        self.old_realignment = chapter.realignment
+        if chapter.realignment:
+            new_realignment = RealignmentData(
+                original_timestamp=chapter.realignment.original_timestamp,
+                confidence=1.0,
+                is_guess=False
+            )
+            chapter.realignment = new_realignment
 
     def undo(self, pipeline: "ProcessingPipeline"):
         chapter = self.find_chapter(pipeline, self.chapter_id)
         chapter.timestamp = self.old_timestamp
+        chapter.realignment = self.old_realignment

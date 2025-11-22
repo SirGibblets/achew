@@ -19,7 +19,6 @@
 
     // Icons
     import ChevronLeft from "@lucide/svelte/icons/chevron-left";
-    import CircleDot from "@lucide/svelte/icons/circle-dot";
     import CircleQuestionMark from "@lucide/svelte/icons/circle-question-mark";
     import Download from "@lucide/svelte/icons/download";
     import Headphones from "@lucide/svelte/icons/headphones";
@@ -28,6 +27,7 @@
     import Pencil from "@lucide/svelte/icons/pencil";
     import Settings from "@lucide/svelte/icons/settings";
     import Sun from "@lucide/svelte/icons/sun";
+    import Workflow from "@lucide/svelte/icons/workflow";
 
     let currentComponent = Connecting;
     let mounted = false;
@@ -227,7 +227,7 @@
             case "idle":
                 return "New Audiobook";
             case "select_cue_source":
-                return "Select Cue Source";
+                return "Workflow Selection";
             case "cue_set_selection":
                 return "Select Cue Set";
             case "configure_asr":
@@ -244,7 +244,7 @@
             case "idle":
                 return Headphones;
             case "select_cue_source":
-                return CircleDot;
+                return Workflow;
             case "configure_asr":
                 return Mic;
             case "chapter_editing":

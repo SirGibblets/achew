@@ -14,7 +14,10 @@
     import TriangleAlert from "@lucide/svelte/icons/triangle-alert";
 
     let loading = false;
-    let selectedOption = "";
+    let selectedExistingSource = "";
+    let selectedRealignSource = "";
+    let activeTab = "smart_detect";
+    let isDramatized = false;
     let cueSources = {};
     let existingCueSources = [];
     let error = null;
@@ -34,10 +37,6 @@
     $: if ($session.cueSources) {
         cueSources = $session.cueSources;
         error = null;
-        // Only set default selection if no option is currently selected
-        if (!selectedOption) {
-            selectedOption = "smart_detect";
-        }
     }
 
     // Get existing cue sources from session store
@@ -154,15 +153,26 @@
     }
 
     async function proceedWithSelection() {
-        if (!selectedOption) {
-            alert("Please select a cue source option.");
-            return;
-        }
-
         loading = true;
         try {
-            // Send the user's choice to the backend
-            await api.session.selectCueSource(selectedOption);
+            if (activeTab === "smart_detect") {
+                const option = isDramatized ? "smart_detect_vad" : "smart_detect";
+                await api.session.selectCueSource(option);
+            } else if (activeTab === "realign") {
+                if (!selectedRealignSource) {
+                    alert("Please select a source to realign.");
+                    loading = false;
+                    return;
+                }
+                await api.session.realignChapter(selectedRealignSource, isDramatized);
+            } else if (activeTab === "regenerate_titles") {
+                if (!selectedExistingSource) {
+                    alert("Please select a cue source option.");
+                    loading = false;
+                    return;
+                }
+                await api.session.selectCueSource(selectedExistingSource);
+            }
         } catch (error) {
             console.error("Error selecting cue source:", error);
             session.setError("Failed to select cue source: " + error.message);
@@ -213,6 +223,8 @@
         chapterModalTitle = "";
     }
 
+
+
     // Get the option display info
     function getOptionInfo(option) {
         // Handle dynamic existing cue sources
@@ -222,52 +234,14 @@
         if (existingSource) {
             return {
                 title: existingSource.name,
-                description:
-                    existingSource.description ||
-                    `Uses cues from ${existingSource.name.toLowerCase()}.`,
+                description: existingSource.description,
             };
         }
 
-        // Handle built-in options
-        switch (option) {
-            case "smart_detect":
-                // Build description with conditional text about other sources
-                let description =
-                    "Uses audio analysis to detect potential chapter cues. You will choose which set of cues to use in the next step.";
-
-                // Check if there are other sources available
-                const availableSourceNames = existingCueSources.map(
-                    (source) => source.name,
-                );
-
-                if (availableSourceNames.length > 0) {
-                    const sourcesList =
-                        availableSourceNames.length === 1
-                            ? availableSourceNames[0]
-                            : availableSourceNames.length === 2
-                                ? availableSourceNames.join(" and ")
-                                : availableSourceNames.slice(0, -1).join(", ") +
-                                ", and " +
-                                availableSourceNames[availableSourceNames.length - 1];
-                    description += ` You will be able to compare to—and add cues from—the ${sourcesList}.`;
-                }
-
-                return {
-                    title: "Smart Detect",
-                    description: description,
-                };
-            case "smart_detect_vad":
-                return {
-                    title: "Smart Detect (Dramatized)",
-                    description:
-                        "Ideal for dramatized audiobooks containing music and sound effects. 2-3x slower than normal Smart Detect.",
-                };
-            default:
-                return {
-                    title: option,
-                    description: "Unknown option",
-                };
-        }
+        return {
+            title: option,
+            description: "Unknown option",
+        };
     }
 
     onMount(async () => {
@@ -304,10 +278,7 @@
     {/if}
 
     <div class="header">
-        <h2>Select Cue Source</h2>
-        <p>
-            Choose how you'd like to generate/import chapter cues for this audiobook.
-        </p>
+        <h2>Select A Workflow</h2>
     </div>
 
     {#if loading}
@@ -316,298 +287,400 @@
             <p class="mt-2">Loading cue sources...</p>
         </div>
     {:else}
+        <div class="mode-selector">
+            <button
+                    class="mode-btn {activeTab === 'smart_detect' ? 'active' : ''}"
+                    on:click={() => activeTab = 'smart_detect'}
+                    type="button"
+            >
+                Smart Detect
+            </button>
+            <button
+                    class="mode-btn {activeTab === 'realign' ? 'active' : ''}"
+                    on:click={() => activeTab = 'realign'}
+                    type="button"
+            >
+                Realign Chapters
+            </button>
+            <button
+                    class="mode-btn {activeTab === 'regenerate_titles' ? 'active' : ''}"
+                    on:click={() => activeTab = 'regenerate_titles'}
+                    type="button"
+            >
+                Regenerate Titles
+            </button>
+        </div>
+
         <div class="options-grid">
-            <div
-                    class="option-card"
-                    class:selected={selectedOption === "smart_detect"}
-            >
-                <label>
-                    <div class="option-layout">
-                        <input
-                                type="radio"
-                                bind:group={selectedOption}
-                                value="smart_detect"
-                                disabled={loading}
-                        />
-                        <div class="option-content">
-                            <div class="option-header">
-                                <b>{getOptionInfo("smart_detect").title}</b>
-                            </div>
-                            <p class="description">
-                                {getOptionInfo("smart_detect").description}
-                            </p>
-                        </div>
-                    </div>
-                </label>
-            </div>
+            {#if activeTab === 'smart_detect'}
+                <p class="tab-description">
+                    The <b>Smart Detect</b> workflow uses audio analysis to locate potential chapter cues within the audiobook. You will choose which set of cues to use in the next step.
+                    {#if existingCueSources.length > 0}
+                        {@const availableSourceNames = existingCueSources.map(source => source.name)}
+                        {@const sourcesList = availableSourceNames.length === 1 ? availableSourceNames[0] : availableSourceNames.length === 2 ? availableSourceNames.join(" and ") : availableSourceNames.slice(0, -1).join(", ") + ", and " + availableSourceNames[availableSourceNames.length - 1]}
+                         You will also be able to compare to the {sourcesList}.
+                    {/if}
+                </p>
 
-            <div
-                    class="option-card"
-                    class:selected={selectedOption === "smart_detect_vad"}
-            >
-                <label>
-                    <div class="option-layout">
-                        <input
-                                type="radio"
-                                bind:group={selectedOption}
-                                value="smart_detect_vad"
-                                disabled={loading}
-                        />
-                        <div class="option-content">
-                            <div class="option-header">
-                                <b>{getOptionInfo("smart_detect_vad").title}</b>
-                            </div>
-                            <p class="description">
-                                {getOptionInfo("smart_detect_vad").description}
-                            </p>
-                        </div>
-                    </div>
-                </label>
-            </div>
+                <!-- Settings -->
+                <div class="settings-section">
+                    <button
+                            class="settings-toggle"
+                            on:click={() => (settingsExpanded = !settingsExpanded)}
+                            type="button"
+                    >
+                        <Settings2 size="16"/>
+                        Detection Settings
+                        <span class="chevron" class:expanded={settingsExpanded}>
+                            <ChevronDown size="12"/>
+                        </span>
+                    </button>
 
-            <!-- Settings -->
-            <div class="settings-section">
-                <button
-                        class="settings-toggle"
-                        on:click={() => (settingsExpanded = !settingsExpanded)}
-                        type="button"
-                >
-                    <Settings2 size="16"/>
-                    Smart Detect Settings
-                    <span class="chevron" class:expanded={settingsExpanded}>
-            <ChevronDown size="12"/>
-          </span>
-                </button>
-
-                {#if settingsExpanded}
-                    <div class="settings-panel" transition:slide={{ duration: 300 }}>
-                        <!-- Smart Detect Settings Section -->
-                        <div class="settings-subsection">
-                            <div class="settings-grid">
-                                <!-- Segment Length -->
-                                <div class="setting-item">
-                                    <div class="setting-header">
-                                        <label for="segment-length">Segment Length</label>
-                                        <div
-                                                class="help-icon"
-                                                data-tooltip="The initial length of the audio segment extracted at each chapter cue to be used for ASR. If your audiobook features music at the start of chapters, increasing this may improve ASR accuracy."
-                                        >
-                                            <CircleQuestionMark size="14"/>
+                    {#if settingsExpanded}
+                        <div class="settings-panel" transition:slide={{ duration: 300 }}>
+                            <!-- Smart Detect Settings Section -->
+                            <div class="settings-subsection">
+                                <div class="settings-grid">
+                                    <!-- Segment Length -->
+                                    <div class="setting-item">
+                                        <div class="setting-header">
+                                            <label for="segment-length">Segment Length</label>
+                                            <div
+                                                    class="help-icon"
+                                                    data-tooltip="The initial length of the audio segment extracted at each chapter cue to be used for ASR. If your audiobook features music at the start of chapters, increasing this may improve ASR accuracy."
+                                            >
+                                                <CircleQuestionMark size="14"/>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div class="slider-container">
-                                        <input
-                                                id="segment-length"
-                                                type="range"
-                                                min="3"
-                                                max="30"
-                                                step="1"
-                                                value={localConfig.segment_length}
-                                                on:input={(e) =>
+                                        <div class="slider-container">
+                                            <input
+                                                    id="segment-length"
+                                                    type="range"
+                                                    min="3"
+                                                    max="30"
+                                                    step="1"
+                                                    value={localConfig.segment_length}
+                                                    on:input={(e) =>
                         handleSliderChange("segment_length", e.target.value)}
-                                                class="slider"
-                                        />
-                                        <div class="slider-value">
-                                            {localConfig.segment_length}s
+                                                    class="slider"
+                                            />
+                                            <div class="slider-value">
+                                                {localConfig.segment_length}s
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
 
-                                <!-- Min Clip Length -->
-                                <div class="setting-item">
-                                    <div class="setting-header">
-                                        <label for="min-clip-length">Min Segment Length</label>
-                                        <div
-                                                class="help-icon"
-                                                data-tooltip="The minimum segment length to use for ASR in the event that segments overlap."
-                                        >
-                                            <CircleQuestionMark size="14"/>
+                                    <!-- Min Clip Length -->
+                                    <div class="setting-item">
+                                        <div class="setting-header">
+                                            <label for="min-clip-length">Min Segment Length</label>
+                                            <div
+                                                    class="help-icon"
+                                                    data-tooltip="The minimum segment length to use for ASR in the event that segments overlap."
+                                            >
+                                                <CircleQuestionMark size="14"/>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div class="slider-container">
-                                        <input
-                                                id="min-clip-length"
-                                                type="range"
-                                                min="0.5"
-                                                max="5"
-                                                step="0.25"
-                                                value={localConfig.min_clip_length}
-                                                on:input={(e) =>
+                                        <div class="slider-container">
+                                            <input
+                                                    id="min-clip-length"
+                                                    type="range"
+                                                    min="0.5"
+                                                    max="5"
+                                                    step="0.25"
+                                                    value={localConfig.min_clip_length}
+                                                    on:input={(e) =>
                         handleSliderChange("min_clip_length", e.target.value)}
-                                                class="slider"
-                                        />
-                                        <div class="slider-value">
-                                            {localConfig.min_clip_length}s
+                                                    class="slider"
+                                            />
+                                            <div class="slider-value">
+                                                {localConfig.min_clip_length}s
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
 
-                                <!-- Silence Buffer -->
-                                <div class="setting-item">
-                                    <div class="setting-header">
-                                        <label for="asr-buffer">Silence Buffer</label>
-                                        <div
-                                                class="help-icon"
-                                                data-tooltip="The amount of buffer silence to add at the beginning of each segment for the benefit of Automatic Speech Recognition (ASR). A higher buffer may help improve ASR accuracy, depending on the model used."
-                                        >
-                                            <CircleQuestionMark size="14"/>
+                                    <!-- Silence Buffer -->
+                                    <div class="setting-item">
+                                        <div class="setting-header">
+                                            <label for="asr-buffer">Silence Buffer</label>
+                                            <div
+                                                    class="help-icon"
+                                                    data-tooltip="The amount of buffer silence to add at the beginning of each segment for the benefit of Automatic Speech Recognition (ASR). A higher buffer may help improve ASR accuracy, depending on the model used."
+                                            >
+                                                <CircleQuestionMark size="14"/>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div class="slider-container">
-                                        <input
-                                                id="asr-buffer"
-                                                type="range"
-                                                min="0"
-                                                max="1"
-                                                step="0.05"
-                                                value={localConfig.asr_buffer}
-                                                on:input={(e) =>
+                                        <div class="slider-container">
+                                            <input
+                                                    id="asr-buffer"
+                                                    type="range"
+                                                    min="0"
+                                                    max="1"
+                                                    step="0.05"
+                                                    value={localConfig.asr_buffer}
+                                                    on:input={(e) =>
                         handleSliderChange("asr_buffer", e.target.value)}
-                                                class="slider"
-                                        />
-                                        <div class="slider-value">{localConfig.asr_buffer}s</div>
-                                    </div>
-                                </div>
-
-                                <!-- Min Silence Duration -->
-                                <div class="setting-item">
-                                    <div class="setting-header">
-                                        <label for="min-silence-duration">Minimum Chapter Gap</label
-                                        >
-                                        <div
-                                                class="help-icon"
-                                                data-tooltip="The minimum gap before a segment to consider it as a potential chapter cue. Smaller values will produce more false positives, while larger values may omit valid cues."
-                                        >
-                                            <CircleQuestionMark size="14"/>
+                                                    class="slider"
+                                            />
+                                            <div class="slider-value">{localConfig.asr_buffer}s</div>
                                         </div>
                                     </div>
-                                    <div class="slider-container">
-                                        <input
-                                                id="min-silence-duration"
-                                                type="range"
-                                                min="1"
-                                                max="5"
-                                                step="0.25"
-                                                value={localConfig.min_silence_duration}
-                                                on:input={(e) =>
+
+                                    <!-- Min Silence Duration -->
+                                    <div class="setting-item">
+                                        <div class="setting-header">
+                                            <label for="min-silence-duration">Minimum Chapter Gap</label
+                                            >
+                                            <div
+                                                    class="help-icon"
+                                                    data-tooltip="The minimum gap before a segment to consider it as a potential chapter cue. Smaller values will produce more false positives, while larger values may omit valid cues."
+                                            >
+                                                <CircleQuestionMark size="14"/>
+                                            </div>
+                                        </div>
+                                        <div class="slider-container">
+                                            <input
+                                                    id="min-silence-duration"
+                                                    type="range"
+                                                    min="1"
+                                                    max="5"
+                                                    step="0.25"
+                                                    value={localConfig.min_silence_duration}
+                                                    on:input={(e) =>
                         handleSliderChange(
                           "min_silence_duration",
                           e.target.value,
                         )}
-                                                class="slider"
-                                        />
-                                        <div class="slider-value">
-                                            {localConfig.min_silence_duration}s
+                                                    class="slider"
+                                            />
+                                            <div class="slider-value">
+                                                {localConfig.min_silence_duration}s
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
 
-                            <div class="settings-actions">
-                                <button
-                                        class="btn btn-outline btn-sm"
-                                        on:click={resetToDefaults}
-                                        type="button"
-                                >
-                                    Reset to Defaults
-                                </button>
-                                {#if $session.smartDetectConfigLoading}
+                                <div class="settings-actions">
+                                    <button
+                                            class="btn btn-outline btn-sm"
+                                            on:click={resetToDefaults}
+                                            type="button"
+                                    >
+                                        Reset to Defaults
+                                    </button>
+                                    {#if $session.smartDetectConfigLoading}
                   <span class="config-status">
                     <div class="mini-spinner"></div>
                     Saving...
                   </span>
-                                {:else}
-                                    {@const errors = validateConfig(localConfig)}
-                                    {#if errors.length > 0}
+                                    {:else}
+                                        {@const errors = validateConfig(localConfig)}
+                                        {#if errors.length > 0}
                     <span class="config-status error">
                       <TriangleAlert size="14"/>
                         {errors[0]}
                     </span>
+                                        {/if}
                                     {/if}
-                                {/if}
+                                </div>
                             </div>
                         </div>
-                    </div>
-                {/if}
-            </div>
-
-            <!-- Section header for other sources -->
-            {#if existingCueSources.length > 0}
-                <div class="section-header">
-                    <h4 class="section-title">Existing Sources</h4>
-                    <p class="section-description">
-                        Choose one of these if you simply want to regenerate titles for an
-                        existing chapter set.
-                    </p>
+                    {/if}
                 </div>
-            {/if}
 
-            <!-- Dynamic existing cue source options -->
-            {#each existingCueSources as source}
-                <div class="option-card" class:selected={selectedOption === source.id}>
+                <div class="dramatized-toggle">
                     <label>
-                        <div class="option-layout">
-                            <input
-                                    type="radio"
-                                    bind:group={selectedOption}
-                                    value={source.id}
-                                    disabled={loading}
-                            />
-                            <div class="option-content">
-                                <div class="option-header">
-                                    <b>{getOptionInfo(source.id).title}</b>
-                                    <div class="chapter-count-container">
-                                        <button
-                                                class="chapter-count clickable"
-                                                on:click={() => handleChapterCountClick(source.id)}
-                                                title="Click to view chapter details"
-                                        >
-                                            {source.cues.length} chapters found
-                                            <ExternalLink size="12"/>
-                                        </button>
-                                        {#each getWarnings(source.id) as warning}
-                                            <div class="warning-icon-container" title="">
-                                                <TriangleAlert size="16" color="var(--warning)"/>
-                                                <div class="warning-tooltip">
-                                                    <TriangleAlert
-                                                            name="warning"
-                                                            color="var(--warning)"
-                                                            size="14"
-                                                    />
-                                                    <div class="warning-content">
-                                                        <span class="warning-title">{warning.title}:</span>
-                                                        <span class="warning-text"
-                                                        >{warning.description}</span
-                                                        >
-                                                    </div>
-                                                </div>
+                        <input
+                                type="checkbox"
+                                bind:checked={isDramatized}
+                                disabled={loading}
+                        />
+                        <span>Dramatized</span>
+                    </label>
+                    <div
+                            class="help-icon"
+                            data-tooltip="Select this if your audiobook contains non-speech elements like music and sound effects. Detection will be slower but more accurate."
+                    >
+                        <CircleQuestionMark size="14"/>
+                    </div>
+                </div>
+
+                <div class="actions">
+                    <button
+                            class="btn btn-verify"
+                            on:click={proceedWithSelection}
+                            disabled={loading}
+                    >
+                        {#if loading}
+                            <span class="btn-spinner"></span>
+                            Processing...
+                        {:else}
+                            Start Smart Detect
+                        {/if}
+                    </button>
+                </div>
+
+            {:else if activeTab === 'realign'}
+                <p class="tab-description">
+                    The <b>Realign Chapters</b> workflow uses chapters from an existing source and attempts to realign the timestamps to better match the book's audio. This is useful for cases where a source like Audnexus has correct titles, but the timestamps are off by a few seconds.
+                </p>
+
+                {#if existingCueSources.length > 0}
+                    {#each existingCueSources as source}
+                        <div class="option-card" class:selected={selectedRealignSource === source.id}>
+                            <label>
+                                <div class="option-layout">
+                                    <input
+                                            type="radio"
+                                            bind:group={selectedRealignSource}
+                                            value={source.id}
+                                            disabled={loading}
+                                    />
+                                    <div class="option-content">
+                                        <div class="option-header">
+                                            <b>{getOptionInfo(source.id).title}</b>
+                                            <div class="chapter-count-container">
+                                                <button
+                                                        class="chapter-count clickable"
+                                                        on:click={() => handleChapterCountClick(source.id)}
+                                                        title="Click to view chapter details"
+                                                >
+                                                    {source.cues.length} chapters
+                                                    <ExternalLink size="12"/>
+                                                </button>
                                             </div>
-                                        {/each}
+                                        </div>
+                                        <p class="description">
+                                            {getOptionInfo(source.id).description}
+                                        </p>
                                     </div>
                                 </div>
-                                <p class="description">
-                                    {getOptionInfo(source.id).description}
-                                </p>
-                            </div>
+                            </label>
                         </div>
-                    </label>
-                </div>
-            {/each}
-        </div>
+                    {/each}
 
-        <div class="actions">
-            <button
-                    class="btn btn-verify"
-                    on:click={proceedWithSelection}
-                    disabled={!selectedOption || loading}
-            >
-                {#if loading}
-                    <span class="btn-spinner"></span>
-                    Processing...
+                    <div class="dramatized-toggle">
+                        <label>
+                            <input
+                                    type="checkbox"
+                                    bind:checked={isDramatized}
+                                    disabled={loading}
+                            />
+                            <span>Dramatized</span>
+                        </label>
+                        <div
+                                class="help-icon"
+                                data-tooltip="Select this if your audiobook contains non-speech elements like music and sound effects. Detection will be slower but more accurate."
+                        >
+                            <CircleQuestionMark size="14"/>
+                        </div>
+                    </div>
+
+                    <div class="actions">
+                        <button
+                                class="btn btn-verify"
+                                on:click={proceedWithSelection}
+                                disabled={loading || !selectedRealignSource}
+                        >
+                            {#if loading}
+                                <span class="btn-spinner"></span>
+                                Processing...
+                            {:else}
+                                {#if selectedRealignSource}
+                                    Realign {getOptionInfo(selectedRealignSource).title}
+                                {:else}
+                                    Select a Chapter Source
+                                {/if}
+                            {/if}
+                        </button>
+                    </div>
                 {:else}
-                    Continue with {getOptionInfo(selectedOption).title}
+                    <div class="no-sources-card">
+                        <TriangleAlert size="16" />
+                        <p>No chapter sources found</p>
+                    </div>
                 {/if}
-            </button>
+
+            {:else if activeTab === 'regenerate_titles'}
+                <p class="tab-description">
+                    The <b>Regenerate Titles</b> workflow uses chapters from an existing source and regenerates titles at the given timestamps. This is useful for cases where a source has correct timestamps, but the titles are missing or incorrect.
+                </p>
+
+                {#if existingCueSources.length > 0}
+                    {#each existingCueSources as source}
+                        <div class="option-card" class:selected={selectedExistingSource === source.id}>
+                            <label>
+                                <div class="option-layout">
+                                    <input
+                                            type="radio"
+                                            bind:group={selectedExistingSource}
+                                            value={source.id}
+                                            disabled={loading}
+                                    />
+                                    <div class="option-content">
+                                        <div class="option-header">
+                                            <b>{getOptionInfo(source.id).title}</b>
+                                            <div class="chapter-count-container">
+                                                <button
+                                                        class="chapter-count clickable"
+                                                        on:click={() => handleChapterCountClick(source.id)}
+                                                        title="Click to view chapter details"
+                                                >
+                                                    {source.cues.length} chapters
+                                                    <ExternalLink size="12"/>
+                                                </button>
+                                                {#each getWarnings(source.id) as warning}
+                                                    <div class="warning-icon-container" title="">
+                                                        <TriangleAlert size="16" color="var(--warning)"/>
+                                                        <div class="warning-tooltip">
+                                                            <TriangleAlert
+                                                                    name="warning"
+                                                                    color="var(--warning)"
+                                                                    size="14"
+                                                            />
+                                                            <div class="warning-content">
+                                                                <span class="warning-title">{warning.title}:</span>
+                                                                <span class="warning-text"
+                                                                >{warning.description}</span
+                                                                >
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                {/each}
+                                            </div>
+                                        </div>
+                                        <p class="description">
+                                            {getOptionInfo(source.id).description}
+                                        </p>
+                                    </div>
+                                </div>
+                            </label>
+                        </div>
+                    {/each}
+
+                    <div class="actions" style="margin-top: 1.5rem;">
+                        <button
+                                class="btn btn-verify"
+                                on:click={proceedWithSelection}
+                                disabled={loading || !selectedExistingSource}
+                        >
+                            {#if loading}
+                                <span class="btn-spinner"></span>
+                                Processing...
+                            {:else if selectedExistingSource}
+                                Continue with {getOptionInfo(selectedExistingSource).title}
+                            {:else}
+                                Select a Chapter Source
+                            {/if}
+                        </button>
+                    </div>
+                {:else}
+                    <div class="no-sources-card">
+                        <TriangleAlert size="16" />
+                        <p>No chapter sources found</p>
+                    </div>
+                {/if}
+            {/if}
         </div>
     {/if}
 </div>
@@ -637,11 +710,6 @@
         margin-bottom: 0.75rem;
         font-size: 2rem;
         font-weight: 600;
-    }
-
-    .header p {
-        color: var(--text-secondary);
-        font-size: 1rem;
     }
 
     .options-grid {
@@ -834,7 +902,7 @@
     .actions {
         display: flex;
         justify-content: center;
-        margin-top: 2.5rem;
+        margin-top: 0rem;
     }
 
     .spinner {
@@ -875,7 +943,7 @@
 
     /* Settings Styles */
     .settings-section {
-        margin-top: 0;
+        margin-top: -1.5rem;
     }
 
     .settings-toggle {
@@ -1065,7 +1133,7 @@
     .settings-actions {
         display: flex;
         align-items: center;
-        justify-content: space-between;
+        justify-content: center;
         gap: 1rem;
         flex-wrap: wrap;
     }
@@ -1167,24 +1235,120 @@
         }
     }
 
-    /* Section header styles */
-    .section-header {
-        text-align: center;
-        margin-top: 2rem;
-        margin-bottom: 0.5rem;
+    .mode-selector {
+        display: flex;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        width: fit-content;
+        min-width: 500px;
+        margin-left: auto;
+        margin-right: auto;
+        overflow: hidden;
+        margin-bottom: 2rem;
     }
 
-    .section-title {
-        font-size: 1.1rem;
-        font-weight: 600;
+    .mode-btn {
+        flex: 1;
+        padding: 0.5rem 1rem;
+        border: none;
+        background: transparent;
+        color: var(--text-muted);
+        font-weight: 500;
+        font-size: 0.875rem;
+        border-radius: 0;
+        cursor: pointer;
+        position: relative;
+        border-right: 1px solid var(--border-color);
+        white-space: nowrap;
+    }
+
+    .mode-btn:first-child {
+        border-top-left-radius: 7px;
+        border-bottom-left-radius: 7px;
+    }
+
+    .mode-btn:last-child {
+        border-top-right-radius: 7px;
+        border-bottom-right-radius: 7px;
+        border-right: none;
+    }
+
+    .mode-btn:hover:not(.active) {
         color: var(--text-primary);
-        margin-bottom: 0.25rem;
+        background: var(--hover-bg);
     }
 
-    .section-description {
+    .mode-btn.active {
+        background: linear-gradient(
+                135deg,
+                var(--accent-gradient-start) 0%,
+                var(--accent-gradient-end) 100%
+        );
+        color: white;
+        font-weight: 600;
+    }
+
+    .tab-description {
         color: var(--text-secondary);
-        font-size: 0.9rem;
-        line-height: 1.4;
-        margin: 0 auto;
+        font-size: 1rem;
+        line-height: 1.5;
+        margin-bottom: 1rem;
+        text-align: center;
+        max-width: 700px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .tab-description b {
+        color: var(--text-primary);
+    }
+
+    .dramatized-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        margin-top: 1.5rem;
+    }
+
+    .dramatized-toggle label {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        cursor: pointer;
+        font-weight: 500;
+        color: var(--text-primary);
+        margin: 0;
+    }
+
+    .dramatized-toggle input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        accent-color: var(--primary-color);
+        cursor: pointer;
+    }
+
+    .no-sources-card {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+        padding: 1rem 1.5rem;
+        background: rgba(245, 158, 11, 0.1);
+        border: 0.5px solid var(--warning);
+        border-radius: 8px;
+        color: var(--warning);
+        text-align: left;
+        margin: 1rem auto;
+        width: fit-content;
+        max-width: 100%;
+    }
+
+    .no-sources-card p {
+        margin: 0;
+        font-weight: 400;
+        font-size: 0.95rem;
+        color: var(--warning);
     }
 </style>

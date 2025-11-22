@@ -88,6 +88,7 @@ class AudioProcessingService:
         silence_threshold: float = -30,
         min_silence_duration: float = None,
         duration: Optional[float] = None,
+        publish_progress: bool = True,
     ) -> Optional[List[Tuple[float, float]]]:
         """
         Detect silence boundaries in audio files using ffmpeg.
@@ -98,7 +99,8 @@ class AudioProcessingService:
         if min_silence_duration is None:
             min_silence_duration = self.min_silence_duration
 
-        self._notify_progress(Step.AUDIO_ANALYSIS, 0, "Starting audio analysis...")
+        if publish_progress:
+            self._notify_progress(Step.AUDIO_ANALYSIS, 0, "Starting audio analysis...")
 
         all_silences = []
 
@@ -139,10 +141,11 @@ class AudioProcessingService:
 
         all_silences.extend(file_silences)
 
-        # Process any remaining progress updates
-        await self._process_queued_progress()
+        if publish_progress:
+            # Process any remaining progress updates
+            await self._process_queued_progress()
 
-        self._notify_progress(Step.AUDIO_ANALYSIS, 100, f"Found {len(all_silences)} potential chapter breaks")
+            self._notify_progress(Step.AUDIO_ANALYSIS, 100, f"Found {len(all_silences)} potential chapter breaks")
 
         return all_silences
 
@@ -150,6 +153,7 @@ class AudioProcessingService:
         self,
         cmd: List[str],
         duration: Optional[float],
+        publish_progress: bool = True,
     ) -> Optional[List[Tuple[float, float]]]:
         """Run silence detection in a separate thread"""
         process = subprocess.Popen(cmd, stderr=subprocess.PIPE, text=True)
@@ -178,7 +182,7 @@ class AudioProcessingService:
                         silence_ends.append(timestamp)
 
                         # Update progress based on silence end timestamp
-                        if duration and timestamp > last_progress:
+                        if publish_progress and duration and timestamp > last_progress:
                             file_progress = min((timestamp / duration) * 100, 100)
                             message = f"Analyzing audio... ({_format_time(timestamp)} / {_format_time(duration)})"
 
@@ -292,29 +296,39 @@ class AudioProcessingService:
     def _run_segment_extraction(
         self,
         audio_file: str,
-        timestamps: List[float],
+        timestamps: List[float] | List[Tuple[float, float]],
         output_dir: str,
         use_wav: bool = False,
         allow_retry: bool = True,
     ) -> List[str]:
         """Run segment extraction in a separate thread"""
 
-        def _timestamp_to_filename(timestamp: float) -> str:
+        def _timestamp_to_filename(timestamp: float | Tuple[float, float]) -> str:
             """Convert timestamp to filename format using milliseconds"""
-            milliseconds = int(timestamp * 1000)
+            milliseconds: int
+            if isinstance(timestamp, tuple):
+                milliseconds = int(timestamp[0] * 1000)
+            else:
+                milliseconds = int(timestamp * 1000)
             return f"{milliseconds}"
-
+        
         # Generate expanded timestamps for segment extraction
         expanded_timestamps = []
-        for i, ts in enumerate(timestamps):
-            expanded_timestamps.append(ts)  # Original timestamp
-            # Calculate additional timestamp (segment_length seconds later)
-            extra_ts = ts + self.segment_length
-            # Check if the extra timestamp overlaps with the next original timestamp
-            if i < len(timestamps) - 1 and extra_ts >= timestamps[i + 1] - self.min_clip_length:
-                # Set it to min_clip_length before the next timestamp if it would overlap
-                extra_ts = timestamps[i + 1] - self.min_clip_length
-            expanded_timestamps.append(extra_ts)
+        
+        if isinstance(timestamps[0], tuple):
+            for start_ts, end_ts in timestamps:
+                expanded_timestamps.append(start_ts)
+                expanded_timestamps.append(end_ts)
+        else:
+            for i, ts in enumerate(timestamps):
+                expanded_timestamps.append(ts)  # Original timestamp
+                # Calculate additional timestamp (segment_length seconds later)
+                extra_ts = ts + self.segment_length
+                # Check if the extra timestamp overlaps with the next original timestamp
+                if i < len(timestamps) - 1 and extra_ts >= timestamps[i + 1] - self.min_clip_length:
+                    # Set it to min_clip_length before the next timestamp if it would overlap
+                    extra_ts = timestamps[i + 1] - self.min_clip_length
+                expanded_timestamps.append(extra_ts)
 
         segment_times = ",".join(
             str(ts) for ts in expanded_timestamps[1:]
