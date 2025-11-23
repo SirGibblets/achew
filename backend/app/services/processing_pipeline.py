@@ -860,14 +860,14 @@ class ProcessingPipeline:
             if self.detected_silences:
                 self.detected_silences = [(start, end - 0.25) for start, end in self.detected_silences]
             
-            await self._realign_chapters(existing_source)
+            await self._realign_chapters(existing_source, padding)
 
         except Exception as e:
             logger.error(f"Failed to align chapters: {e}", exc_info=True)
             await self.restart_at_step(RestartStep.SELECT_CUE_SOURCE, f"Processing failed: {str(e)}")
             raise
 
-    async def _realign_chapters(self, source: ExistingCueSource):
+    async def _realign_chapters(self, source: ExistingCueSource, ransac_threshold: float):
         """Realign chapters using the detected silences and the source chapters"""
         self._notify_progress(Step.AUDIO_ANALYSIS, 100, "Aligning chapters...")
 
@@ -881,7 +881,9 @@ class ProcessingPipeline:
                     'silence_duration': end - start
                 })
 
-            aligner = ChapterAligner()
+            aligner = ChapterAligner(
+                ransac_threshold=ransac_threshold,
+            )
             
             aligned_chapters, _ = aligner.align(
                 source_chapters, 
@@ -1023,7 +1025,7 @@ class ProcessingPipeline:
         for idx, (segment_start, segment_file) in enumerate(segments):
             segment_silences = await audio_service.get_silence_boundaries(
                 segment_file,
-                min_silence_duration=1.5,
+                min_silence_duration=1,
                 publish_progress=False,
             )
             if segment_silences:
