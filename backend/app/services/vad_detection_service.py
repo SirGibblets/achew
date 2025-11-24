@@ -795,7 +795,6 @@ class VadDetectionService:
     ) -> Optional[List[Tuple[float, float]]]:
         """
         Detect silence boundaries from a list of audio segments.
-        Uses a single subprocess for processing all segments.
         Returns a list of tuples containing (silence_start, silence_end) timestamps.
         """
         try:
@@ -803,34 +802,56 @@ class VadDetectionService:
             self._notify_progress(Step.VAD_PREP, 0, "Preparing segments...")
 
             vad_worker_path = self._get_vad_worker_path()
+            total_segments = len(segments)
 
-            chunk_batch = [(i, file_path) for i, (_, file_path) in enumerate(segments)]
+            all_chunks = [(i, file_path) for i, (_, file_path) in enumerate(segments)]
 
-            progress_tracker = {i: 0 for i in range(len(segments))}
+            chunks_per_worker = max(1, total_segments // self.max_processes)
+            if total_segments % self.max_processes != 0:
+                chunks_per_worker += 1
+
+            worker_batches = []
+            for worker_id in range(self.max_processes):
+                start_idx = worker_id * chunks_per_worker
+                end_idx = min(start_idx + chunks_per_worker, total_segments)
+
+                if start_idx < total_segments:
+                    worker_batches.append(all_chunks[start_idx:end_idx])
+
+            progress_tracker = {i: 0 for i in range(total_segments)}
 
             progress_task = asyncio.create_task(
-                self._monitor_segment_progress(progress_tracker, len(segments))
+                self._monitor_segment_progress(progress_tracker, total_segments)
             )
 
             self._notify_progress(Step.VAD_ANALYSIS, 0, "Starting analysis...")
 
-            worker_results = await self._process_chunk_batch_subprocess(
-                chunk_batch,
-                vad_worker_path,
-                progress_tracker,
-                segment_duration=0.0,
-            )
+            worker_tasks = []
+            for batch in worker_batches:
+                task = self._process_chunk_batch_subprocess(
+                    batch,
+                    vad_worker_path,
+                    progress_tracker,
+                    segment_duration=0.0,
+                )
+                worker_tasks.append(task)
+
+            worker_results_list = await asyncio.gather(*worker_tasks, return_exceptions=True)
 
             progress_task.cancel()
-
             self._check_cancellation()
 
             all_gaps = []
-            for chunk_index, gaps in worker_results:
-                start_offset = segments[chunk_index][0]
+            for result in worker_results_list:
+                if isinstance(result, Exception):
+                    logger.error(f"Worker failed: {result}")
+                    continue
 
-                adjusted_gaps = [(start + start_offset, end + start_offset) for start, end in gaps]
-                all_gaps.extend(adjusted_gaps)
+                for chunk_index, gaps in result:
+                    start_offset = segments[chunk_index][0]
+
+                    adjusted_gaps = [(start + start_offset, end + start_offset) for start, end in gaps]
+                    all_gaps.extend(adjusted_gaps)
 
             self._notify_progress(Step.VAD_ANALYSIS, 100, "Finalizing results...")
             final_gaps = self._merge_overlapping_gaps(all_gaps)
