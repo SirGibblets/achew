@@ -349,7 +349,7 @@ function createSessionStore() {
 
         // Chapter management
         async loadChapters() {
-            update(state => ({...state, loading: true, error: null}));
+            update(state => ({...state, loading: true}));
 
             try {
                 const response = await api.chapters.getAll();

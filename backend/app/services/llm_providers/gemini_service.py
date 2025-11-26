@@ -292,114 +292,126 @@ class GeminiService(AIService):
         chapter_data = [{"id": idx, "title": text} for idx, text in enumerate(transcriptions)]
         user_message = f"Input data:\n{json.dumps(chapter_data)}"
 
-        try:
-            # Get API key and create client
-            api_key = self._get_api_key()
-            if not api_key:
-                raise ValueError("Gemini API key configuration is required")
-
-            processing_client = self._create_client(api_key)
-
-            # Initialize incremental parser for progress tracking
-            parser = IncrementalJSONParser()
-            total_chapters = len(transcriptions)
-
-            # Combine system prompt and user message
-            combined_prompt = f"{system_prompt}\n\n{user_message}"
-
-            # Use structured output with ChapterList model
-            stream_count = 0
-            content_received = ""
-
-            # Enable thinking only for gemini-2.5 models
-            thinking_budget = 0
-            if "gemini-2.5" in model_id:
-                thinking_budget = 1024
-
-            # Stream the response for progress updates
-            async for chunk in await processing_client.aio.models.generate_content_stream(
-                model=model_id,
-                contents=combined_prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    response_schema=ChapterList,
-                    thinking_config=types.ThinkingConfig(
-                        thinking_budget=thinking_budget,
-                        include_thoughts=True,
-                    ),
-                ),
-            ):
-                stream_count += 1
-                logger.debug(f"Gemini Received chunk {stream_count}: {chunk}")
-
-                for part in chunk.candidates[0].content.parts:
-                    if not part.text:
-                        continue
-
-                    if part.thought:
-                        self._notify_progress(0, "Thinking...")
-                    else:
-                        content = part.text
-                        content_received += content
-                        logger.debug(f"Gemini Content chunk: '{content}'")
-
-                        result = parser.feed(content)
-                        if result["new_chapters"]:
-                            progress_percent = result["total_parsed"] / total_chapters * 100
-                            self._notify_progress(
-                                progress_percent,
-                                f"Processed {result['total_parsed']}/{total_chapters} chapters",
-                            )
-
-            if not content_received:
-                logger.error("Gemini No content received from streaming!")
-
-            self._notify_progress(100, "Processing AI response...")
-
-            # Parse the response
+        # Retry on JSON decode errors
+        max_retries = 1
+        for attempt in range(max_retries + 1):
             try:
-                response_data = json.loads(content_received)
-                processed_chapters = response_data.get("chapters", [])
+                if attempt > 0:
+                    self._notify_progress(0, "Retrying...")
 
-            except json.JSONDecodeError as e:
-                logger.error(f"Gemini Failed to parse Gemini response as JSON: {e}")
-                logger.error(f"Gemini Raw response: {content_received}")
+                # Get API key and create client
+                api_key = self._get_api_key()
+                if not api_key:
+                    raise ValueError("Gemini API key configuration is required")
+
+                processing_client = self._create_client(api_key)
+
+                # Initialize incremental parser for progress tracking
+                parser = IncrementalJSONParser()
+                total_chapters = len(transcriptions)
+
+                # Combine system prompt and user message
+                combined_prompt = f"{system_prompt}\n\n{user_message}"
+
+                # Use structured output with ChapterList model
+                stream_count = 0
+                content_received = ""
+
+                # Enable thinking only for gemini-2.5 models
+                thinking_budget = 0
+                if "gemini-2.5" in model_id:
+                    thinking_budget = 1024
+                
+                # Stream the response for progress updates
+                async for chunk in await processing_client.aio.models.generate_content_stream(
+                    model=model_id,
+                    contents=combined_prompt,
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        response_schema=ChapterList,
+                        thinking_config=types.ThinkingConfig(
+                            thinking_budget=thinking_budget,
+                            include_thoughts=True,
+                        ),
+                    ),
+                ):
+                    stream_count += 1
+                    logger.debug(f"Gemini Received chunk {stream_count}: {chunk}")
+
+                    for part in chunk.candidates[0].content.parts:
+                        if not part.text:
+                            continue
+
+                        if part.thought:
+                            self._notify_progress(0, "Thinking...")
+                        else:
+                            content = part.text
+                            content_received += content
+                            logger.debug(f"Gemini Content chunk: '{content}'")
+
+                            result = parser.feed(content)
+                            if result["new_chapters"]:
+                                progress_percent = result["total_parsed"] / total_chapters * 100
+                                self._notify_progress(
+                                    progress_percent,
+                                    f"Processed {result['total_parsed']}/{total_chapters} chapters",
+                                )
+
+                if not content_received:
+                    logger.error("Gemini No content received from streaming!")
+
+                self._notify_progress(100, "Processing AI response...")
+
+                # Parse the response
+                try:
+                    response_data = json.loads(content_received)
+                    processed_chapters = response_data.get("chapters", [])
+
+                except json.JSONDecodeError as e:
+                    logger.error(f"Gemini Failed to parse Gemini response as JSON: {e}")
+                    logger.error(f"Gemini Raw response: {content_received}")
+
+                    if attempt < max_retries:
+                        logger.warning(f"Gemini JSON decode error on attempt {attempt + 1}, retrying...")
+                        continue
+                    else:
+                        raise
+                    
+
+                # Convert to title list
+                chapters = [
+                    None if chapter.get("title") == "null" or chapter.get("title") is None else chapter.get("title")
+                    for chapter in processed_chapters
+                ]
+
+                valid_chapters = len([t for t in chapters if t])
+
+                self._notify_progress(100, f"Generated {valid_chapters} chapter titles")
+
+                return chapters
+
+            except ClientError as e:
+                error_msg = f"Gemini Client error: {str(e)}"
+                logger.error(f"Gemini Client error: {e}")
+                self._notify_progress(0, error_msg)
                 raise
-
-            # Convert to title list
-            chapters = [
-                None if chapter.get("title") == "null" or chapter.get("title") is None else chapter.get("title")
-                for chapter in processed_chapters
-            ]
-
-            valid_chapters = len([t for t in chapters if t])
-
-            self._notify_progress(100, f"Generated {valid_chapters} chapter titles")
-
-            return chapters
-
-        except ClientError as e:
-            error_msg = f"Gemini Client error: {str(e)}"
-            logger.error(f"Gemini Client error: {e}")
-            self._notify_progress(0, error_msg)
-            raise
-        except ServerError as e:
-            error_msg = f"Gemini server error - please wait and try again: {str(e)}"
-            logger.error(f"Gemini server error: {e}")
-            self._notify_progress(0, error_msg)
-            raise
-        except APIError as e:
-            error_msg = f"Google Gemini API error: {str(e)}"
-            logger.error(f"Gemini API error: {e}")
-            self._notify_progress(0, error_msg)
-            raise
-        except json.JSONDecodeError as e:
-            error_msg = f"Failed to parse Gemini response - invalid JSON format: {str(e)}"
-            logger.error(f"Gemini JSON decode error: {e}")
-            self._notify_progress(0, error_msg)
-            raise
-        except Exception as e:
-            error_msg = f"Unexpected error during Gemini processing (model: {model_id}): {str(e)}"
-            logger.error(f"Gemini unexpected error: {e}", exc_info=True)
-            self._notify_progress(0, error_msg)
-            raise
+            except ServerError as e:
+                error_msg = f"Gemini server error - please wait and try again: {str(e)}"
+                logger.error(f"Gemini server error: {e}")
+                self._notify_progress(0, error_msg)
+                raise
+            except APIError as e:
+                error_msg = f"Google Gemini API error: {str(e)}"
+                logger.error(f"Gemini API error: {e}")
+                self._notify_progress(0, error_msg)
+                raise
+            except json.JSONDecodeError as e:
+                error_msg = f"Failed to parse Gemini response - invalid JSON format: {str(e)}"
+                logger.error(f"Gemini JSON decode error: {e}")
+                self._notify_progress(0, error_msg)
+                raise
+            except Exception as e:
+                error_msg = f"Unexpected error during Gemini processing (model: {model_id}): {str(e)}"
+                logger.error(f"Gemini unexpected error: {e}", exc_info=True)
+                self._notify_progress(0, error_msg)
+                raise

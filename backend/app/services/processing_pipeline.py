@@ -1649,6 +1649,7 @@ class ProcessingPipeline:
         except ValueError as e:
             error_msg = f"AI cleanup error: {str(e)}"
             logger.error(f"AI cleanup error: {e}")
+            self.step = Step.CHAPTER_EDITING
             asyncio.create_task(get_app_state().broadcast_step_change(Step.CHAPTER_EDITING, error_message=error_msg))
             return False
         except Exception as e:
@@ -1659,6 +1660,7 @@ class ProcessingPipeline:
             )
             error_msg = f"AI cleanup failed{provider_info}: {str(e)}"
             logger.error(f"AI cleanup unexpected error: {e}", exc_info=True)
+            self.step = Step.CHAPTER_EDITING
             asyncio.create_task(get_app_state().broadcast_step_change(Step.CHAPTER_EDITING, error_message=error_msg))
             return False
 
