@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from typing import List, Dict, Any
 import csv
 import json
@@ -358,7 +359,16 @@ async def ai_cleanup(request: ProcessSelectedRequest):
                 affected_chapters=0,
             )
 
-        success = await app_state.pipeline.process_selected_with_ai(request.ai_options)
+        task = asyncio.create_task(app_state.pipeline.process_selected_with_ai(request.ai_options))
+        app_state.pipeline._ai_cleanup_task = task
+
+        try:
+            success = await task
+        except asyncio.CancelledError:
+            logger.info("AI cleanup request cancelled")
+            raise HTTPException(status_code=499, detail="Request cancelled")
+        finally:
+            app_state.pipeline._ai_cleanup_task = None
 
         if not success:
             raise HTTPException(status_code=500, detail="AI cleanup failed")

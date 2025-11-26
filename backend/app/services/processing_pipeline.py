@@ -123,6 +123,7 @@ class ProcessingPipeline:
         self._trimming_task = None
         self._download_task = None
         self._vad_task = None
+        self._ai_cleanup_task = None
         self.is_realignment: bool = False
 
         # Create temporary directory
@@ -187,6 +188,9 @@ class ProcessingPipeline:
         if self._vad_task:
             self._vad_task.cancel()
             self._vad_task = None
+        if self._ai_cleanup_task:
+            self._ai_cleanup_task.cancel()
+            self._ai_cleanup_task = None
         self.cleanup_all_files()
 
     def cleanup_all_files(self):
@@ -248,6 +252,18 @@ class ProcessingPipeline:
             except Exception as e:
                 logger.warning(f"Error waiting for extraction task cancellation: {e}")
             self._extraction_task = None
+
+        # Cancel any running AI cleanup tasks
+        if self._ai_cleanup_task:
+            logger.info("Cancelling AI cleanup task...")
+            self._ai_cleanup_task.cancel()
+            try:
+                await self._ai_cleanup_task
+            except asyncio.CancelledError:
+                logger.info("AI cleanup task cancelled successfully")
+            except Exception as e:
+                logger.warning(f"Error waiting for AI cleanup task cancellation: {e}")
+            self._ai_cleanup_task = None
 
         # Cancel any running transcription tasks
         if self._transcription_task:

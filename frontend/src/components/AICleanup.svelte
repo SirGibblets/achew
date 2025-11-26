@@ -1,6 +1,7 @@
 <script>
     import {onMount} from "svelte";
     import {session} from "../stores/session.js";
+    import {api} from "../utils/api.js";
     import Icon from "./Icon.svelte";
 
     let progress = 0;
@@ -32,6 +33,15 @@
         }
         return "Initializing AI cleanup...";
     })();
+
+    async function handleCancel() {
+        try {
+            await api.session.cancel();
+        } catch (error) {
+            console.error("Failed to cancel AI cleanup:", error);
+            session.setError("Failed to cancel processing. Please try again.");
+        }
+    }
 </script>
 
 <div class="ai-processing">
@@ -59,6 +69,15 @@
 
                 <div class="progress-message">
                     {progressMessage}
+                </div>
+
+                <div class="action-section">
+                    <button
+                            class="btn btn-cancel"
+                            on:click={handleCancel}
+                    >
+                        Cancel
+                    </button>
                 </div>
             </div>
         </div>
@@ -129,6 +148,12 @@
         font-size: 0.8rem;
         margin-bottom: 2rem;
         margin-top: 0.75rem;
+    }
+
+    .action-section {
+        display: flex;
+        justify-content: center;
+        margin-top: 1rem;
     }
 
     .progress-bar-container {

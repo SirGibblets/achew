@@ -524,6 +524,14 @@ async def cancel_step():
                 "restart_step": RestartStep.CONFIGURE_ASR.value,
             }
 
+        elif step == Step.AI_CLEANUP:
+            await pipeline.restart_at_step(RestartStep.CHAPTER_EDITING)
+            return {
+                "message": "AI cleanup cancelled, returned to chapter editing",
+                "action": "restarted",
+                "restart_step": RestartStep.CHAPTER_EDITING.value,
+            }
+
         else:
             await pipeline.restart_at_step(RestartStep.SELECT_CUE_SOURCE)
             return {
