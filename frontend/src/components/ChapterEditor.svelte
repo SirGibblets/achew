@@ -63,7 +63,7 @@
 
     let hasAlignmentData = $derived(
         $chapters.some(
-            (chapter) => chapter.realignment !== undefined
+            (chapter) => chapter.realignment != null
         )
     );
 
