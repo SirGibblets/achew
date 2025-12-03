@@ -68,7 +68,7 @@
     );
 
     let showTranscriptions = $derived(
-        hasTranscriptions && !editorSettings.hide_transcriptions
+        hasTranscriptions && !editorSettings.hide_transcriptions && !hasAlignmentData
     );
 
     // Load chapters and AI options when component mounts
