@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "achew"
-version = "1.5.3"
+version = "1.5.4"
 description = "Audiobook Chapter Extraction Wizard"
 license = {text = "MIT"}
 authors = [
