@@ -163,7 +163,7 @@ class AIService(ABC):
         # Base prompt
         base_prompt = """You are a helpful assistant that validates and cleans up audiobook chapter titles.
 You will receive a JSON array of objects, each containing a chapter index (int) and a raw text transcription of the title. Note that there may be inaccuracies in the transcriptions.
-You will output the same array, but with processed titles. You must respond with ONLY the JSON data, with no additional text or comments.
+You will output the same array, but with processed titles. You must respond with ONLY the raw JSON data - no additional text, comments, or markdown.
 
 Rules for processing chapter titles:
 - For transcriptions that clearly denote a numbered chapter/section (e.g., "Chapter 1", "Part 5", "One", "Section IX"):

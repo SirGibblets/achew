@@ -3,10 +3,19 @@ import json
 import logging
 from typing import List, Optional
 
-from .base import AIService, ProviderInfo, ModelInfo, IncrementalJSONParser
+from .base import AIService, Chapter, ProviderInfo, ModelInfo, IncrementalJSONParser
 
 logger = logging.getLogger(__name__)
 
+
+# Claude models that do not support structured output
+UNSTRUCTURED_OUTPUT_MODELS = {
+    "claude-opus-4",
+    "claude-sonnet-4",
+    "claude-3-7-sonnet",
+    "claude-3-5-haiku",
+    "claude-3-haiku",
+}
 
 class ClaudeService(AIService):
     """Anthropic Claude implementation of AIService"""
@@ -288,17 +297,33 @@ class ClaudeService(AIService):
             # Stream the response for progress updates
             content_received = ""
 
-            async with processing_client.messages.stream(
-                system=system_prompt,
-                messages=[
+            # Check if model supports structured output
+            # Strip the trailing date (e.g. -20250514) and check against known unstructured base models
+            model_basename = model_id
+            parts = model_id.split("-")
+            
+            if len(parts) > 1 and len(parts[-1]) == 8 and parts[-1].isdigit():
+                model_basename = "-".join(parts[:-1])
+                
+            supports_structured_output = model_basename not in UNSTRUCTURED_OUTPUT_MODELS
+
+            stream_kwargs = {
+                "system": system_prompt,
+                "messages": [
                     {
                         "role": "user",
                         "content": user_message,
                     }
                 ],
-                model=model_id,
-                max_tokens=4096,
-            ) as stream:
+                "model": model_id,
+                "max_tokens": 4096,
+            }
+
+            if supports_structured_output:
+                stream_kwargs["betas"] = ["structured-outputs-2025-11-13"]
+                stream_kwargs["output_format"] = List[Chapter]
+
+            async with processing_client.beta.messages.stream(**stream_kwargs) as stream:
                 async for text in stream.text_stream:
                     if text:
                         content_received += text
@@ -327,16 +352,24 @@ class ClaudeService(AIService):
                 raise
 
             # Convert to title list
-            chapters = [
-                None if chapter.get("title") == "null" or chapter.get("title") is None else chapter.get("title")
-                for chapter in processed_chapters
-            ]
+            try:
+                chapters = [
+                    None if chapter.get("title") == "null" or chapter.get("title") is None else chapter.get("title")
+                    for chapter in processed_chapters
+                ]
 
-            valid_chapters = len([t for t in chapters if t])
+                valid_chapters = len([t for t in chapters if t])
 
-            self._notify_progress(100, f"Generated {valid_chapters} chapter titles")
+                self._notify_progress(100, f"Generated {valid_chapters} chapter titles")
 
-            return chapters
+                return chapters
+
+            except Exception as e:
+                logger.error(f"Failed to extract Claude response: {e}")
+                logger.error(f"Claude Raw response: {content_received}")
+                logger.error(f"Parsed response: {processed_chapters}")
+                raise
+            
 
         except anthropic.AuthenticationError as e:
             error_msg = f"Claude authentication failed - please check your API key: {str(e)}"
