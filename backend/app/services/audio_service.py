@@ -156,7 +156,7 @@ class AudioProcessingService:
         publish_progress: bool = True,
     ) -> Optional[List[Tuple[float, float]]]:
         """Run silence detection in a separate thread"""
-        process = subprocess.Popen(cmd, stderr=subprocess.PIPE, text=True, encoding="utf-8")
+        process = subprocess.Popen(cmd, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
 
         self._running_processes.append(process)
 
@@ -369,7 +369,7 @@ class AudioProcessingService:
                 output_pattern,  # Output pattern
             ]
 
-        process = subprocess.Popen(command, stderr=subprocess.PIPE, text=True, encoding="utf-8")
+        process = subprocess.Popen(command, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
 
         self._running_processes.append(process)
 
@@ -601,7 +601,7 @@ class AudioProcessingService:
             "-",
         ]
 
-        process = subprocess.Popen(cmd, stderr=subprocess.PIPE, text=True, encoding="utf-8")
+        process = subprocess.Popen(cmd, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
 
         self._running_processes.append(process)
 
@@ -732,7 +732,7 @@ class AudioProcessingService:
                 "copy",
                 output_file,
             ]
-            process = subprocess.Popen(cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE, text=True, encoding="utf-8")
+            process = subprocess.Popen(cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
             self._running_processes.append(process)
 
             stderr_output = []

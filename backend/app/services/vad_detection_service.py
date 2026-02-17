@@ -116,7 +116,7 @@ class VadDetectionService:
         ]
 
         try:
-            process = subprocess.Popen(cmd, stderr=subprocess.PIPE, text=True, encoding="utf-8")
+            process = subprocess.Popen(cmd, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
             self._running_processes.append(process)
 
             # Monitor progress by watching stderr for segment creation
