@@ -158,6 +158,9 @@ UVICORN_ARGS=""
 if [ "$DEBUG" = "true" ]; then
     UVICORN_ARGS="--reload --log-level debug"
     log_warning "Debug mode enabled - using auto-reload"
+    export DEBUG="true"
+else
+    export DEBUG="false"
 fi
 
 # Run the backend server

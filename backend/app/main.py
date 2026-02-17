@@ -1,11 +1,14 @@
+import os
 import asyncio
 import logging
 
 # Configure logging before any other imports
 # noinspection SpellCheckingInspection
+debug_mode = os.getenv("DEBUG", "false").lower() == "true"
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG if debug_mode else logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    force=True,
 )
 
 from contextlib import asynccontextmanager

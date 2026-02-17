@@ -181,6 +181,9 @@ cd backend
 UVICORN_ARGS="--reload --host $HOST --port $PORT"
 if [ "$DEBUG" = "true" ]; then
     UVICORN_ARGS="$UVICORN_ARGS --log-level debug"
+    export DEBUG="true"
+else
+    export DEBUG="false"
 fi
 
 uv run python -m uvicorn app.main:app $UVICORN_ARGS &
