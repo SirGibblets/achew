@@ -34,13 +34,12 @@ class AudioProcessingService:
             self.segment_length = smart_detect_config.segment_length
             self.min_clip_length = smart_detect_config.min_clip_length
             self.asr_buffer = smart_detect_config.asr_buffer
-            self.min_silence_duration = smart_detect_config.min_silence_duration
         else:
             # Default values (same as before)
             self.segment_length = 8.0
             self.min_clip_length = 1.0
             self.asr_buffer = 0.25
-            self.min_silence_duration = 2
+        self.min_silence_duration = 1.0
 
     def _notify_progress(self, step: Step, percent: float, message: str = "", details: dict = None):
         """Notify progress via callback"""

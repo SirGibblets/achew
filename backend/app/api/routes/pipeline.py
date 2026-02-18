@@ -32,7 +32,6 @@ class SmartDetectConfigRequest(BaseModel):
     segment_length: float
     min_clip_length: float
     asr_buffer: float
-    min_silence_duration: float
 
 
 class ASROptionsRequest(BaseModel):
@@ -264,7 +263,7 @@ async def select_cue_source(request: CueSourceRequest, background_tasks: Backgro
 
 @router.get("/pipeline/cue-sets")
 async def get_cue_sets():
-    """Get available cue sets for user selection"""
+    """Get all detected cues for initial chapter selection"""
     try:
         app_state = get_app_state()
 
@@ -273,33 +272,28 @@ async def get_cue_sets():
 
         if app_state.step != Step.CUE_SET_SELECTION:
             raise HTTPException(
-                status_code=400, detail=f"Pipeline not in cue set selection step. Current step: {app_state.step.value}"
+                status_code=400, detail=f"Pipeline not in initial chapter selection step. Current step: {app_state.step.value}"
             )
 
-        # Get cue sets from pipeline data
-        cue_sets = app_state.pipeline.cue_sets
+        silences = app_state.pipeline.detected_silences
+        if not silences:
+            raise HTTPException(status_code=400, detail="No detected cues available")
 
-        if not cue_sets:
-            raise HTTPException(status_code=400, detail="No cue sets available")
+        asr_buffer = app_state.pipeline.smart_detect_config.asr_buffer
 
-        # Format options for frontend
-        options = []
-        for chapter_count, timestamps in cue_sets.items():
-            avg_length = app_state.pipeline.book.duration / chapter_count if chapter_count > 0 else 0
-            options.append(
-                {
-                    "chapter_count": chapter_count,
-                    "timestamps": timestamps,
-                    "average_length_minutes": round(avg_length / 60, 1),
-                    "total_duration_hours": round(app_state.pipeline.book.duration / 3600, 2),
-                }
-            )
+        # Build list of detected cues with gap info; filter to gaps >= 1s
+        detected_cues = []
+        for silence_start, silence_end in silences:
+            gap = silence_end - silence_start
+            if gap >= 1.0:
+                timestamp = max(0.0, silence_end - asr_buffer)
+                detected_cues.append({"timestamp": round(timestamp, 3), "gap": round(gap, 3)})
 
-        # Sort by chapter count
-        options.sort(key=lambda x: x["chapter_count"])
+        # Sort by timestamp
+        detected_cues.sort(key=lambda x: x["timestamp"])
 
         return {
-            "cue_sets": options,
+            "detected_cues": detected_cues,
             "book_duration": app_state.pipeline.book.duration,
             "existing_cue_sources": app_state.pipeline.existing_cue_sources,
         }
@@ -313,7 +307,7 @@ async def get_cue_sets():
 
 @router.post("/pipeline/select-cue-set")
 async def select_cue_set(request: dict, background_tasks: BackgroundTasks):
-    """Select a cue set"""
+    """Select initial chapters by providing a list of cue timestamps"""
     try:
         app_state = get_app_state()
 
@@ -321,11 +315,13 @@ async def select_cue_set(request: dict, background_tasks: BackgroundTasks):
             raise HTTPException(status_code=404, detail="Pipeline not found")
 
         if app_state.step != Step.CUE_SET_SELECTION:
-            raise HTTPException(status_code=400, detail="Pipeline not in cue set selection step")
+            raise HTTPException(status_code=400, detail="Pipeline not in initial chapter selection step")
 
-        chapter_count = request.get("chapter_count")
-        if not chapter_count:
-            raise HTTPException(status_code=400, detail="Chapter count is required")
+        timestamps = request.get("timestamps")
+        if timestamps is None or not isinstance(timestamps, list):
+            raise HTTPException(status_code=400, detail="timestamps must be a list of floats")
+        if len(timestamps) == 0:
+            raise HTTPException(status_code=400, detail="At least one timestamp is required")
 
         include_unaligned = request.get("include_unaligned", [])
         if not isinstance(include_unaligned, list):
@@ -340,17 +336,16 @@ async def select_cue_set(request: dict, background_tasks: BackgroundTasks):
                     detail=f"Invalid include_unaligned option: {option}. Available options: {available_source_ids}",
                 )
 
-        async def select_cue_set():
+        async def do_select_cue_set():
             try:
-                # Use the new select_cue_set method that goes to CONFIGURE_ASR
-                await app_state.pipeline.select_cue_set(chapter_count, include_unaligned)
+                await app_state.pipeline.select_cue_set(timestamps, include_unaligned)
             except Exception as e:
                 logger.error(f"Failed to select cue set: {e}")
 
-        background_tasks.add_task(select_cue_set)
+        background_tasks.add_task(do_select_cue_set)
 
         return {
-            "message": "Cue set selected, extracting segments...",
+            "message": "Initial chapters selected, extracting segments...",
             "include_unaligned": include_unaligned,
         }
 
@@ -501,10 +496,10 @@ async def cancel_step():
             }
 
         elif step == Step.AUDIO_EXTRACTION:
-            if pipeline.cue_sets:
+            if pipeline.initial_chapter_selection_available:
                 await pipeline.restart_at_step(RestartStep.CUE_SET_SELECTION)
                 return {
-                    "message": "Audio extraction cancelled, returned to cue set selection",
+                    "message": "Audio extraction cancelled, returned to initial chapter selection",
                     "action": "restarted",
                     "restart_step": RestartStep.CUE_SET_SELECTION.value,
                 }
@@ -561,7 +556,6 @@ async def update_smart_detect_config(request: SmartDetectConfigRequest):
             "segment_length": request.segment_length,
             "min_clip_length": request.min_clip_length,
             "asr_buffer": request.asr_buffer,
-            "min_silence_duration": request.min_silence_duration,
         }
 
         result = app_state.pipeline.update_smart_detect_config(config_data)

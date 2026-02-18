@@ -10,7 +10,7 @@
     import ChapterReview from "./components/ChapterReview.svelte";
     import ConfigureASR from "./components/ConfigureASR.svelte";
     import Connecting from "./components/Connecting.svelte";
-    import CueSetSelection from "./components/CueSetSelection.svelte";
+    import InitialChapterSelection from "./components/InitialChapterSelection.svelte";
     import FindBook from "./components/FindBook.svelte";
     import Icon from "./components/Icon.svelte";
     import LLMSetup from "./components/LLMSetup.svelte";
@@ -102,7 +102,7 @@
             case "select_cue_source":
                 return SelectCueSource;
             case "cue_set_selection":
-                return CueSetSelection;
+                return InitialChapterSelection;
             case "configure_asr":
                 return ConfigureASR;
             case "chapter_editing":
@@ -229,7 +229,7 @@
             case "select_cue_source":
                 return "Workflow Selection";
             case "cue_set_selection":
-                return "Select Cue Set";
+                return "Initial Chapter Selection";
             case "configure_asr":
                 return "Transcribe Titles";
             case "chapter_editing":

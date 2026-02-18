@@ -14,7 +14,6 @@ from pydantic import BaseModel, Field
 from .abs_service import ABSService
 from .asr_service import create_asr_service
 from .audio_service import AudioProcessingService
-from .smart_detection_service import SmartDetectionService
 from .vad_detection_service import VadDetectionService
 from ..core.config import get_app_config
 from ..models.chapter import ChapterData, RealignmentData
@@ -59,12 +58,11 @@ class SmartDetectConfig:
         segment_length: float = 8.0,
         min_clip_length: float = 1.0,
         asr_buffer: float = 0.25,
-        min_silence_duration: float = 2.0,
+        **kwargs,
     ):
         self.segment_length = segment_length
         self.min_clip_length = min_clip_length
         self.asr_buffer = asr_buffer
-        self.min_silence_duration = min_silence_duration
 
     def validate_constraints(self) -> List[str]:
         """Validate configuration constraints and return list of errors"""
@@ -77,8 +75,6 @@ class SmartDetectConfig:
             errors.append("Min clip length must be between 0.5 and 5 seconds")
         if not (0.0 <= self.asr_buffer <= 1.0):
             errors.append("ASR buffer must be between 0 and 1 seconds")
-        if not (1.0 <= self.min_silence_duration <= 5.0):
-            errors.append("Min silence duration must be between 1 and 5 seconds")
 
         # Cross-parameter validations
         if self.segment_length < self.min_clip_length:
@@ -163,6 +159,7 @@ class ProcessingPipeline:
         self.include_unaligned: List[str] = []
 
         self.detected_silences: List[Tuple[float, float]] = []  # List of (silence_start, silence_end)
+        self.initial_chapter_selection_available: bool = False  # True only after smart-detect populates detected_silences
 
     async def __aenter__(self):
         return self
@@ -363,6 +360,7 @@ class ProcessingPipeline:
         if step_num <= RestartStep.SELECT_CUE_SOURCE.ordinal:
             self.cue_sets = {}
             self.detected_silences = []
+            self.initial_chapter_selection_available = False
             self.is_realignment = False
             self.step = Step.SELECT_CUE_SOURCE
 
@@ -961,7 +959,6 @@ class ProcessingPipeline:
 
         # Initialize services
         audio_service = AudioProcessingService(self._notify_progress, self.smart_detect_config, self._running_processes)
-        detection_service = SmartDetectionService(self._notify_progress, self.smart_detect_config)
 
         self._notify_progress(Step.AUDIO_ANALYSIS, 0, "Analyzing audio...")
 
@@ -979,12 +976,9 @@ class ProcessingPipeline:
 
         self._notify_progress(Step.AUDIO_ANALYSIS, 100, f"Found {len(silences)} silence segments")
 
-        # Store silences in the detection service for clustering
-        detection_service.silences = silences
-
         self.detected_silences = silences.copy() if silences else []
 
-        await self._cluster_and_set_cues(detection_service)
+        await self._transition_to_cue_selection()
 
     async def _detect_cues_vad(self):
         """Detect potential chapter boundaries using VAD (Voice Activity Detection)."""
@@ -1012,12 +1006,9 @@ class ProcessingPipeline:
                 logger.info("Processing was cancelled during VAD analysis, stopping cue detection")
                 return
 
-            # Store silences in the detection service for clustering
-            service.silences = silences
-
             self.detected_silences = silences.copy() if silences else []
 
-            await self._cluster_and_set_cues(service)
+            await self._transition_to_cue_selection()
 
         except asyncio.CancelledError:
             logger.info("VAD detection was cancelled")
@@ -1089,23 +1080,14 @@ class ProcessingPipeline:
             await self.restart_at_step(RestartStep.SELECT_CUE_SOURCE, f"VAD detection failed: {str(e)}")
             raise ProcessingError(f"Error during VAD detection: {str(e)}")
 
-    async def _cluster_and_set_cues(self, service):
-        """Generate cue sets from detection service and store for user selection"""
-        # Generate cue sets
-        self._notify_progress(Step.CUE_SET_SELECTION, 0, "Generating cue set options...")
-        cue_sets = service.get_clustered_cue_sets(service.silences, self.book.duration)
-
-        # Check again if processing was cancelled during cue set generation
-        if self.step != Step.CUE_SET_SELECTION:
-            logger.info("Processing was cancelled during cue set generation, stopping cue detection")
-            return
-
-        # Store cue sets for user selection
-        self.cue_sets = cue_sets
-
-        self._notify_progress(Step.CUE_SET_SELECTION, 100, f"Generated {len(cue_sets)} cue sets")
-
-        logger.info(f"Generated {len(cue_sets)} cue sets")
+    async def _transition_to_cue_selection(self):
+        """Transition to the initial chapter selection step after silence detection is complete"""
+        self.initial_chapter_selection_available = True
+        self._notify_progress(
+            Step.CUE_SET_SELECTION, 100,
+            f"Ready for selection with {len(self.detected_silences)} detected silences"
+        )
+        logger.info(f"Detected {len(self.detected_silences)} silences, ready for cue selection")
 
     async def _extract_audio_segments(self):
         """Extract audio segments for transcription"""
@@ -1460,14 +1442,11 @@ class ProcessingPipeline:
 
         return deduplicated_timestamps
 
-    async def select_cue_set(self, chapter_count: int, include_unaligned: List[str] = None) -> Dict[str, Any]:
-        """Select a cue set from smart detect and proceed to CONFIGURE_ASR"""
+    async def select_cue_set(self, timestamps: List[float], include_unaligned: List[str] = None) -> Dict[str, Any]:
+        """Select a cue set from detected cues and proceed to CONFIGURE_ASR"""
         try:
-            if chapter_count not in self.cue_sets:
-                raise ValueError(f"Invalid chapter count: {chapter_count}")
-
-            # Set the selected cues
-            self.cues = self.cue_sets[chapter_count]
+            # Set the selected cues directly from provided timestamps
+            self.cues = sorted(timestamps)
             self.include_unaligned = include_unaligned or []
 
             # Add unaligned cues if specified
@@ -1491,7 +1470,7 @@ class ProcessingPipeline:
 
         except Exception as e:
             logger.error(f"Failed to select cue set: {e}", exc_info=True)
-            await self.restart_at_step(RestartStep.CUE_SET_SELECTION, f"Cue set selection failed: {str(e)}")
+            await self.restart_at_step(RestartStep.CUE_SET_SELECTION, f"Initial chapter selection failed: {str(e)}")
             raise
 
     def get_segment_count(self) -> int:
@@ -1686,7 +1665,7 @@ class ProcessingPipeline:
 
         restart_options: List[RestartStep] = []
 
-        has_cue_sets = len(self.cue_sets) > 0 if self.cue_sets else False
+        has_detected_silences = self.initial_chapter_selection_available
 
         match self.step:
             case Step.SELECT_CUE_SOURCE:
@@ -1697,19 +1676,19 @@ class ProcessingPipeline:
             case Step.CONFIGURE_ASR:
                 restart_options.append(RestartStep.IDLE)
                 restart_options.append(RestartStep.SELECT_CUE_SOURCE)
-                if has_cue_sets:
+                if has_detected_silences:
                     restart_options.append(RestartStep.CUE_SET_SELECTION)
             case Step.CHAPTER_EDITING:
                 restart_options.append(RestartStep.IDLE)
                 restart_options.append(RestartStep.SELECT_CUE_SOURCE)
-                if has_cue_sets:
+                if has_detected_silences:
                     restart_options.append(RestartStep.CUE_SET_SELECTION)
                 if not self.is_realignment:
                     restart_options.append(RestartStep.CONFIGURE_ASR)
             case Step.REVIEWING | Step.COMPLETED:
                 restart_options.append(RestartStep.IDLE)
                 restart_options.append(RestartStep.SELECT_CUE_SOURCE)
-                if has_cue_sets:
+                if has_detected_silences:
                     restart_options.append(RestartStep.CUE_SET_SELECTION)
                 if not self.is_realignment:
                     restart_options.append(RestartStep.CONFIGURE_ASR)

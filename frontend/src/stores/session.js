@@ -40,7 +40,6 @@ function createSessionStore() {
             segment_length: 8.0,
             min_clip_length: 1.0,
             asr_buffer: 0.25,
-            min_silence_duration: 2,
         },
         smartDetectConfigLoading: false,
 
@@ -255,7 +254,6 @@ function createSessionStore() {
                         segment_length: 8.0,
                         min_clip_length: 1.0,
                         asr_buffer: 0.25,
-                        min_silence_duration: 2,
                     },
                     smartDetectConfigLoading: false,
                     version: null,
@@ -292,7 +290,6 @@ function createSessionStore() {
                     segment_length: 8.0,
                     min_clip_length: 1.0,
                     asr_buffer: 0.25,
-                    min_silence_duration: 2,
                 },
                 smartDetectConfigLoading: false,
                 version: null,

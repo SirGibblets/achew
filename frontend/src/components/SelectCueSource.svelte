@@ -75,9 +75,6 @@
         if (config.asr_buffer < 0 || config.asr_buffer > 1) {
             errors.push("Silence buffer must be between 0 and 1 seconds");
         }
-        if (config.min_silence_duration < 1 || config.min_silence_duration > 5) {
-            errors.push("Min silence duration must be between 1 and 5 seconds");
-        }
 
         // Cross-parameter validations
         if (config.segment_length < config.min_clip_length) {
@@ -115,7 +112,6 @@
             segment_length: 8.0,
             min_clip_length: 1.0,
             asr_buffer: 0.25,
-            min_silence_duration: 2,
         };
         updateConfigWithDebounce(defaultConfig);
     }
@@ -426,38 +422,6 @@
                                         </div>
                                     </div>
 
-                                    <!-- Min Silence Duration -->
-                                    <div class="setting-item">
-                                        <div class="setting-header">
-                                            <label for="min-silence-duration">Minimum Chapter Gap</label
-                                            >
-                                            <div
-                                                    class="help-icon"
-                                                    data-tooltip="The minimum gap before a segment to consider it as a potential chapter cue. Smaller values will produce more false positives, while larger values may omit valid cues."
-                                            >
-                                                <CircleQuestionMark size="14"/>
-                                            </div>
-                                        </div>
-                                        <div class="slider-container">
-                                            <input
-                                                    id="min-silence-duration"
-                                                    type="range"
-                                                    min="1"
-                                                    max="5"
-                                                    step="0.25"
-                                                    value={localConfig.min_silence_duration}
-                                                    on:input={(e) =>
-                        handleSliderChange(
-                          "min_silence_duration",
-                          e.target.value,
-                        )}
-                                                    class="slider"
-                                            />
-                                            <div class="slider-value">
-                                                {localConfig.min_silence_duration}s
-                                            </div>
-                                        </div>
-                                    </div>
                                 </div>
 
                                 <div class="settings-actions">

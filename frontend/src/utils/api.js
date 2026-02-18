@@ -117,11 +117,11 @@ export const session = {
         return apiRequest('/pipeline/cue-sets');
     },
 
-    async selectCueSet(chapterCount, includeUnaligned = []) {
+    async selectCueSet(timestamps, includeUnaligned = []) {
         return apiRequest('/pipeline/select-cue-set', {
             method: 'POST',
             body: {
-                chapter_count: chapterCount,
+                timestamps: timestamps,
                 include_unaligned: includeUnaligned
             },
         });
