@@ -209,18 +209,23 @@ class ChapterAligner:
         offset: float
     ) -> List[Dict[str, Any]]:
         results = []
-        
+        n = len(source_chapters)
+
+        # Index of (chapter_idx, cue_idx) pairs that were successfully matched,
+        # used to interpolate positions for unmatched chapters.
+        matched_pairs = [(i, matches[i]) for i in range(n) if matches[i] >= 0]
+
         for i, src_chapter in enumerate(source_chapters):
             match_idx = matches[i]
-            
+
             if match_idx >= 0:
                 cue = detected_cues[match_idx]
                 timestamp = cue["time"]
                 silence = cue["silence_duration"]
-                
+
                 time_diff = abs(expected_times[i] - timestamp)
                 confidence = self._calculate_confidence(time_diff, silence)
-                
+
                 results.append({
                     "title": src_chapter["title"],
                     "timestamp": timestamp,
@@ -229,16 +234,45 @@ class ChapterAligner:
                     "matched_silence": silence,
                 })
             else:
-                timestamp = max(0.0, expected_times[i])
-                
+                # Find the nearest matched chapter on each side.
+                prev_pair = next((p for p in reversed(matched_pairs) if p[0] < i), None)
+                next_pair = next((p for p in matched_pairs if p[0] > i), None)
+
+                src_t = src_chapter["time"]
+
+                if prev_pair and next_pair:
+                    # Interpolate linearly between the two surrounding anchors.
+                    src_prev  = source_chapters[prev_pair[0]]["time"]
+                    actual_prev = detected_cues[prev_pair[1]]["time"]
+                    src_next  = source_chapters[next_pair[0]]["time"]
+                    actual_next = detected_cues[next_pair[1]]["time"]
+                    if src_next > src_prev:
+                        t = (src_t - src_prev) / (src_next - src_prev)
+                        timestamp = actual_prev + t * (actual_next - actual_prev)
+                    else:
+                        timestamp = expected_times[i]
+                elif prev_pair:
+                    # Extrapolate forward from the last known anchor.
+                    src_prev = source_chapters[prev_pair[0]]["time"]
+                    actual_prev = detected_cues[prev_pair[1]]["time"]
+                    timestamp = actual_prev + (src_t - src_prev) * scale
+                elif next_pair:
+                    # Extrapolate backward from the next known anchor.
+                    src_next = source_chapters[next_pair[0]]["time"]
+                    actual_next = detected_cues[next_pair[1]]["time"]
+                    timestamp = actual_next + (src_t - src_next) * scale
+                else:
+                    # No matched chapters at all — fall back to global transform.
+                    timestamp = expected_times[i]
+
                 results.append({
                     "title": src_chapter["title"],
-                    "timestamp": timestamp,
+                    "timestamp": max(0.0, timestamp),
                     "confidence": 0.3,
                     "is_guess": True,
                     "matched_silence": 0.0,
                 })
-        
+
         return results
     
     def _calculate_confidence(self, time_diff: float, silence: float) -> float:
