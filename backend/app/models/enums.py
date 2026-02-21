@@ -12,6 +12,9 @@ class Step(str, Enum):
     AUDIO_ANALYSIS = "audio_analysis"
     VAD_PREP = "vad_prep"
     VAD_ANALYSIS = "vad_analysis"
+    PARTIAL_SCAN_PREP = "partial_scan_prep"
+    PARTIAL_AUDIO_ANALYSIS = "partial_audio_analysis"
+    PARTIAL_VAD_ANALYSIS = "partial_vad_analysis"
     CUE_SET_SELECTION = "cue_set_selection"  # Interactive
     AUDIO_EXTRACTION = "audio_extraction"
     CONFIGURE_ASR = "configure_asr"  # Interactive

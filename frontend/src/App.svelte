@@ -95,6 +95,9 @@
             case "audio_analysis":
             case "vad_prep":
             case "vad_analysis":
+            case "partial_scan_prep":
+            case "partial_audio_analysis":
+            case "partial_vad_analysis":
             case "audio_extraction":
             case "trimming":
             case "asr_processing":

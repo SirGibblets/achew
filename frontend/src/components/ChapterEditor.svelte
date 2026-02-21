@@ -8,6 +8,7 @@
         progress,
         selectionStats,
         session,
+        pendingAddChapterDialog,
     } from "../stores/session.js";
     import {api, handleApiError} from "../utils/api.js";
     import AddChapterDialog from "./AddChapterDialog.svelte";
@@ -37,6 +38,7 @@
     let showAIConfirmation = $state(false);
     let showAddChapterDialog = $state(false);
     let addChapterDialogChapterId = $state(null);
+    let addChapterDialogDefaultTab = $state(null);
 
     let showSettings = $state(false);
     let editorSettings = $state({
@@ -448,20 +450,32 @@
         }
     }
 
-    function openAddChapterDialog(chapterId) {
+    function openAddChapterDialog(chapterId, defaultTab = null) {
         addChapterDialogChapterId = chapterId;
+        addChapterDialogDefaultTab = defaultTab;
         showAddChapterDialog = true;
     }
 
     function handleAddChapterConfirm(event) {
         showAddChapterDialog = false;
         addChapterDialogChapterId = null;
+        addChapterDialogDefaultTab = null;
     }
 
     function handleAddChapterCancel() {
         showAddChapterDialog = false;
         addChapterDialogChapterId = null;
+        addChapterDialogDefaultTab = null;
     }
+
+    // Re-open add-chapter dialog after a partial scan completes
+    $effect(() => {
+        if ($pendingAddChapterDialog) {
+            const { chapter_id, open_tab } = $pendingAddChapterDialog;
+            pendingAddChapterDialog.set(null);
+            openAddChapterDialog(chapter_id, open_tab);
+        }
+    });
 
     // Go to review page
     function goToReview() {
@@ -1021,6 +1035,7 @@
 <AddChapterDialog
         bind:isOpen={showAddChapterDialog}
         chapterId={addChapterDialogChapterId}
+        defaultTab={addChapterDialogDefaultTab}
         editorSettings={editorSettings}
         on:confirm={handleAddChapterConfirm}
         on:cancel={handleAddChapterCancel}

@@ -16,9 +16,10 @@ from app.models.chapter_operation import (
     RestoreChapterOperation,
 )
 from app.models.enums import Step
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
+from typing import Literal
 
 from ...app import get_app_state
 
@@ -108,6 +109,12 @@ class AddOptionsResponse(BaseModel):
     detected_cues: List[DetectedCue]
     existing_cues: Dict[str, List[ExistingCue]]
     deleted: List[DeletedChapter]
+    allow_normal_scan: bool = False
+    allow_vad_scan: bool = False
+
+
+class PartialScanRequest(BaseModel):
+    scan_type: Literal["normal", "vad"]
 
 
 class AddChapterRequest(BaseModel):
@@ -755,18 +762,67 @@ async def get_add_options(chapter_id: str):
                     DeletedChapter(timestamp=chapter.timestamp, title=chapter.current_title or chapter.asr_title or "")
                 )
 
+        # Determine scan availability
+        allow_normal_scan = False
+        allow_vad_scan = False
+        pipeline = app_state.pipeline
+        if pipeline.audio_file_path:
+            vad_covered = pipeline._is_region_covered(
+                pipeline.vad_scanned_regions, min_timestamp_raw, max_timestamp_raw, margin=1.0
+            )
+            if not vad_covered:
+                allow_vad_scan = True
+                combined_scanned = pipeline._merge_regions(
+                    pipeline.normal_scanned_regions + pipeline.vad_scanned_regions
+                )
+                normal_covered = pipeline._is_region_covered(
+                    combined_scanned, min_timestamp_raw, max_timestamp_raw, margin=1.0
+                )
+                allow_normal_scan = not normal_covered
+
         return AddOptionsResponse(
             min_timestamp=min_timestamp_raw + 0.25,
             max_timestamp=max_timestamp_raw - 0.25,
             detected_cues=detected_cues,
             existing_cues=existing_cues,
             deleted=deleted_chapters,
+            allow_normal_scan=allow_normal_scan,
+            allow_vad_scan=allow_vad_scan,
         )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Failed to get add options: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/chapters/{chapter_id}/partial-scan")
+async def start_partial_scan(chapter_id: str, request: PartialScanRequest, background_tasks: BackgroundTasks):
+    """Start a partial scan for the region surrounding the given chapter"""
+    try:
+        app_state = get_app_state()
+
+        if not app_state.pipeline:
+            raise HTTPException(status_code=404, detail="Pipeline not found")
+
+        if app_state.pipeline.step != Step.CHAPTER_EDITING:
+            raise HTTPException(status_code=400, detail="Pipeline must be in chapter_editing step to start a partial scan")
+
+        if not app_state.pipeline.audio_file_path:
+            raise HTTPException(status_code=400, detail="No audio file available for scanning")
+
+        if app_state.pipeline._partial_scan_task and not app_state.pipeline._partial_scan_task.done():
+            raise HTTPException(status_code=409, detail="A partial scan is already in progress")
+
+        background_tasks.add_task(app_state.pipeline.run_partial_scan, chapter_id, request.scan_type)
+
+        return {"message": f"Partial {request.scan_type} scan started"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to start partial scan: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -161,6 +161,14 @@ class ProcessingPipeline:
         self.detected_silences: List[Tuple[float, float]] = []  # List of (silence_start, silence_end)
         self.initial_chapter_selection_available: bool = False  # True only after smart-detect populates detected_silences
 
+        # Scan coverage tracking
+        self.normal_scanned_regions: List[Tuple[float, float]] = []
+        self.vad_scanned_regions: List[Tuple[float, float]] = []
+
+        # Partial scan task tracking
+        self._partial_scan_task: Optional[asyncio.Task] = None
+        self._partial_scan_temp_files: List[str] = []
+
     async def __aenter__(self):
         return self
 
@@ -188,6 +196,9 @@ class ProcessingPipeline:
         if self._ai_cleanup_task:
             self._ai_cleanup_task.cancel()
             self._ai_cleanup_task = None
+        if self._partial_scan_task:
+            self._partial_scan_task.cancel()
+            self._partial_scan_task = None
         self.cleanup_all_files()
 
     def cleanup_all_files(self):
@@ -233,6 +244,16 @@ class ProcessingPipeline:
                     os.remove(os.path.join(self.temp_dir, filename))
                 except Exception:
                     pass
+
+    def cleanup_partial_scan_files(self):
+        """Cleanup temporary files created during partial scanning"""
+        for f in list(self._partial_scan_temp_files):
+            try:
+                if os.path.exists(f):
+                    os.unlink(f)
+            except Exception as e:
+                logger.debug(f"Failed to remove partial scan temp file {f}: {e}")
+        self._partial_scan_temp_files = []
 
     async def cancel_processing(self):
         """Cancel any running processing tasks"""
@@ -304,6 +325,19 @@ class ProcessingPipeline:
                 logger.warning(f"Error waiting for VAD task cancellation: {e}")
             self._vad_task = None
 
+        # Cancel any running partial scan tasks
+        if self._partial_scan_task:
+            logger.info("Cancelling partial scan task...")
+            self._partial_scan_task.cancel()
+            try:
+                await self._partial_scan_task
+            except asyncio.CancelledError:
+                logger.info("Partial scan task cancelled successfully")
+            except Exception as e:
+                logger.warning(f"Error waiting for partial scan task cancellation: {e}")
+            self._partial_scan_task = None
+        self.cleanup_partial_scan_files()
+
         # Cancel any running ffmpeg processes
         if self._running_processes:
             logger.info(f"Cancelling {len(self._running_processes)} running ffmpeg processes...")
@@ -360,6 +394,8 @@ class ProcessingPipeline:
         if step_num <= RestartStep.SELECT_CUE_SOURCE.ordinal:
             self.cue_sets = {}
             self.detected_silences = []
+            self.normal_scanned_regions = []
+            self.vad_scanned_regions = []
             self.initial_chapter_selection_available = False
             self.is_realignment = False
             self.step = Step.SELECT_CUE_SOURCE
@@ -977,6 +1013,7 @@ class ProcessingPipeline:
         self._notify_progress(Step.AUDIO_ANALYSIS, 100, f"Found {len(silences)} silence segments")
 
         self.detected_silences = silences.copy() if silences else []
+        self.normal_scanned_regions = [(0.0, self.book.duration)]
 
         await self._transition_to_cue_selection()
 
@@ -1007,6 +1044,7 @@ class ProcessingPipeline:
                 return
 
             self.detected_silences = silences.copy() if silences else []
+            self.vad_scanned_regions = [(0.0, self.book.duration)]
 
             await self._transition_to_cue_selection()
 
@@ -1698,3 +1736,421 @@ class ProcessingPipeline:
 
         restart_options.reverse()
         return [option.value for option in restart_options]
+
+    # ─── Coverage tracking helpers ────────────────────────────────────────────
+
+    @staticmethod
+    def _merge_regions(regions: List[Tuple[float, float]]) -> List[Tuple[float, float]]:
+        """Sort and merge overlapping/adjacent regions into a minimal covering list."""
+        if not regions:
+            return []
+        sorted_regions = sorted(regions, key=lambda r: r[0])
+        merged = [sorted_regions[0]]
+        for start, end in sorted_regions[1:]:
+            if start <= merged[-1][1]:
+                merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+            else:
+                merged.append((start, end))
+        return merged
+
+    def _is_region_covered(
+        self,
+        scanned: List[Tuple[float, float]],
+        start: float,
+        end: float,
+        margin: float = 1.0,
+    ) -> bool:
+        """Return True if [start+margin, end-margin] is fully covered by scanned regions."""
+        check_start = start + margin
+        check_end = end - margin
+        if check_start >= check_end:
+            return True  # Region too small to meaningfully check
+
+        merged = self._merge_regions(scanned)
+        remaining_start = check_start
+        for r_start, r_end in merged:
+            if r_start <= remaining_start and r_end >= check_end:
+                return True
+            if r_start <= remaining_start:
+                remaining_start = max(remaining_start, r_end)
+            if remaining_start >= check_end:
+                return True
+        return False
+
+    def _get_uncovered_subregions(
+        self,
+        scanned: List[Tuple[float, float]],
+        start: float,
+        end: float,
+    ) -> List[Tuple[float, float]]:
+        """Return portions of [start, end] not covered by scanned regions."""
+        if not scanned:
+            return [(start, end)]
+
+        merged = self._merge_regions(scanned)
+        uncovered = []
+        current = start
+
+        for r_start, r_end in merged:
+            if r_start >= end:
+                break
+            if r_start > current:
+                uncovered.append((current, min(r_start, end)))
+            current = max(current, r_end)
+
+        if current < end:
+            uncovered.append((current, end))
+
+        return uncovered
+
+    # ─── Partial scanning ─────────────────────────────────────────────────────
+
+    def _run_single_extraction(
+        self,
+        seg_start: float,
+        seg_end: float,
+        output_path: str,
+    ) -> bool:
+        """Extract a single contiguous audio range using stream copy. Returns True on success."""
+        cmd = [
+            "ffmpeg", "-y",
+            "-ss", str(seg_start),
+            "-to", str(seg_end),
+            "-i", self.audio_file_path,
+            "-c", "copy",
+            output_path,
+        ]
+        process = subprocess.Popen(cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+        self._running_processes.append(process)
+        try:
+            process.wait()
+            return process.returncode == 0
+        finally:
+            try:
+                self._running_processes.remove(process)
+            except ValueError:
+                pass
+
+    def _run_split_extraction(
+        self,
+        seg_start: float,
+        seg_end: float,
+        split_boundaries_global: List[float],
+        output_pattern: str,
+    ) -> bool:
+        """
+        Extract and split audio in a single ffmpeg pass using the segment muxer.
+        split_boundaries_global are global timestamps within (seg_start, seg_end).
+        Returns True on success.
+        """
+        # Convert global timestamps to stream-relative timestamps
+        relative_boundaries = [b - seg_start for b in split_boundaries_global if seg_start < b < seg_end]
+        if not relative_boundaries:
+            return False
+
+        segment_times_str = ",".join(str(b) for b in relative_boundaries)
+
+        cmd = [
+            "ffmpeg", "-y",
+            "-ss", str(seg_start),
+            "-to", str(seg_end),
+            "-i", self.audio_file_path,
+            "-c", "copy",
+            "-f", "segment",
+            "-segment_times", segment_times_str,
+            output_pattern,
+        ]
+        process = subprocess.Popen(cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+        self._running_processes.append(process)
+        try:
+            process.wait()
+            return process.returncode == 0
+        finally:
+            try:
+                self._running_processes.remove(process)
+            except ValueError:
+                pass
+
+    def _extract_segment_audio(
+        self,
+        seg_start: float,
+        seg_end: float,
+        large_scanned_in_seg: List[Tuple[float, float]],
+        ext: str,
+    ) -> List[Tuple[str, float, float]]:
+        """
+        Extract audio for a single extraction segment in a single ffmpeg pass.
+        Splits around large already-scanned sub-regions if needed.
+
+        Returns list of (file_path, global_start, duration) for unscanned sub-segments.
+        All created temp files are added to self._partial_scan_temp_files.
+        """
+        import glob as glob_module
+
+        seg_uid = uuid.uuid4().hex
+
+        if not large_scanned_in_seg:
+            # Simple single-file extraction
+            out_path = os.path.join(self.temp_dir, f"partial_{seg_uid}.{ext}")
+            success = self._run_single_extraction(seg_start, seg_end, out_path)
+            if not success or not os.path.exists(out_path):
+                raise ProcessingError(f"ffmpeg extraction failed for segment ({seg_start:.1f}, {seg_end:.1f})")
+            self._partial_scan_temp_files.append(out_path)
+            return [(out_path, seg_start, seg_end - seg_start)]
+
+        # Build split boundaries from large scanned region edges
+        split_boundaries = []
+        for sr_start, sr_end in large_scanned_in_seg:
+            split_boundaries.append(sr_start)
+            split_boundaries.append(sr_end)
+        split_boundaries = sorted(set(split_boundaries))
+
+        output_pattern = os.path.join(self.temp_dir, f"partial_{seg_uid}_%03d.{ext}")
+        success = self._run_split_extraction(seg_start, seg_end, split_boundaries, output_pattern)
+
+        # Find all created files matching the pattern
+        base_name = os.path.basename(output_pattern).replace("%03d", "*")
+        created_files = sorted(glob_module.glob(os.path.join(self.temp_dir, base_name)))
+
+        # Track all created files for cleanup
+        self._partial_scan_temp_files.extend(created_files)
+
+        if not success or not created_files:
+            raise ProcessingError(f"ffmpeg split extraction failed for segment ({seg_start:.1f}, {seg_end:.1f})")
+
+        # Determine which files to keep (unscanned) vs discard (scanned)
+        # Compute all sub-segment ranges and their keep/discard status
+        sub_segments: List[Tuple[float, float, bool]] = []
+        current = seg_start
+        for sr_start, sr_end in large_scanned_in_seg:
+            if current < sr_start:
+                sub_segments.append((current, sr_start, True))   # unscanned → KEEP
+            sub_segments.append((sr_start, sr_end, False))        # scanned → DISCARD
+            current = sr_end
+        if current < seg_end:
+            sub_segments.append((current, seg_end, True))         # unscanned → KEEP
+
+        result = []
+        for i, (s_start, s_end, keep) in enumerate(sub_segments):
+            if i < len(created_files) and keep:
+                duration = s_end - s_start
+                result.append((created_files[i], s_start, duration))
+
+        return result
+
+    async def run_partial_scan(self, chapter_id: str, scan_type: str):
+        """Run a partial scan for the region surrounding the given chapter."""
+
+        async def _do_partial_scan():
+            try:
+                # ── Step 1: Determine target region ────────────────────────────
+                active_chapters = sorted(
+                    [ch for ch in self.chapters if not ch.deleted],
+                    key=lambda ch: ch.timestamp,
+                )
+                current_chapter = next((ch for ch in active_chapters if ch.id == chapter_id), None)
+                if not current_chapter:
+                    raise ProcessingError(f"Chapter {chapter_id} not found")
+
+                current_idx = active_chapters.index(current_chapter)
+                next_chapter = active_chapters[current_idx + 1] if current_idx + 1 < len(active_chapters) else None
+
+                region_start = current_chapter.timestamp
+                region_end = next_chapter.timestamp if next_chapter else self.book.duration
+
+                logger.info(f"Starting {scan_type} partial scan for region ({region_start:.1f}, {region_end:.1f})")
+
+                # ── Step 2: Find unscanned sub-regions ─────────────────────────
+                if scan_type == "vad":
+                    already_scanned = self._merge_regions(self.vad_scanned_regions)
+                else:
+                    already_scanned = self._merge_regions(
+                        self.normal_scanned_regions + self.vad_scanned_regions
+                    )
+
+                uncovered = self._get_uncovered_subregions(already_scanned, region_start, region_end)
+                if not uncovered:
+                    logger.info("No unscanned sub-regions found; nothing to scan")
+                    return
+
+                # ── Step 3: Expand and merge extraction segments ────────────────
+                book_dur = self.book.duration
+                expand = 5.0
+                raw_segments = []
+                for u_start, u_end in uncovered:
+                    raw_segments.append((
+                        max(0.0, u_start - expand),
+                        min(book_dur, u_end + expand),
+                    ))
+                extraction_segments = self._merge_regions(raw_segments)
+
+                # ── Step 4: 80% threshold check ────────────────────────────────
+                total_extraction = sum(e - s for s, e in extraction_segments)
+                use_original_file = (total_extraction / book_dur) >= 0.8
+
+                # ── Step 5: Extract audio (PARTIAL_SCAN_PREP) ──────────────────
+                self._notify_progress(Step.PARTIAL_SCAN_PREP, 0, "Extracting audio...")
+
+                ext = os.path.splitext(self.audio_file_path)[1].lstrip(".")
+                if ext in ["m4b", "m4a", "mp4"]:
+                    ext = "aac"
+
+                if use_original_file:
+                    logger.info("Using original audio file for partial scan (coverage >= 80%)")
+                    scan_files = [(self.audio_file_path, 0.0, book_dur)]
+                else:
+                    scan_files: List[Tuple[str, float, float]] = []
+
+                    # Determine which scan type is used for checking large sub-regions
+                    if scan_type == "vad":
+                        sub_check_scanned = self._merge_regions(self.vad_scanned_regions)
+                    else:
+                        sub_check_scanned = self._merge_regions(
+                            self.normal_scanned_regions + self.vad_scanned_regions
+                        )
+
+                    ten_min = 600.0  # 10 minutes
+
+                    for seg_start, seg_end in extraction_segments:
+                        # Find large already-scanned sub-regions within this extraction segment
+                        large_scanned = []
+                        for r_start, r_end in sub_check_scanned:
+                            clipped_start = max(r_start, seg_start)
+                            clipped_end = min(r_end, seg_end)
+                            if clipped_end - clipped_start > ten_min:
+                                large_scanned.append((clipped_start, clipped_end))
+
+                        self._notify_progress(
+                            Step.PARTIAL_SCAN_PREP,
+                            extraction_segments.index((seg_start, seg_end)) / len(extraction_segments) * 100,
+                            "Extracting audio...",
+                        )
+
+                        files = self._extract_segment_audio(seg_start, seg_end, large_scanned, ext)
+                        scan_files.extend(files)
+
+                if not scan_files:
+                    raise ProcessingError("No audio files to scan")
+
+                self._notify_progress(Step.PARTIAL_SCAN_PREP, 100, "Audio extracted")
+
+                # ── Step 6: Run analysis ────────────────────────────────────────
+                new_silences: List[Tuple[float, float]] = []
+
+                if scan_type == "vad":
+                    target_step = Step.PARTIAL_VAD_ANALYSIS
+                else:
+                    target_step = Step.PARTIAL_AUDIO_ANALYSIS
+
+                self._notify_progress(target_step, 0, "Scanning audio...")
+
+                for file_idx, (file_path, global_offset, file_duration) in enumerate(scan_files):
+                    base_progress = file_idx / len(scan_files) * 100
+
+                    if scan_type == "vad":
+                        # Create a progress-translating callback for VAD
+                        def make_vad_callback(base_pct, total_files):
+                            def vad_progress_cb(_, percent, message="", details=None):
+                                adjusted_pct = base_pct + percent / total_files
+                                self._notify_progress(Step.PARTIAL_VAD_ANALYSIS, adjusted_pct, message, details)
+                            return vad_progress_cb
+
+                        vad_service = VadDetectionService(
+                            progress_callback=make_vad_callback(base_progress, len(scan_files)),
+                            smart_detect_config=self.smart_detect_config,
+                            running_processes=self._running_processes,
+                        )
+                        file_silences = await vad_service.get_vad_silence_boundaries(file_path, file_duration)
+
+                        if file_silences is None or self.step not in [Step.PARTIAL_VAD_ANALYSIS, Step.PARTIAL_SCAN_PREP]:
+                            logger.info("Partial VAD scan was cancelled")
+                            return
+                    else:
+                        # Create a progress-translating callback for audio analysis
+                        def make_audio_callback(base_pct, total_files):
+                            def audio_progress_cb(_, percent, message="", details=None):
+                                adjusted_pct = base_pct + percent / total_files
+                                self._notify_progress(Step.PARTIAL_AUDIO_ANALYSIS, adjusted_pct, message, details)
+                            return audio_progress_cb
+
+                        audio_service = AudioProcessingService(
+                            make_audio_callback(base_progress, len(scan_files)),
+                            self.smart_detect_config,
+                            self._running_processes,
+                        )
+                        file_silences = await audio_service.get_silence_boundaries(
+                            file_path,
+                            duration=file_duration,
+                        )
+
+                        if file_silences is None or self.step != Step.PARTIAL_AUDIO_ANALYSIS:
+                            logger.info("Partial audio scan was cancelled")
+                            return
+
+                    if file_silences:
+                        # Offset timestamps to global time
+                        adjusted = [(s + global_offset, e + global_offset) for s, e in file_silences]
+                        new_silences.extend(adjusted)
+
+                # ── Step 7: Merge results (drop near-duplicates) ─────────
+                near_dup_threshold = 0.75
+                for s_start, s_end in new_silences:
+                    is_duplicate = any(
+                        abs(existing_start - s_start) < near_dup_threshold
+                        for existing_start, _ in self.detected_silences
+                    )
+                    if not is_duplicate:
+                        self.detected_silences.append((s_start, s_end))
+
+                self.detected_silences.sort(key=lambda x: x[0])
+                logger.info(
+                    f"Partial scan added {len(new_silences)} new silences; "
+                    f"total detected silences: {len(self.detected_silences)}"
+                )
+
+                # ── Step 8: Update coverage tracking ──────────────────────────
+                if use_original_file:
+                    scanned_ranges = [(0.0, book_dur)]
+                else:
+                    scanned_ranges = extraction_segments
+
+                if scan_type == "vad":
+                    self.vad_scanned_regions = self._merge_regions(
+                        self.vad_scanned_regions + scanned_ranges
+                    )
+                else:
+                    self.normal_scanned_regions = self._merge_regions(
+                        self.normal_scanned_regions + scanned_ranges
+                    )
+
+                # ── Step 9: Cleanup temp files ─────────────────────────────────
+                self.cleanup_partial_scan_files()
+
+                # ── Step 10: Return to chapter editing ─────────────────────────
+                self.step = Step.CHAPTER_EDITING
+                asyncio.create_task(
+                    get_app_state().broadcast_step_change(
+                        Step.CHAPTER_EDITING,
+                        extras={"chapter_id": chapter_id, "open_tab": "detected_cue"},
+                    )
+                )
+                logger.info(f"Partial {scan_type} scan complete; returned to chapter editing")
+
+            except asyncio.CancelledError:
+                logger.info("Partial scan was cancelled")
+                self.cleanup_partial_scan_files()
+                raise
+            except Exception as e:
+                logger.error(f"Partial scan failed: {e}", exc_info=True)
+                self.cleanup_partial_scan_files()
+                self.step = Step.CHAPTER_EDITING
+                asyncio.create_task(
+                    get_app_state().broadcast_step_change(
+                        Step.CHAPTER_EDITING,
+                        error_message=f"Partial scan failed: {str(e)}",
+                    )
+                )
+            finally:
+                self._partial_scan_task = None
+
+        self._partial_scan_task = asyncio.create_task(_do_partial_scan())

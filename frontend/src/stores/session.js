@@ -86,6 +86,13 @@ function createSessionStore() {
                     // Handle restart_options if present
                     ...(data.restart_options && {restartOptions: data.restart_options}),
                 }));
+                // Re-open the add-chapter dialog if a partial scan just completed
+                if (data.new_step === 'chapter_editing' && data.chapter_id) {
+                    pendingAddChapterDialog.set({
+                        chapter_id: data.chapter_id,
+                        open_tab: data.open_tab || 'detected_cue',
+                    });
+                }
             })
         );
 
@@ -536,6 +543,10 @@ function createSessionStore() {
 }
 
 export const session = createSessionStore();
+
+// Store for re-opening the add-chapter dialog after a partial scan completes
+// Set to { chapter_id, open_tab } when a partial scan returns to chapter_editing
+export const pendingAddChapterDialog = writable(null);
 
 // Derived stores for convenience
 export const step = derived(session, $session => $session.step);

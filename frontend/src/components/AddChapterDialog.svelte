@@ -6,22 +6,26 @@
     // Icons
     import ArrowDown from "@lucide/svelte/icons/arrow-down";
     import ArrowUp from "@lucide/svelte/icons/arrow-up";
+    import AudioLines from "@lucide/svelte/icons/audio-lines";
     import ChevronDown from "@lucide/svelte/icons/chevron-down";
     import ChevronUp from "@lucide/svelte/icons/chevron-up";
     import MoveHorizontal from "@lucide/svelte/icons/move-horizontal";
     import Pause from "@lucide/svelte/icons/pause";
     import Play from "@lucide/svelte/icons/play";
+    import ScanSearch from "@lucide/svelte/icons/scan-search";
     import X from "@lucide/svelte/icons/x";
 
     let {
         isOpen = $bindable(false),
         chapterId = null,
+        defaultTab = null,
         editorSettings = { show_formatted_time: true }
     } = $props();
 
     const dispatch = createEventDispatcher();
 
     let loading = $state(false);
+    let scanning = $state(false);
     let error = $state(null);
     let addOptions = $state(null);
     let activeTab = $state("timestamp");
@@ -71,13 +75,9 @@
 
     function getAvailableTabs() {
         if (!addOptions) return ["timestamp"];
-        
-        const tabs = ["timestamp"];
-        
-        if (addOptions.detected_cues && addOptions.detected_cues.length > 0) {
-            tabs.push("detected_cue");
-        }
-        
+
+        const tabs = ["timestamp", "detected_cue"];
+
         if (addOptions.existing_cues) {
             Object.keys(addOptions.existing_cues).forEach(sourceName => {
                 if (addOptions.existing_cues[sourceName].length > 0) {
@@ -202,9 +202,10 @@
                 originalTimestamp = addOptions.min_timestamp;
                 manualTimestamp = formatTimestamp(addOptions.min_timestamp);
                 selectedTimestamp = addOptions.min_timestamp;
-                
-                const availableTabs = getAvailableTabs();
-                if (availableTabs.includes("detected_cue")) {
+
+                if (defaultTab && getAvailableTabs().includes(defaultTab)) {
+                    activeTab = defaultTab;
+                } else if (addOptions.detected_cues && addOptions.detected_cues.length > 0) {
                     activeTab = "detected_cue";
                 } else {
                     activeTab = "timestamp";
@@ -248,7 +249,7 @@
             if ($isPlaying && $currentSegmentId && $currentSegmentId.startsWith('preview-')) {
                 audio.stop();
             }
-            
+
             addOptions = null;
             selectedTimestamp = null;
             selectedTitle = "";
@@ -256,8 +257,21 @@
             originalTimestamp = null;
             activeTab = "timestamp";
             error = null;
+            scanning = false;
         }
     });
+
+    async function startPartialScan(scanType) {
+        scanning = true;
+        error = null;
+        try {
+            await api.chapters.startPartialScan(chapterId, scanType);
+            close(); // Pipeline takes over; dialog will re-open when scan completes
+        } catch (err) {
+            error = handleApiError(err);
+            scanning = false;
+        }
+    }
 
     async function handleConfirm() {
         if (!selectedTimestamp) return;
@@ -410,73 +424,116 @@
                                     </div>
                                 </div>
                             {:else if activeTab === "detected_cue"}
-                                <div class="cue-table-section">
-                                    <table class="cue-table">
-                                        <thead>
-                                            <tr>
-                                                <th width="1"></th>
-                                                <th width="1"></th>
-                                                <th width="1" class="sortable" onclick={() => toggleSort("gap")}>
-                                                    Gap
-                                                    {#if sortBy === "gap"}
-                                                        {#if sortOrder === "asc"}
-                                                            <ArrowUp size="14" class="sort-icon"/>
-                                                        {:else}
-                                                            <ArrowDown size="14" class="sort-icon"/>
-                                                        {/if}
-                                                    {/if}
-                                                </th>
-                                                <th class="sortable" onclick={() => toggleSort("timestamp")}>
-                                                    Timestamp
-                                                    {#if sortBy === "timestamp"}
-                                                        {#if sortOrder === "asc"}
-                                                            <ArrowUp size="14" class="sort-icon"/>
-                                                        {:else}
-                                                            <ArrowDown size="14" class="sort-icon"/>
-                                                        {/if}
-                                                    {/if}
-                                                </th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {#each getSortedDetectedCues() as cue}
-                                                <tr
-                                                    class="cue-row clickable-row"
-                                                    class:selected={selectedTimestamp === cue.timestamp}
-                                                    onclick={(e) => handleRowClick(e, cue.timestamp)}
-                                                    onkeydown={(e) => handleRowKeydown(e, cue.timestamp)}
-                                                    tabindex="0"
-                                                    role="button"
-                                                    aria-label="Select detected cue at {formatTimestamp(cue.timestamp)} with {cue.gap.toFixed(1)}s gap"
-                                                >
-                                                    <td class="radio-cell">
-                                                        <input
-                                                            type="radio"
-                                                            name="detected-cue"
-                                                            checked={selectedTimestamp === cue.timestamp}
-                                                            onchange={() => selectOption(cue.timestamp)}
-                                                        />
-                                                    </td>
-                                                    <td class="preview-cell">
-                                                        <button
-                                                            class="preview-button"
-                                                            class:playing={$currentSegmentId === `preview-${cue.timestamp}` && $isPlaying}
-                                                            onclick={() => { selectOption(cue.timestamp); previewAudio(cue.timestamp); }}
-                                                            title="Preview audio"
-                                                        >
-                                                            {#if $currentSegmentId === `preview-${cue.timestamp}` && $isPlaying}
-                                                                <Pause size="16"/>
-                                                            {:else}
-                                                                <Play size="16"/>
+                                <div class="cue-tab-wrapper">
+                                    <div class="cue-list-scroll">
+                                    {#if getSortedDetectedCues().length > 0}
+                                        <div class="cue-table-section">
+                                            <table class="cue-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th width="1"></th>
+                                                        <th width="1"></th>
+                                                        <th width="1" class="sortable" onclick={() => toggleSort("gap")}>
+                                                            Gap
+                                                            {#if sortBy === "gap"}
+                                                                {#if sortOrder === "asc"}
+                                                                    <ArrowUp size="14" class="sort-icon"/>
+                                                                {:else}
+                                                                    <ArrowDown size="14" class="sort-icon"/>
+                                                                {/if}
                                                             {/if}
-                                                        </button>
-                                                    </td>
-                                                    <td class="gap-cell">{cue.gap.toFixed(1)}s</td>
-                                                    <td class="timestamp-cell">{formatTimestamp(cue.timestamp)}</td>
-                                                </tr>
-                                            {/each}
-                                        </tbody>
-                                    </table>
+                                                        </th>
+                                                        <th class="sortable" onclick={() => toggleSort("timestamp")}>
+                                                            Timestamp
+                                                            {#if sortBy === "timestamp"}
+                                                                {#if sortOrder === "asc"}
+                                                                    <ArrowUp size="14" class="sort-icon"/>
+                                                                {:else}
+                                                                    <ArrowDown size="14" class="sort-icon"/>
+                                                                {/if}
+                                                            {/if}
+                                                        </th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {#each getSortedDetectedCues() as cue}
+                                                        <tr
+                                                            class="cue-row clickable-row"
+                                                            class:selected={selectedTimestamp === cue.timestamp}
+                                                            onclick={(e) => handleRowClick(e, cue.timestamp)}
+                                                            onkeydown={(e) => handleRowKeydown(e, cue.timestamp)}
+                                                            tabindex="0"
+                                                            role="button"
+                                                            aria-label="Select detected cue at {formatTimestamp(cue.timestamp)} with {cue.gap.toFixed(1)}s gap"
+                                                        >
+                                                            <td class="radio-cell">
+                                                                <input
+                                                                    type="radio"
+                                                                    name="detected-cue"
+                                                                    checked={selectedTimestamp === cue.timestamp}
+                                                                    onchange={() => selectOption(cue.timestamp)}
+                                                                />
+                                                            </td>
+                                                            <td class="preview-cell">
+                                                                <button
+                                                                    class="preview-button"
+                                                                    class:playing={$currentSegmentId === `preview-${cue.timestamp}` && $isPlaying}
+                                                                    onclick={() => { selectOption(cue.timestamp); previewAudio(cue.timestamp); }}
+                                                                    title="Preview audio"
+                                                                >
+                                                                    {#if $currentSegmentId === `preview-${cue.timestamp}` && $isPlaying}
+                                                                        <Pause size="16"/>
+                                                                    {:else}
+                                                                        <Play size="16"/>
+                                                                    {/if}
+                                                                </button>
+                                                            </td>
+                                                            <td class="gap-cell">{cue.gap.toFixed(1)}s</td>
+                                                            <td class="timestamp-cell">{formatTimestamp(cue.timestamp)}</td>
+                                                        </tr>
+                                                    {/each}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    {:else}
+                                        <div class="empty-cues-state">
+                                            {#if addOptions.allow_normal_scan && addOptions.allow_vad_scan}
+                                                This region has not been scanned for cues yet.
+                                            {:else if addOptions.allow_vad_scan}
+                                                No cues found in this region. Try clicking "Detect Cues [Dramatized]".
+                                            {:else}
+                                                No cues found in this region.
+                                            {/if}
+                                        </div>
+                                    {/if}
+                                    </div>
+
+                                    {#if addOptions.allow_normal_scan || addOptions.allow_vad_scan}
+                                        <div class="scan-actions">
+                                            {#if addOptions.allow_normal_scan}
+                                                <button
+                                                    class="btn btn-secondary btn-scan"
+                                                    onclick={() => startPartialScan('normal')}
+                                                    disabled={scanning}
+                                                    title="Scan this region for chapter cues using silence detection"
+                                                >
+                                                    <ScanSearch size="16"/>
+                                                    Detect {getSortedDetectedCues().length > 0 ? 'Additional ' : ''}Cues
+                                                </button>
+                                            {/if}
+                                            {#if addOptions.allow_vad_scan}
+                                                <button
+                                                    class="btn btn-secondary btn-scan"
+                                                    onclick={() => startPartialScan('vad')}
+                                                    disabled={scanning}
+                                                    title="Scan this region for chapter cues using voice activity detection (for dramatized audiobooks)"
+                                                >
+                                                    <AudioLines size="16"/>
+                                                    Detect {getSortedDetectedCues().length > 0 ? 'Additional ' : ''}Cues [Dramatized]
+                                                </button>
+                                            {/if}
+                                        </div>
+                                    {/if}
                                 </div>
                             {:else if activeTab === "deleted"}
                                 <div class="cue-table-section">
@@ -851,6 +908,48 @@
     .validation-error {
         color: var(--danger);
         font-size: 0.875rem;
+    }
+
+    .cue-tab-wrapper {
+        display: flex;
+        flex-direction: column;
+        min-height: 200px;
+        max-height: 400px;
+        overflow: hidden;
+    }
+
+    .cue-list-scroll {
+        flex: 1;
+        overflow-y: auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .empty-cues-state {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+    }
+
+    .scan-actions {
+        display: flex;
+        justify-content: center;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+        flex-wrap: wrap;
+    }
+
+    .btn-secondary.btn-scan {
+        border-color: var(--primary);
+    }
+
+    .btn-scan :global(svg) {
+        color: var(--primary);
     }
 
     .cue-table-section {

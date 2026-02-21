@@ -47,6 +47,21 @@
             description: "Analyzing voice activity to detect chapter cues...",
             icon: AudioLines,
         },
+        partial_scan_prep: {
+            title: "Preparing Partial Scan",
+            description: "Extracting audio for analysis...",
+            icon: ScissorsLineDashed,
+        },
+        partial_audio_analysis: {
+            title: "Scanning for Chapter Cues",
+            description: "Analyzing audio in selected region...",
+            icon: ScanSearch,
+        },
+        partial_vad_analysis: {
+            title: "Scanning for Chapter Cues",
+            description: "Analyzing voice activity in selected region...",
+            icon: AudioLines,
+        },
         audio_extraction: {
             title: "Extracting",
             description: "Extracting short segments of chapter audio...",

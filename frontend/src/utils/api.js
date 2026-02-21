@@ -267,6 +267,14 @@ export const chapters = {
         return apiRequest(`/chapters/add-options/${chapterId}`);
     },
 
+    async startPartialScan(chapterId, scanType) {
+        return apiRequest(`/chapters/${chapterId}/partial-scan`, {
+            method: 'POST',
+            body: {scan_type: scanType},
+        });
+    },
+
+
     async add(chapterData) {
         return apiRequest('/chapters', {
             method: 'POST',
