@@ -5,6 +5,7 @@
      * Svelte 5 runes component.
      * Accepts callbacks: onchange(ruleset), onresetToDefaults(), ondeleteSelf()
      */
+    import { onMount } from "svelte";
     import { DragDropProvider, DragOverlay } from "@dnd-kit-svelte/svelte";
     import { CollisionPriority } from "@dnd-kit/abstract";
     import { move } from "@dnd-kit/helpers";
@@ -38,6 +39,19 @@
     } = $props();
 
     let rulesetId = $derived(ruleset.id || "root");
+
+    // Suppress HierarchyRequestError from dnd-kit's internal DOM reorder
+    // when dragging nested sortable containers (rulesets).
+    onMount(() => {
+        if (!isRoot) return;
+        function suppress(e) {
+            if (e.reason?.name === "HierarchyRequestError") {
+                e.preventDefault();
+            }
+        }
+        window.addEventListener("unhandledrejection", suppress);
+        return () => window.removeEventListener("unhandledrejection", suppress);
+    });
 
     // --- Global Tree State for Drag & Drop ---
     // Instead of local items per level, the root manages the entire tree mapped by container ID.

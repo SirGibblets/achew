@@ -15,14 +15,14 @@
     } = $props();
 
     const { ref, handleRef, isDragging, isDropTarget } = useSortable({
-        id,
+        id: () => id,
         index: () => index,
-        type,
-        accept,
-        group,
-        data,
-        collisionPriority,
-        disabled: isOverlay,
+        type: () => type,
+        accept: () => accept,
+        group: () => group,
+        data: () => data,
+        collisionPriority: () => collisionPriority,
+        disabled: () => isOverlay,
     });
 </script>
 
