@@ -1534,6 +1534,20 @@ class ProcessingPipeline:
 
                 if success:
                     self._notify_progress(Step.COMPLETED, 100, "Chapter submission completed successfully")
+                    # Update chapter search cache if this book is cached
+                    try:
+                        from .chapter_search.database import upsert_chapters_for_book
+                        from .chapter_search.state import get_chapter_search_state
+                        cached_chapters = [
+                            {"title": title, "start_time": timestamp}
+                            for timestamp, title in chapter_data
+                        ]
+                        await upsert_chapters_for_book(self.book.id, cached_chapters)
+                        await get_chapter_search_state().update_book_chapters(
+                            self.book.id, cached_chapters
+                        )
+                    except Exception as cache_err:
+                        logger.warning(f"Failed to update chapter search cache: {cache_err}")
 
                 return success
 

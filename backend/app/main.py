@@ -20,9 +20,11 @@ from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .api.routes import core, chapters, audio, config, audiobookshelf, pipeline
+from .api.routes.chapter_search import routes as chapter_search_routes
 from .core.config import get_settings
 from .models.websocket import WSMessage, WSMessageType
 from .app import get_app_state
+from .services.chapter_search.state import get_chapter_search_state
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +58,11 @@ async def lifespan(achew_app: FastAPI):
     # Initialize app state
     get_app_state()
     logger.info("App state initialized")
+
+    # Initialize chapter search database
+    from .services.chapter_search.database import init_db
+    await init_db()
+    logger.info("Chapter search database initialized")
 
     yield
 
@@ -110,6 +117,7 @@ app.include_router(config.router, prefix="/api", tags=["config"])
 app.include_router(chapters.router, prefix="/api", tags=["chapters"])
 app.include_router(audio.router, prefix="/api", tags=["audio"])
 app.include_router(audiobookshelf.router, prefix="/api/audiobookshelf", tags=["audiobookshelf"])
+app.include_router(chapter_search_routes.router, prefix="/api", tags=["chapter-search"])
 
 # Setup static file serving
 static_dir = get_static_directory()
@@ -302,6 +310,33 @@ async def websocket_endpoint(websocket: WebSocket):
     finally:
         # Remove connection from app state
         app_state.remove_websocket_connection(websocket)
+
+
+@app.websocket("/ws/chapter-search")
+async def chapter_search_websocket_endpoint(websocket: WebSocket):
+    """WebSocket endpoint for Chapter Search real-time state."""
+    cs_state = get_chapter_search_state()
+
+    try:
+        await websocket.accept()
+        await cs_state.add_ws_connection(websocket)
+
+        while True:
+            try:
+                message = await websocket.receive_text()
+                await cs_state.handle_ws_message(message)
+            except Exception:
+                break
+
+    except Exception as e:
+        logger.error(f"Chapter search WebSocket error: {e}")
+        try:
+            await websocket.close(code=1011, reason="Internal server error")
+        except Exception:
+            pass
+
+    finally:
+        cs_state.remove_ws_connection(websocket)
 
 
 @app.exception_handler(Exception)

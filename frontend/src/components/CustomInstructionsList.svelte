@@ -2,7 +2,7 @@
     import {onMount} from "svelte";
     import {api} from "../utils/api.js";
     import { dndzone } from "svelte-dnd-action";
-    
+
     // Icons
     import CircleQuestionMark from "@lucide/svelte/icons/circle-question-mark";
     import GripVertical from "@lucide/svelte/icons/grip-vertical";
@@ -388,17 +388,17 @@
     .instruction-wrapper {
         touch-action: none;
     }
-    
+
     :global(.dnd-action-dragged-el) {
         opacity: 0.5;
         transform: rotate(5deg);
         box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
     }
-    
+
     :global(.dnd-action-dragged-el .drag-handle) {
         cursor: grabbing;
     }
-    
+
     .help-icon {
         border: none;
         display: inline-flex;

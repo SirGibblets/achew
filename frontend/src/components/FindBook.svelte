@@ -1,17 +1,19 @@
 <script>
+    import {slide, fade} from "svelte/transition";
     import {session} from "../stores/session.js";
     import {api} from "../utils/api.js";
     import AudiobookCard from "./AudiobookCard.svelte";
     import Icon from "./Icon.svelte";
+    import ChapterSearch from "./chapter_search/ChapterSearch.svelte";
 
     // Icons
     import ArrowRight from "@lucide/svelte/icons/arrow-right";
     import Check from "@lucide/svelte/icons/check";
     import CircleQuestionMark from "@lucide/svelte/icons/circle-question-mark";
-    import RefreshCw from "@lucide/svelte/icons/refresh-cw";
 
-    // Input mode - 'itemId', 'search', or 'missingChapters'
+    // Input mode - 'itemId', 'search', or 'chapterSearch'
     let inputMode = "search";
+    $: isChapterSearch = inputMode === 'chapterSearch';
 
     // Item ID mode variables
     let itemId = "";
@@ -34,15 +36,6 @@
     let isLoadingLibraries = false;
     let isSearching = false;
     let searchError = "";
-
-    // Missing Chapters mode variables
-    let missingChaptersLibrary = null;
-    let maxChapters = 0;
-    let missingChaptersBooks = [];
-    let filteredMissingChaptersBooks = [];
-    let isFetchingMissingChapters = false;
-    let isRefreshingCache = false;
-    let missingChaptersError = "";
 
     // Format duration for display
     function formatDuration(seconds) {
@@ -256,65 +249,6 @@
         }
     }
 
-    async function loadMissingChaptersBooks() {
-        if (!missingChaptersLibrary) return;
-
-        isFetchingMissingChapters = true;
-        missingChaptersError = "";
-
-        try {
-            const books = await api.audiobookshelf.getLibraryItems(missingChaptersLibrary.id);
-            missingChaptersBooks = books;
-            filterMissingChaptersBooks();
-        } catch (error) {
-            console.error("Failed to load missing chapters books:", error);
-            missingChaptersError = "Failed to load books. Please check your connection.";
-            missingChaptersBooks = [];
-            filteredMissingChaptersBooks = [];
-        } finally {
-            isFetchingMissingChapters = false;
-        }
-    }
-
-    function filterMissingChaptersBooks() {
-        if (!missingChaptersBooks.length) {
-            filteredMissingChaptersBooks = [];
-            return;
-        }
-
-        filteredMissingChaptersBooks = missingChaptersBooks.filter(
-            book => (book.media.numChapters || 0) <= maxChapters
-        );
-    }
-
-    $: if (inputMode === "missingChapters" && missingChaptersBooks.length > 0 && maxChapters !== undefined) {
-        filterMissingChaptersBooks();
-    }
-
-    async function handleMissingChaptersLibraryChange() {
-        if (missingChaptersLibrary) {
-            await loadMissingChaptersBooks();
-        }
-    }
-
-    async function refreshMissingChaptersCache() {
-        if (!missingChaptersLibrary) return;
-
-        isRefreshingCache = true;
-        missingChaptersError = "";
-
-        try {
-            const books = await api.audiobookshelf.getLibraryItems(missingChaptersLibrary.id, true);
-            missingChaptersBooks = books;
-            filterMissingChaptersBooks();
-        } catch (error) {
-            console.error("Failed to refresh cache:", error);
-            missingChaptersError = "Failed to refresh cache. Please try again.";
-        } finally {
-            isRefreshingCache = false;
-        }
-    }
-
     // Mode switching
     function switchToItemIdMode() {
         inputMode = "itemId";
@@ -325,38 +259,8 @@
         loadLibraries();
     }
 
-    function switchToMissingChaptersMode() {
-        inputMode = "missingChapters";
-        loadLibrariesForMissingChapters();
-    }
-
-    async function loadLibrariesForMissingChapters() {
-        if (libraries.length > 0) {
-            if (!missingChaptersLibrary && libraries.length > 0) {
-                missingChaptersLibrary = libraries[0];
-                await loadMissingChaptersBooks();
-            }
-            return;
-        }
-
-        isLoadingLibraries = true;
-        missingChaptersError = "";
-
-        try {
-            const librariesData = await api.audiobookshelf.getLibraries();
-            libraries = librariesData;
-
-            if (libraries.length > 0) {
-                missingChaptersLibrary = libraries[0];
-                await loadMissingChaptersBooks();
-            }
-        } catch (error) {
-            console.error("Failed to load libraries:", error);
-            missingChaptersError = "Failed to load libraries. Please check your connection.";
-            libraries = [];
-        } finally {
-            isLoadingLibraries = false;
-        }
+    function switchToChapterSearchMode() {
+        inputMode = "chapterSearch";
     }
 
     function clearAllState() {
@@ -369,11 +273,6 @@
         validationError = "";
         bookInfo = null;
         isValidItem = false;
-        // Clear missing chapters state
-        missingChaptersBooks = [];
-        filteredMissingChaptersBooks = [];
-        missingChaptersError = "";
-        maxChapters = 0;
         api.audiobookshelf.clearAllCache().catch(console.error);
     }
 
@@ -419,8 +318,9 @@
         </div>
     {:else}
         <div class="start-content">
-            <div class="header-area">
-                <div class="header-section">
+            {#if !isChapterSearch}
+            <div class="header-area" transition:slide={{ duration: 200 }}>
+                <div class="header-section" transition:fade={{ duration: 33 }}>
                     <div class="title-row">
                         <div class="logo-container">
                             <Icon
@@ -439,6 +339,7 @@
                     </div>
                 </div>
             </div>
+            {/if}
 
             <!-- Mode Selector -->
             <div class="mode-selector">
@@ -447,7 +348,7 @@
                         on:click={switchToSearchMode}
                         type="button"
                 >
-                    Search
+                    Title Search
                 </button>
                 <button
                         class="mode-btn {inputMode === 'itemId' ? 'active' : ''}"
@@ -457,11 +358,11 @@
                     Item ID
                 </button>
                 <button
-                        class="mode-btn {inputMode === 'missingChapters' ? 'active' : ''}"
-                        on:click={switchToMissingChaptersMode}
+                        class="mode-btn {inputMode === 'chapterSearch' ? 'active' : ''}"
+                        on:click={switchToChapterSearchMode}
                         type="button"
                 >
-                    Missing Chapters
+                    Chapter Search
                 </button>
             </div>
 
@@ -630,114 +531,8 @@
                         </div>
                     </div>
                 {/if}
-            {:else if inputMode === "missingChapters"}
-                <div class="missing-chapters-form">
-                    <div class="missing-chapters-controls">
-                        <!-- Library Selection -->
-                        <div class="library-controls">
-                            <select
-                                    class="library-select"
-                                    bind:value={missingChaptersLibrary}
-                                    on:change={handleMissingChaptersLibraryChange}
-                                    disabled={isLoadingLibraries || isFetchingMissingChapters || $session.loading}
-                            >
-                                {#if isLoadingLibraries}
-                                    <option>Loading libraries...</option>
-                                {:else if libraries.length === 0}
-                                    <option>No libraries found</option>
-                                {:else}
-                                    {#each libraries as library}
-                                        <option value={library}>{library.name}</option>
-                                    {/each}
-                                {/if}
-                            </select>
-                            
-                            <button
-                                    class="refresh-btn"
-                                    on:click={refreshMissingChaptersCache}
-                                    disabled={!missingChaptersLibrary || isRefreshingCache || $session.loading}
-                                    title="Refresh library cache"
-                            >
-                                <RefreshCw size="16" class={isRefreshingCache ? 'spinning' : ''}/>
-                            </button>
-                        </div>
-
-                        <!-- Chapter Count Filter -->
-                        <div class="chapter-filter">
-                            <label for="maxChapters" class="filter-label">
-                                Show books with
-                            </label>
-                            <input
-                                    id="maxChapters"
-                                    type="number"
-                                    class="chapter-input"
-                                    bind:value={maxChapters}
-                                    min="0"
-                                    max="999"
-                                    disabled={isFetchingMissingChapters || $session.loading}
-                            />
-                            <span class="filter-label">chapter(s) or fewer</span>
-                        </div>
-                    </div>
-
-                    {#if missingChaptersError}
-                        <div class="invalid-feedback">
-                            {missingChaptersError}
-                        </div>
-                    {/if}
-                </div>
-
-                <!-- Missing Chapters Results -->
-                {#if isFetchingMissingChapters}
-                    <div class="loading-indicator">
-                        <span class="loading-spinner"></span>
-                        Loading books...
-                    </div>
-                {:else if filteredMissingChaptersBooks.length > 0}
-                    <div class="missing-chapters-results">
-                        <div class="results-header">
-                            <p class="results-count">
-                                Found {filteredMissingChaptersBooks.length} book{filteredMissingChaptersBooks.length === 1 ? '' : 's'}
-                                with {maxChapters} chapter{maxChapters === 1 ? '' : 's'} or fewer
-                            </p>
-                        </div>
-                        <div class="results-list">
-                            {#each filteredMissingChaptersBooks as book}
-                                <AudiobookCard
-                                        title={book.media.metadata.title}
-                                        duration={book.duration}
-                                        coverImageUrl={book.media.coverPath}
-                                        fileCount={book.media.numAudioFiles || 0}
-                                        size="compact"
-                                >
-                                    <div slot="metadata" class="chapter-info">
-                                        {book.media.numChapters || 'No'} chapter{book.media.numChapters === 1 ? '' : 's'}
-                                    </div>
-                                    <div slot="actions" class="search-result-actions">
-                                        <button
-                                                class="btn btn-verify start-btn"
-                                                disabled={$session.loading}
-                                                on:click={() => startSessionFromBook(book)}
-                                        >
-                                            {#if isValidating || $session.loading}
-                                                <span class="btn-spinner"></span>
-                                                Processing...
-                                            {:else}
-                                                Start
-                                                <ArrowRight size="14"/>
-                                            {/if}
-                                        </button>
-                                    </div>
-                                </AudiobookCard>
-                            {/each}
-                        </div>
-                    </div>
-                {:else if missingChaptersBooks.length > 0}
-                    <div class="no-results">
-                        <p>No books found with {maxChapters} chapter{maxChapters === 1 ? '' : 's'} or fewer.</p>
-                        <p class="hint">Try increasing the chapter count or clicking the refresh button.</p>
-                    </div>
-                {/if}
+            {:else if inputMode === "chapterSearch"}
+                <ChapterSearch />
             {/if}
         </div>
     {/if}
@@ -760,7 +555,6 @@
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 2rem;
     }
 
     .header-area {
@@ -769,6 +563,7 @@
         display: flex;
         align-items: center;
         justify-content: center;
+        padding-bottom: 2rem;
     }
 
     .header-section {
@@ -833,6 +628,7 @@
         width: 100%;
         max-width: 600px;
         text-align: center;
+        margin-bottom: 2rem;
     }
 
     .form-group {
@@ -959,6 +755,7 @@
         display: inline-flex;
         border: 1px solid var(--border-color);
         border-radius: 8px;
+        margin-bottom: 2rem;
         min-width: 480px;
         margin-left: auto;
         margin-right: auto;
@@ -1015,6 +812,7 @@
         width: 100%;
         max-width: 600px;
         text-align: center;
+        margin-bottom: 2rem;
     }
 
     .search-input-container {
@@ -1154,196 +952,5 @@
             min-width: 80px;
         }
     }
-
-    /* Missing Chapters Styles */
-    .missing-chapters-form {
-        width: 100%;
-        max-width: 600px;
-        text-align: center;
-    }
-
-    .missing-chapters-controls {
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
-    }
-
-    .library-controls {
-        display: flex;
-        align-items: center;
-        gap: 0.25rem;
-        justify-content: center;
-    }
-
-    .library-controls .library-select {
-        flex: 1;
-        max-width: 300px;
-        background: var(--bg-tertiary);
-        border: 1px solid var(--border-color);
-        padding: 0.75rem 1rem;
-        color: var(--text-primary);
-        font-weight: 500;
-        border-radius: 8px;
-        outline: none;
-    }
-
-    .refresh-btn {
-        background: transparent;
-        border: none;
-        border-radius: 100em;
-        padding: 0.75rem;
-        color: var(--text-muted);
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: all 0.2s ease;
-    }
-
-    .refresh-btn:hover:not(:disabled) {
-        background: var(--hover-bg);
-        color: var(--text-primary);
-    }
-
-    .refresh-btn:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-    }
-
-    .refresh-btn :global(.spinning) {
-        animation: spin 1s linear infinite;
-    }
-
-    @keyframes spin {
-        from { transform: rotate(0deg); }
-        to { transform: rotate(360deg); }
-    }
-
-    .chapter-filter {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 0.5rem;
-        flex-wrap: wrap;
-    }
-
-    .filter-label {
-        color: var(--text-primary);
-        font-weight: 500;
-        font-size: 0.95rem;
-    }
-
-    .chapter-input {
-        background: var(--bg-primary);
-        border: 1px solid var(--border-color);
-        border-radius: 8px;
-        padding: 0.5rem 0.75rem;
-        color: var(--text-primary);
-        font-size: 0.95rem;
-        text-align: center;
-        width: 80px;
-        outline: none;
-        transition: border-color 0.2s ease;
-    }
-
-    .chapter-input:focus {
-        border-color: var(--primary);
-    }
-
-    .chapter-input:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
-    }
-
-    .missing-chapters-results {
-        width: 100%;
-        max-width: 600px;
-        margin-top: 0;
-    }
-
-    .results-header {
-        margin-bottom: 1rem;
-        text-align: center;
-    }
-
-    .results-count {
-        color: var(--text-secondary);
-        font-size: 0.9rem;
-        margin: 0;
-        font-weight: 500;
-    }
-
-    .chapter-info {
-        color: var(--text-secondary);
-        font-size: 0.8rem;
-        font-weight: 500;
-        margin-top: 0.25rem;
-    }
-
-    .loading-indicator {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 0.5rem;
-        color: var(--text-secondary);
-        font-size: 0.9rem;
-        padding: 2rem;
-    }
-
-    .loading-spinner {
-        width: 16px;
-        height: 16px;
-        border: 2px solid var(--border-color);
-        border-top: 2px solid var(--primary);
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-    }
-
-    .no-results {
-        text-align: center;
-        padding: 2rem;
-        color: var(--text-secondary);
-    }
-
-    .no-results p {
-        margin: 0.5rem 0;
-    }
-
-    .no-results .hint {
-        font-size: 0.85rem;
-        opacity: 0.8;
-    }
-
-    /* Missing Chapters Responsive Design */
-    @media (max-width: 768px) {
-        .chapter-filter {
-            text-align: center;
-            line-height: 1.5;
-        }
-
-        .filter-label {
-            font-size: 0.9rem;
-        }
-
-        .chapter-input {
-            width: 70px;
-            font-size: 0.9rem;
-        }
-    }
-
-    @media (max-width: 480px) {
-        .chapter-filter {
-            gap: 0.4rem;
-        }
-
-        .filter-label {
-            font-size: 0.85rem;
-        }
-
-        .chapter-input {
-            width: 60px;
-            padding: 0.4rem 0.6rem;
-            font-size: 0.85rem;
-        }
-    }
+    
 </style>
