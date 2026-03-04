@@ -103,6 +103,8 @@ class VadDetectionService:
             "-y",  # -y to overwrite existing files
             "-i",
             audio_file,
+            "-map",
+            "0:a",  # Audio stream only — skip cover art/video/data streams
             "-f",
             "segment",  # Use segment muxer
             "-segment_time",
@@ -122,6 +124,7 @@ class VadDetectionService:
             segment_pattern = re.compile(r"Opening '.*vad_chunk_(\d+)\.[^']+' for writing")
             segments_created = 0
             expected_segments = int(duration // self.segment_duration) + 1
+            stderr_lines = []
 
             for line in process.stderr:
                 # Check for cancellation during processing
@@ -134,6 +137,8 @@ class VadDetectionService:
                         process.kill()
                         process.wait()
                     return []
+
+                stderr_lines.append(line)
 
                 # Look for segment creation messages
                 match = segment_pattern.search(line)
@@ -149,10 +154,6 @@ class VadDetectionService:
                         }
                     )
 
-                # Also check for any error messages
-                if "Error" in line or "error" in line:
-                    logger.warning(f"ffmpeg warning/error: {line.strip()}")
-
             process.wait()
 
             # Check for cancellation after process completion
@@ -161,6 +162,7 @@ class VadDetectionService:
 
             if process.returncode != 0:
                 logger.error(f"ffmpeg segmentation failed with return code {process.returncode}")
+                logger.error(f"ffmpeg stderr output:\n{''.join(stderr_lines)}")
                 return []
 
         except Exception as e:
