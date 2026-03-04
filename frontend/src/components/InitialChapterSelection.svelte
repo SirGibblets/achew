@@ -205,6 +205,14 @@
         return `${minutes}:${secs.toString().padStart(2, "0")}`;
     }
 
+    function ellipsize(str, max = 30) {
+        return str.length > max ? str.slice(0, max - 1) + '…' : str;
+    }
+
+    function formatCueTitle(title) {
+        return title ? `\n"${ellipsize(title)}"` : '';
+    }
+
     function toggleCueSourceDisplay(sourceId) {
         activeComparisonSource = activeComparisonSource === sourceId ? null : sourceId;
     }
@@ -286,6 +294,7 @@
                         nearestTick = {
                             type: 'existing',
                             timestamp: cue.timestamp,
+                            title: cue.title,
                             index: index + 1,
                             percent: tickPercent,
                             source: activeSource
@@ -302,8 +311,8 @@
             if (isComparing) {
                 if (nearestTick.type === 'existing') {
                     timelineTooltip.topContent = nearestTick.source.id === 'file_starts'
-                        ? `File Start: ${formatTimelineTime(nearestTick.timestamp)}`
-                        : `${nearestTick.source.short_name} Chapter: ${formatTimelineTime(nearestTick.timestamp)}`;
+                        ? `File Start: ${formatTimelineTime(nearestTick.timestamp)}${formatCueTitle(nearestTick.title)}`
+                        : `${nearestTick.source.short_name} Chapter: ${formatTimelineTime(nearestTick.timestamp)}${formatCueTitle(nearestTick.title)}`;
                     timelineTooltip.showTop = true;
                     const alignedNew = selectedTimestamps.find(ts => Math.abs(ts - nearestTick.timestamp) <= 5);
                     timelineTooltip.showBottom = !!alignedNew;
@@ -318,8 +327,8 @@
                         );
                         if (alignedExisting) {
                             timelineTooltip.topContent = activeSource.id === 'file_starts'
-                                ? `File Start: ${formatTimelineTime(alignedExisting.timestamp)}`
-                                : `${activeSource.short_name} Chapter: ${formatTimelineTime(alignedExisting.timestamp)}`;
+                                ? `File Start: ${formatTimelineTime(alignedExisting.timestamp)}${formatCueTitle(alignedExisting.title)}`
+                                : `${activeSource.short_name} Chapter: ${formatTimelineTime(alignedExisting.timestamp)}${formatCueTitle(alignedExisting.title)}`;
                             timelineTooltip.showTop = true;
                         } else {
                             timelineTooltip.showTop = false;
@@ -1581,7 +1590,8 @@
         font-size: 0.75rem;
         font-family: monospace;
         font-weight: 600;
-        white-space: nowrap;
+        white-space: pre-line;
+        text-align: center;
         z-index: 100;
         pointer-events: none;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
