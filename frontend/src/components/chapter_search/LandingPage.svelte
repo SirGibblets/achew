@@ -17,9 +17,16 @@
     $: selectedLibrary = libraries.find(lib => lib.id === selectedLibraryId) || null;
     $: canSearch = selectedLibrary && rootRuleset && hasEnabledRules(rootRuleset);
 
-    // Auto-select first library
+    // Auto-select last-used library, or first if unavailable
     $: if (libraries.length > 0 && !selectedLibraryId) {
-        selectedLibraryId = libraries[0].id;
+        const savedId = localStorage.getItem('achew-last-library-id');
+        const saved = savedId && libraries.some(l => l.id === savedId);
+        selectedLibraryId = saved ? savedId : libraries[0].id;
+    }
+
+    // Persist library selection on change
+    $: if (selectedLibraryId) {
+        localStorage.setItem('achew-last-library-id', selectedLibraryId);
     }
 
     async function handleSearch() {

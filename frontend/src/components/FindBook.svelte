@@ -167,9 +167,11 @@
             const librariesData = await api.audiobookshelf.getLibraries();
             libraries = librariesData;
 
-            // Auto-select first library if available
+            // Auto-select last-used library, or first if unavailable
             if (libraries.length > 0) {
-                selectedLibrary = libraries[0];
+                const savedId = localStorage.getItem('achew-last-library-id');
+                const saved = savedId && libraries.find(l => l.id === savedId);
+                selectedLibrary = saved || libraries[0];
             }
         } catch (error) {
             console.error("Failed to load libraries:", error);
@@ -228,8 +230,11 @@
         }
     }
 
-    // Handle library change - trigger new search if query exists
+    // Handle library change - save preference and trigger new search if query exists
     async function handleLibraryChange() {
+        if (selectedLibrary) {
+            localStorage.setItem('achew-last-library-id', selectedLibrary.id);
+        }
         if (searchQuery.length >= 2) {
             await performSearch();
         }
@@ -257,6 +262,16 @@
     function switchToSearchMode() {
         inputMode = "search";
         loadLibraries();
+        restoreSavedLibrary();
+    }
+
+    function restoreSavedLibrary() {
+        if (libraries.length === 0) return;
+        const savedId = localStorage.getItem('achew-last-library-id');
+        const saved = savedId && libraries.find(l => l.id === savedId);
+        if (saved && saved !== selectedLibrary) {
+            selectedLibrary = saved;
+        }
     }
 
     function switchToChapterSearchMode() {
