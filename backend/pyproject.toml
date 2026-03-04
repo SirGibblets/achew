@@ -29,7 +29,7 @@ dependencies = [
     "mlx-whisper>=0.4.2; sys_platform == 'darwin'",
     "parakeet-mlx>=0.3.5; sys_platform == 'darwin'",
     "ollama>=0.5.1",
-    "google-genai[aiohttp]>=1.27.0",
+    "google-genai[aiohttp]>=1.65.0",
     "anthropic>=0.76.0",
     "silero-vad>=5.1.2",
     "lmstudio==1.4.1",

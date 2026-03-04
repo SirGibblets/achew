@@ -217,7 +217,7 @@ class GeminiService(AIService):
                 logger.warning("Gemini No API key configured, returning empty model list")
                 return []
 
-            client = self._create_client(api_key, stable=True)
+            client = self._create_client(api_key)
             models_response = client.models.list()
 
             models = []
@@ -225,10 +225,17 @@ class GeminiService(AIService):
             for model in models_response:
                 logger.debug(f"Gemini Processing model: {model.name}")
 
+                # Strip any trailing "-preview" or "-latest" suffix for the base name check
+                base_name = model.name
+                for suffix in ("-preview", "-latest"):
+                    if base_name.endswith(suffix):
+                        base_name = base_name[: -len(suffix)]
+                        break
+
                 if (
                     "gemini" in model.name
                     and "generateContent" in getattr(model, "supported_actions", [])
-                    and model.name.endswith(("pro", "flash", "lite"))
+                    and base_name.endswith(("pro", "flash", "lite"))
                 ):
                     display_name = model.display_name or model.name.replace("models/", "").replace("-", " ").title()
                     model_info = ModelInfo(
@@ -240,16 +247,16 @@ class GeminiService(AIService):
                     models.append(model_info)
                     logger.debug(f"Gemini Added model: {model_info.name} (id: {model_info.id})")
 
-            # Sort by preference (gemini-2.5 first, then others)
+            # Sort by version number descending (newest first)
+            import re
+
+            tier_order = {"flash": 0, "lite": 1, "pro": 2}
+
             def sort_key(model):
-                if "gemini-2.5" in model.id:
-                    return 0
-                elif "gemini-2.0" in model.id:
-                    return 1
-                elif "gemini-1.5" in model.id:
-                    return 2
-                else:
-                    return 3
+                match = re.search(r"gemini-(\d+(?:\.\d+)?)", model.id)
+                version = -float(match.group(1)) if match else 0
+                tier = next((v for k, v in tier_order.items() if k in model.id), 3)
+                return (version, tier)
 
             models.sort(key=sort_key)
 
@@ -317,9 +324,9 @@ class GeminiService(AIService):
                 stream_count = 0
                 content_received = ""
 
-                # Enable thinking only for gemini-2.5 models
+                # Enable thinking for models 2.5 and above
                 thinking_budget = 0
-                if "gemini-2.5" in model_id:
+                if not any(v in model_id for v in ("gemini-1.5", "gemini-2.0")):
                     thinking_budget = 1024
                 
                 # Stream the response for progress updates
