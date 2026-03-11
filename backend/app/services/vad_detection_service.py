@@ -6,6 +6,7 @@ import tempfile
 import glob
 import json
 import sys
+import threading
 from typing import List, Tuple, Dict, Optional
 
 from app.models.enums import Step
@@ -188,115 +189,110 @@ class VadDetectionService:
         segment_duration: float = None,
     ) -> List[Tuple[int, List[Tuple[float, float]]]]:
         """Process a batch of audio chunks with VAD using a single subprocess for efficiency"""
-        try:
-            chunk_indices = [chunk_index for chunk_index, _ in chunk_batch]
-            logger.debug(f"Starting subprocess for chunk batch {[i+1 for i in chunk_indices]}")
+        chunk_indices = [chunk_index for chunk_index, _ in chunk_batch]
+        logger.debug(f"Starting subprocess for chunk batch {[i+1 for i in chunk_indices]}")
 
-            # Prepare chunk data for worker (format: [["chunk1.wav", 0], ["chunk2.wav", 1], ...])
-            # Convert from [(chunk_index, chunk_file), ...] to [["chunk_file", chunk_index], ...]
-            worker_chunk_data = [[chunk_file, chunk_index] for chunk_index, chunk_file in chunk_batch]
-            chunk_data = json.dumps(worker_chunk_data)
+        worker_chunk_data = [[chunk_file, chunk_index] for chunk_index, chunk_file in chunk_batch]
+        chunk_data = json.dumps(worker_chunk_data)
+        duration_to_use = segment_duration if segment_duration is not None else self.segment_duration
 
-            duration_to_use = segment_duration if segment_duration is not None else self.segment_duration
+        cmd = [
+            sys.executable,
+            vad_worker_path,
+            chunk_data,
+            str(duration_to_use),
+            str(self.min_silence_duration),
+            "true",  # Enable progress tracking
+        ]
 
-            # Create subprocess command with progress enabled
-            cmd = [
-                sys.executable,  # Current Python interpreter
-                vad_worker_path,
-                chunk_data,  # JSON array of [chunk_file, chunk_index] pairs
-                str(duration_to_use),
-                str(self.min_silence_duration),
-                "true",  # Enable progress tracking
-            ]
+        loop = asyncio.get_event_loop()
 
-            # Start subprocess
-            process = await asyncio.create_subprocess_exec(
-                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, cwd=os.getcwd()
-            )
-
-            # Track process for cancellation
-            self._vad_processes.append(process)
-
+        def run_subprocess_sync():
+            process = None
             try:
-                # Read output line by line to capture progress updates and results
-                stdout_lines = []
-                results = []
+                popen_kwargs = {}
+                if sys.platform == "win32":
+                    popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
 
-                async for line in process.stdout:
-                    line_text = line.decode().strip()
-                    stdout_lines.append(line_text)
+                process = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    cwd=os.getcwd(),
+                    **popen_kwargs,
+                )
+                self._vad_processes.append(process)
+
+                # Drain stderr in a background thread to prevent deadlock.
+                # If the worker writes enough to stderr (torch warnings, tracebacks)
+                # to fill the OS pipe buffer (~64KB), it blocks — and since we're
+                # blocked reading stdout, neither side can make progress.
+                stderr_chunks = []
+
+                def drain_stderr():
+                    try:
+                        stderr_chunks.append(process.stderr.read())
+                    except Exception:
+                        pass
+
+                stderr_thread = threading.Thread(target=drain_stderr, daemon=True)
+                stderr_thread.start()
+
+                results = []
+                for raw_line in process.stdout:
+                    line_text = raw_line.decode().strip()
 
                     if line_text.startswith("PROGRESS:"):
-                        # Parse progress update and update shared tracker
                         try:
-                            progress_json = line_text[9:]  # Remove "PROGRESS:" prefix
-                            progress_data = json.loads(progress_json)
-
+                            progress_data = json.loads(line_text[9:])
                             if progress_data.get("type") == "progress":
                                 chunk_index = progress_data.get("chunk_index")
                                 chunk_progress = progress_data.get("progress", 0)
-
-                                # Update progress tracker for this chunk
                                 if chunk_index is not None:
                                     progress_tracker[chunk_index] = chunk_progress
-
                         except json.JSONDecodeError as e:
                             logger.warning(f"Failed to parse progress data: {e}")
-
                     elif line_text.startswith("RESULT:"):
-                        # Parse individual chunk result
                         try:
-                            result_json = line_text[7:]  # Remove "RESULT:" prefix
-                            result_data = json.loads(result_json)
-                            results.append(result_data)
+                            results.append(json.loads(line_text[7:]))
                         except json.JSONDecodeError as e:
                             logger.error(f"Failed to parse result data: {e}")
 
-                # Wait for process to complete
-                await process.wait()
+                process.wait()
+                stderr_thread.join(timeout=5)
 
-                # Process all results
                 final_results = []
                 if process.returncode == 0:
                     for result_data in results:
                         chunk_index = result_data.get("chunk_index")
                         if result_data.get("error"):
-                            # chunk_index should be an integer from the worker
                             chunk_num = chunk_index + 1 if chunk_index is not None else "unknown"
                             logger.error(f"VAD subprocess error for chunk {chunk_num}: {result_data['error']}")
                             final_results.append((chunk_index, []))
                         else:
-                            # Convert gaps back to tuples
                             gaps = [tuple(gap) for gap in result_data.get("gaps", [])]
-                            # chunk_index should be an integer from the worker
                             chunk_num = chunk_index + 1 if chunk_index is not None else "unknown"
                             logger.debug(f"Subprocess complete for chunk {chunk_num}: found {len(gaps)} gaps")
                             final_results.append((chunk_index, gaps))
                 else:
                     logger.error(f"VAD subprocess failed for batch {chunk_indices} with code {process.returncode}")
-                    if process.stderr:
-                        stderr_data = await process.stderr.read()
-                        logger.error(f"Stderr: {stderr_data.decode()}")
-                    # Return empty results for all chunks in the batch
+                    stderr_data = b"".join(stderr_chunks).decode(errors="replace")
+                    logger.error(f"Stderr: {stderr_data}")
                     final_results = [(chunk_index, []) for chunk_index in chunk_indices]
 
                 return final_results
 
-            except asyncio.TimeoutError:
-                logger.error(f"VAD subprocess timeout for batch {chunk_indices}")
-                process.kill()
-                await process.wait()
-                return [(chunk_index, []) for chunk_index in chunk_indices]
+            except Exception as e:
+                logger.error(f"Failed to run VAD subprocess for batch {chunk_indices}: {e}", exc_info=True)
+                return [(chunk_index, []) for chunk_index, _ in chunk_batch]
+            finally:
+                if process is not None:
+                    try:
+                        self._vad_processes.remove(process)
+                    except ValueError:
+                        pass
 
-        except Exception as e:
-            logger.error(f"Failed to run VAD subprocess for batch {chunk_indices}: {e}", exc_info=True)
-            return [(chunk_index, []) for chunk_index, _ in chunk_batch]
-        finally:
-            # Remove from tracking
-            try:
-                self._vad_processes.remove(process)
-            except (ValueError, UnboundLocalError):
-                pass
+        return await loop.run_in_executor(None, run_subprocess_sync)
 
     async def _process_audio_chunks_async(
         self,
@@ -449,9 +445,9 @@ class VadDetectionService:
             logger.info(f"Cancelling {len(self._vad_processes)} VAD processes...")
             for process in self._vad_processes:
                 try:
-                    if process.returncode is None:  # Process still running
+                    if process.poll() is None:  # Process still running
                         process.kill()
-                        await process.wait()
+                        process.wait()
                 except Exception as e:
                     logger.warning(f"Error killing VAD process: {e}")
 

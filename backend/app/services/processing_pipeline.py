@@ -1834,7 +1834,10 @@ class ProcessingPipeline:
             "-c", "copy",
             output_path,
         ]
-        process = subprocess.Popen(cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+        # Use DEVNULL for both pipes — ffmpeg writes progress to stderr and if we
+        # use PIPE without reading it the OS pipe buffer fills, ffmpeg blocks on
+        # write, process.wait() blocks on exit → deadlock on longer files.
+        process = subprocess.Popen(cmd, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
         self._running_processes.append(process)
         try:
             process.wait()
@@ -1874,7 +1877,7 @@ class ProcessingPipeline:
             "-segment_times", segment_times_str,
             output_pattern,
         ]
-        process = subprocess.Popen(cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+        process = subprocess.Popen(cmd, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
         self._running_processes.append(process)
         try:
             process.wait()
@@ -2040,7 +2043,9 @@ class ProcessingPipeline:
                             "Extracting audio...",
                         )
 
-                        files = self._extract_segment_audio(seg_start, seg_end, large_scanned, ext)
+                        files = await asyncio.get_event_loop().run_in_executor(
+                            None, self._extract_segment_audio, seg_start, seg_end, large_scanned, ext
+                        )
                         scan_files.extend(files)
 
                 if not scan_files:

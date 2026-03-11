@@ -519,10 +519,10 @@ async def cancel_step():
                 "restart_step": RestartStep.CONFIGURE_ASR.value,
             }
 
-        elif step == Step.AI_CLEANUP:
+        elif step in [Step.AI_CLEANUP, Step.PARTIAL_SCAN_PREP, Step.PARTIAL_AUDIO_ANALYSIS, Step.PARTIAL_VAD_ANALYSIS]:
             await pipeline.restart_at_step(RestartStep.CHAPTER_EDITING)
             return {
-                "message": "AI cleanup cancelled, returned to chapter editing",
+                "message": "Processing cancelled, returned to chapter editing",
                 "action": "restarted",
                 "restart_step": RestartStep.CHAPTER_EDITING.value,
             }
