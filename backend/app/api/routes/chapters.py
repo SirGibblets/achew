@@ -9,6 +9,7 @@ from datetime import datetime
 from app.models.chapter import ChapterData
 from app.models.chapter_operation import (
     AddChapterOperation,
+    BatchChapterOperation,
     ChapterOperation,
     DeleteChapterOperation,
     EditTimestampOperation,
@@ -54,6 +55,10 @@ class BatchOperationRequest(BaseModel):
     pass
 
 
+class DeleteBySelectionRequest(BaseModel):
+    target: Literal["selected", "unselected"]
+
+
 class AIOptions(BaseModel):
     inferOpeningCredits: bool = True
     inferEndCredits: bool = True
@@ -68,6 +73,15 @@ class AIOptions(BaseModel):
 
 class ProcessSelectedRequest(BaseModel):
     ai_options: AIOptions = AIOptions()
+
+
+class TimestampShift(BaseModel):
+    chapter_id: str
+    new_timestamp: float
+
+
+class ShiftTimestampsRequest(BaseModel):
+    shifts: List[TimestampShift]
 
 
 class BatchOperationResponse(BaseModel):
@@ -274,6 +288,86 @@ async def delete_chapter(chapter_id: str):
         raise
     except Exception as e:
         logger.error(f"Failed to delete chapter: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/chapters/delete-by-selection", response_model=BatchOperationResponse)
+async def delete_by_selection(request: DeleteBySelectionRequest):
+    """Delete all selected or unselected chapters"""
+    try:
+        app_state = get_app_state()
+
+        if not app_state.pipeline:
+            raise HTTPException(status_code=404, detail="Pipeline not found")
+
+        if request.target == "selected":
+            targets = [ch for ch in app_state.pipeline.chapters if ch.selected]
+        else:
+            targets = [ch for ch in app_state.pipeline.chapters if not ch.deleted and not ch.selected]
+
+        if not targets:
+            raise HTTPException(status_code=400, detail="No chapters to delete")
+
+        operations = [DeleteChapterOperation(chapter_id=ch.id) for ch in targets]
+        batch_op = BatchChapterOperation(operations=operations)
+        batch_op.apply(app_state.pipeline)
+        app_state.pipeline.add_to_history(batch_op)
+
+        await app_state.broadcast_chapter_update()
+        await app_state.broadcast_history_update()
+
+        return BatchOperationResponse(
+            message=f"Deleted {len(targets)} chapters",
+            affected_chapters=len(targets),
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete chapters by selection: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/chapters/shift-timestamps", response_model=BatchOperationResponse)
+async def shift_timestamps(request: ShiftTimestampsRequest):
+    """Shift timestamps for multiple chapters at once"""
+    try:
+        app_state = get_app_state()
+
+        if not app_state.pipeline:
+            raise HTTPException(status_code=404, detail="Pipeline not found")
+
+        if not request.shifts:
+            raise HTTPException(status_code=400, detail="No shifts provided")
+
+        book_duration = app_state.pipeline.book.duration
+
+        operations = []
+        for shift in request.shifts:
+            clamped = max(0.0, min(book_duration - 1.0, shift.new_timestamp))
+            operations.append(
+                EditTimestampOperation(
+                    chapter_id=shift.chapter_id,
+                    new_timestamp=clamped,
+                )
+            )
+
+        batch_op = BatchChapterOperation(operations=operations)
+        batch_op.apply(app_state.pipeline)
+        app_state.pipeline.add_to_history(batch_op)
+
+        await app_state.broadcast_chapter_update()
+        await app_state.broadcast_history_update()
+
+        return BatchOperationResponse(
+            message=f"Shifted {len(operations)} chapter timestamps",
+            affected_chapters=len(operations),
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to shift timestamps: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

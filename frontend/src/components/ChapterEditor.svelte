@@ -1,5 +1,6 @@
 <script>
     import {onDestroy, onMount} from "svelte";
+    import { slide } from "svelte/transition";
     import {audio, currentSegmentId, isPlaying} from "../stores/audio.js";
     import {
         canRedo,
@@ -13,18 +14,22 @@
     import {api, handleApiError} from "../utils/api.js";
     import AddChapterDialog from "./AddChapterDialog.svelte";
     import AICleanupDialog from "./AICleanupDialog.svelte";
+    import ShiftTimestampsDialog from "./ShiftTimestampsDialog.svelte";
     import Icon from "./Icon.svelte";
 
     // Icons
     import ArrowRight from "@lucide/svelte/icons/arrow-right";
     import BookMarked from "@lucide/svelte/icons/book-marked";
     import Check from "@lucide/svelte/icons/check";
-    import ChevronUp from "@lucide/svelte/icons/chevron-up";
     import Pause from "@lucide/svelte/icons/pause";
     import Play from "@lucide/svelte/icons/play";
     import Plus from "@lucide/svelte/icons/plus";
     import Redo from "@lucide/svelte/icons/redo";
-    import Settings from "@lucide/svelte/icons/settings";
+    import SettingsIcon from "@lucide/svelte/icons/settings";
+    import MoreVertical from "@lucide/svelte/icons/more-vertical";
+    import Wrench from "@lucide/svelte/icons/wrench";
+    import Clock from "@lucide/svelte/icons/clock";
+    import CircleQuestionMark from "@lucide/svelte/icons/circle-question-mark";
     import Trash2 from "@lucide/svelte/icons/trash-2";
     import TriangleAlert from "@lucide/svelte/icons/triangle-alert";
     import Undo from "@lucide/svelte/icons/undo";
@@ -37,6 +42,7 @@
     let aiCleanupError = $state(null);
     let showAIConfirmation = $state(false);
     let showAddChapterDialog = $state(false);
+    let showShiftTimestampsDialog = $state(false);
     let addChapterDialogChapterId = $state(null);
     let addChapterDialogDefaultTab = $state(null);
 
@@ -79,11 +85,13 @@
         await loadEditorSettings();
         await loadChapters();
         window.addEventListener("keydown", handleKeydown);
+        document.addEventListener("click", handleOutsideClick);
     });
 
     onDestroy(() => {
         audio.stop();
         window.removeEventListener("keydown", handleKeydown);
+        document.removeEventListener("click", handleOutsideClick);
     });
 
     // Resize all text areas after updates (for programmatic value changes)
@@ -149,6 +157,15 @@
 
     function toggleSettingsPanel() {
         showSettings = !showSettings;
+    }
+
+    function handleOutsideClick(event) {
+        if (showSettings) {
+            const stickyBar = document.querySelector('.sticky-action-bar');
+            if (stickyBar && !stickyBar.contains(event.target)) {
+                showSettings = false;
+            }
+        }
     }
 
     async function handleTabNavigationChange(event) {
@@ -318,6 +335,19 @@
             await api.chapters.delete(chapterId);
             // Clear audio cache when chapters are deleted to prevent wrong segments from playing
             audio.clearSegmentCache();
+        } catch (err) {
+            error = handleApiError(err);
+        }
+    }
+
+    async function deleteBySelection(target) {
+        const count = target === "selected" ? $selectionStats.selected : $selectionStats.unselected;
+        if (count === 0) return;
+        if (!confirm(`Delete ${count} ${target} chapter${count !== 1 ? "s" : ""}?`)) return;
+        try {
+            await api.chapters.deleteBySelection(target);
+            audio.clearSegmentCache();
+            showSettings = false;
         } catch (err) {
             error = handleApiError(err);
         }
@@ -895,61 +925,88 @@
                 </tbody>
             </table>
         </div>
+    {/if}
 
-        <!-- Sticky Action Bar -->
+    <!-- Sticky Action Bar -->
+    {#if $chapters.length > 0 || $canUndo}
         <div class="sticky-action-bar">
-            <!-- Settings Panel -->
-            {#if showSettings}
-                <div class="settings-section">
-                    <div class="settings-content">
-                        <h4>Editor Settings</h4>
-                        <div class="setting-item">
-                            <label class="setting-label">
+            <!-- Tools & Settings Popover -->
+            {#if showSettings && $chapters.length > 0}
+                <div class="tools-popover" transition:slide={{duration: 100, axis: 'y'}}>
+                    <div class="popover-section settings-section">
+                        <h5 class="popover-header">
+                            <SettingsIcon size="12"/>
+                            Settings
+                        </h5>
+                        <div class="settings-grid">
+                            <label class="setting-item">
                                 <input
                                     type="checkbox"
                                     checked={editorSettings.tab_navigation}
                                     onchange={handleTabNavigationChange}
                                 />
-                                <span class="setting-text">
-                                    Tab to Next Title
-                                </span>
+                                <span>Tab to Next</span>
+                                <div class="help-icon" data-tooltip="Press Tab while editing a chapter title to move focus to the next selected chapter">
+                                    <CircleQuestionMark size="14"/>
+                                </div>
                             </label>
-                            <div class="setting-description">
-                                Press Tab while editing a chapter title to move focus to the next selected chapter
-                            </div>
-                        </div>
 
-                        {#if hasTranscriptions}
-                            <div class="setting-item">
-                                <label class="setting-label">
+                            {#if hasTranscriptions}
+                                <label class="setting-item">
                                     <input
                                         type="checkbox"
                                         checked={editorSettings.hide_transcriptions}
                                         onchange={handleHideTranscriptionsChange}
                                     />
-                                    <span class="setting-text">
-                                        Hide Transcriptions
-                                    </span>
+                                    <span>Hide Transcriptions</span>
+                                    <div class="help-icon" data-tooltip="Hide the original transcriptions to focus on editing titles">
+                                        <CircleQuestionMark size="14"/>
+                                    </div>
                                 </label>
-                                <div class="setting-description">
-                                    Hide the original transcriptions to focus on editing titles
-                                </div>
-                            </div>
-                        {/if}
+                            {/if}
 
-                        <div class="setting-item">
-                            <label class="setting-label">
+                            <label class="setting-item">
                                 <input
                                     type="checkbox"
                                     checked={editorSettings.show_formatted_time}
                                     onchange={handleTimeFormatChange}
                                 />
-                                <span class="setting-text">
-                                    Format Timestamps
-                                </span>
+                                <span>Format Timestamps</span>
+                                <div class="help-icon" data-tooltip="Show timestamps as hh:mm:ss instead of seconds">
+                                    <CircleQuestionMark size="14"/>
+                                </div>
                             </label>
-                            <div class="setting-description">
-                                Show timestamps as hh:mm:ss instead of seconds
+                        </div>
+                    </div>
+
+                    <div class="popover-divider"></div>
+
+                    <div class="popover-section tools-section">
+                        <h5 class="popover-header">
+                            <Wrench size="12"/>
+                            Tools
+                        </h5>
+                        <div class="tools-split-layout">
+                            <div class="tools-column">
+                                <button class="btn btn-cancel btn-sm tool-btn full-width" title="Delete Selected"
+                                        onclick={() => deleteBySelection("selected")}
+                                        disabled={$selectionStats.selected === 0}>
+                                    <Trash2 size="16" color="var(--danger)"/>
+                                    Delete Selected
+                                </button>
+                                <button class="btn btn-cancel btn-sm tool-btn full-width" title="Delete Unselected"
+                                        onclick={() => deleteBySelection("unselected")}
+                                        disabled={$selectionStats.unselected === 0}>
+                                    <Trash2 size="16" color="var(--danger)"/>
+                                    Delete Unselected
+                                </button>
+                            </div>
+                            <div class="tools-column">
+                                <button class="btn btn-cancel btn-sm tool-btn full-width" title="Shift Timestamps"
+                                    onclick={() => showShiftTimestampsDialog = true}>
+                                    <Clock size="16" color="var(--primary-color)"/>
+                                    Shift Timestamps
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -958,18 +1015,6 @@
 
             <div class="action-bar-content">
                 <div class="selection-info">
-                    <div class="settings-control">
-                        <div class="chevron-indicator" class:expanded={showSettings}>
-                            <ChevronUp size="12"/>
-                        </div>
-                        <button
-                            class="settings-toggle"
-                            onclick={toggleSettingsPanel}
-                            title="Settings"
-                        >
-                            <Settings size="20"/>
-                        </button>
-                    </div>
           <span class="badge badge-primary">
             {$selectionStats.selected} of {$selectionStats.total} selected
           </span>
@@ -977,7 +1022,7 @@
 
                 <div class="button-group">
                     <button
-                            class="btn btn-secondary btn-sm"
+                            class="btn btn-outline btn-sm undo-redo-btn"
                             onclick={undo}
                             disabled={!$canUndo}
                             title="Undo last action"
@@ -986,7 +1031,7 @@
                         Undo
                     </button>
                     <button
-                            class="btn btn-secondary btn-sm"
+                            class="btn btn-outline btn-sm undo-redo-btn"
                             onclick={redo}
                             disabled={!$canRedo}
                             title="Redo next action"
@@ -997,6 +1042,14 @@
                 </div>
 
                 <div class="button-group">
+                    <button
+                            class="btn btn-cancel btn-sm tools-toggle"
+                            class:active={showSettings}
+                            onclick={toggleSettingsPanel}
+                            title="Additional tools and settings"
+                    >
+                        <MoreVertical size="16"/>
+                    </button>
                     <button
                             class="btn btn-ai btn-sm"
                             onclick={processSelectedWithAI}
@@ -1017,7 +1070,6 @@
                 </div>
             </div>
         </div>
-
     {/if}
 </div>
 
@@ -1040,6 +1092,9 @@
         on:confirm={handleAddChapterConfirm}
         on:cancel={handleAddChapterCancel}
 />
+
+<!-- Shift Timestamps Dialog -->
+<ShiftTimestampsDialog bind:isOpen={showShiftTimestampsDialog} />
 
 <style>
     .page-header {
@@ -1589,99 +1644,208 @@
         justify-content: center;
     }
 
+    .action-bar-content .undo-redo-btn {
+        gap: 0.25rem;
+    }
+
+    .action-bar-content .btn-outline {
+        background-color: rgba(128, 128, 128, 0.10);
+        border: transparent;
+    }
+
+    .action-bar-content .btn-outline:hover:not(:disabled) {
+        background-color: var(--hover-bg);
+    }
+
     .action-bar-verify {
         padding: 0 0.6rem 0 1rem;
         gap: 0.20rem;
     }
 
-    .settings-section {
-        border-bottom: 1px solid var(--border-color);
-        margin-bottom: 1rem;
-        padding-bottom: 0.5rem;
+
+    .tools-popover {
+        position: absolute;
+        bottom: 100%;
+        left: 0;
+        right: 0;
+        margin-bottom: 0.75rem;
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 0.5rem;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.05);
+        padding: 1rem;
+        z-index: 1001;
+        display: flex;
+        gap: 1rem;
     }
 
-    .settings-content h4 {
-        margin: 0 0 1rem 0;
-        color: var(--text-primary);
-        font-size: 1rem;
+    .popover-section.settings-section {
+        flex: 1;
+    }
+
+    .popover-section.tools-section {
+        flex: 2;
+    }
+
+    .popover-header {
+        margin: 0 0 0.75rem 0.22rem;
+        font-size: 0.7rem;
         font-weight: 600;
+        color: #888;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .popover-divider {
+        width: 1px;
+        background: var(--border-color);
+    }
+
+    .settings-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
     }
 
     .setting-item {
-        margin-bottom: 0.75rem;
-    }
-
-    .setting-label {
         display: flex;
-        align-items: flex-start;
+        align-items: center;
         gap: 0.5rem;
         cursor: pointer;
         font-size: 0.875rem;
-    }
-
-    .setting-label input[type="checkbox"] {
-        margin-top: 0.25rem;
-        flex-shrink: 0;
-    }
-
-    .setting-text {
         color: var(--text-primary);
         font-weight: 500;
     }
 
-    .setting-description {
-        margin-top: 0.25rem;
-        margin-left: 1.75rem;
-        font-size: 0.75rem;
-        color: var(--text-secondary);
-        line-height: 1.4;
+    .setting-item input[type="checkbox"] {
+        accent-color: var(--primary);
     }
 
-    .settings-toggle {
-        background: none;
-        border: none;
-        color: var(--text-secondary);
-        cursor: pointer;
-        padding: 0.25rem;
-        border-radius: 0.25rem;
-        margin-right: 0.5rem;
+    .tools-split-layout {
         display: flex;
+        gap: 0.75rem;
+    }
+
+    .tools-column {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .tool-btn {
+        display: inline-flex;
         align-items: center;
-        justify-content: center;
+        justify-content: flex-start;
+        gap: 0.5rem;
+        font-size: 0.875rem !important;
+        height: 2.25rem;
+        padding: 0 0.75rem;
+        border-radius: 0.25rem;
+        transition: all 0.2s;
+        cursor: pointer;
+    }
+
+    .full-width {
+        width: 100%;
+    }
+
+    @media (max-width: 600px) {
+        .tools-popover {
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .tools-split-layout {
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .popover-divider {
+            width: 100%;
+            height: 1px;
+            margin: 0;
+        }
+    }
+
+    .help-icon {
+        display: inline-flex;
+        align-items: center;
+        color: var(--text-secondary);
+        cursor: help;
+        position: relative;
+        padding: 2px;
+        border-radius: 50%;
         transition: all 0.2s ease;
     }
 
-    .settings-toggle:hover {
+    .help-icon:hover {
+        color: var(--primary-color);
+        background: var(--bg-tertiary);
+    }
+
+    .help-icon[data-tooltip]:hover::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        margin-bottom: 12px;
+        padding: 8px 12px;
+        background: var(--bg-primary);
         color: var(--text-primary);
-        background-color: var(--hover-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        font-size: 0.75rem;
+        line-height: 1.4;
+        white-space: pre-line;
+        width: max-content;
+        max-width: 240px;
+        z-index: 10001;
+        pointer-events: none;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        font-weight: normal;
+    }
+
+    .help-icon[data-tooltip]:hover::before {
+        content: "";
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        border: 6px solid transparent;
+        border-top-color: var(--border-color);
+        z-index: 10002;
+    }
+
+    .tools-toggle {
+        padding: 0 !important;
+        width: 2.25rem;
+        min-height: 2.25rem;
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+        border: none !important;
+    }
+
+    .tools-toggle:hover:not(:disabled) {
+        background-color: rgba(128, 128, 128, 0.12);
+    }
+
+    .tools-toggle.active {
+        background-color: rgba(128, 128, 128, 0.18);
+    }
+
+    .tools-toggle.active:hover:not(:disabled) {
+        background-color: rgba(128, 128, 128, 0.26);
     }
 
     .selection-info {
         display: flex;
         align-items: center;
-    }
-
-    .settings-control {
-        position: relative;
-        display: flex;
-        align-items: center;
-        margin-right: 0.5rem;
-    }
-
-    .chevron-indicator {
-        position: absolute;
-        top: -14px;
-        left: 50%;
-        transform: translateX(-10px);
-        color: var(--text-muted);
-        transition: all 0.15s ease;
-        z-index: 1;
-        pointer-events: none;
-    }
-
-    .chevron-indicator.expanded {
-        top: 16px;
-        transform: translateX(-10px) rotate(180deg);
     }
 
     .offset-cell {
@@ -1748,49 +1912,4 @@
         gap: 0.25rem;
     }
 
-    .help-icon {
-        display: flex;
-        align-items: center;
-        color: var(--text-secondary);
-        cursor: help;
-        position: relative;
-    }
-
-    .help-icon:hover {
-        color: var(--text-primary);
-    }
-
-    .help-icon[data-tooltip]:hover::after {
-        content: attr(data-tooltip);
-        position: absolute;
-        bottom: 100%;
-        left: 50%;
-        transform: translateX(-50%);
-        margin-bottom: 11px;
-        padding: 8px 12px;
-        background: var(--bg-primary);
-        color: var(--text-primary);
-        border: 1px solid var(--border-color);
-        border-radius: 6px;
-        font-size: 0.75rem;
-        line-height: 1.4;
-        white-space: pre-line;
-        width: max-content;
-        max-width: 200px;
-        z-index: 10001;
-        pointer-events: none;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        font-weight: normal;
-    }
-
-    .help-icon[data-tooltip]:hover::before {
-        content: "";
-        position: absolute;
-        bottom: 100%;
-        left: 50%;
-        transform: translateX(-50%);
-        border: 6px solid transparent;
-        border-top-color: var(--border-color);
-        z-index: 10002;
-    }
 </style>

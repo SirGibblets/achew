@@ -281,6 +281,20 @@ export const chapters = {
             body: chapterData,
         });
     },
+
+    async deleteBySelection(target) {
+        return apiRequest('/chapters/delete-by-selection', {
+            method: 'POST',
+            body: {target},
+        });
+    },
+
+    async shiftTimestamps(shifts) {
+        return apiRequest('/chapters/shift-timestamps', {
+            method: 'POST',
+            body: { shifts },
+        });
+    },
 };
 
 // Batch operations API

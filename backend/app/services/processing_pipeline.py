@@ -406,8 +406,9 @@ class ProcessingPipeline:
 
     def get_selection_stats(self) -> Dict[str, int]:
         """Get chapter selection statistics"""
-        total = len(self.chapters)
-        selected = sum(1 for c in self.chapters if c.selected)
+        active = [c for c in self.chapters if not c.deleted]
+        total = len(active)
+        selected = sum(1 for c in active if c.selected)
         return {"total": total, "selected": selected, "unselected": total - selected}
 
     def can_undo(self) -> bool:

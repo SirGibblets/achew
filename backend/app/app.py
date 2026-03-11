@@ -202,7 +202,7 @@ class AppState:
                 type=WSMessageType.CHAPTER_UPDATE,
                 data={
                     "chapters": chapter_data,
-                    "total_count": len(self.pipeline.chapters),
+                    "total_count": stats["total"],
                     "selected_count": stats["selected"],
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 },
