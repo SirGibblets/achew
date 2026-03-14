@@ -66,7 +66,7 @@
     });
 
     onMount(async () => {
-        await loadCueSets();
+        await loadDetectedCues();
     });
 
     $: isComparing = activeComparisonSource !== null;
@@ -114,12 +114,12 @@
     })();
     $: maxBarCount = Math.max(1, ...barData);
 
-    async function loadCueSets() {
-        if ($session.step !== "cue_set_selection") return;
+    async function loadDetectedCues() {
+        if ($session.step !== "initial_chapter_selection") return;
         loading = true;
         error = null;
         try {
-            const response = await api.session.getCueSets();
+            const response = await api.session.getDetectedCues();
             const rawCues = response.detected_cues || [];
             // Keep only the MAX_CUES cues with the largest gaps; sort back by timestamp.
             cuesCapped = rawCues.length > MAX_CUES;
@@ -186,7 +186,7 @@
                     unalignedOptions.push(sourceId);
                 }
             });
-            await api.session.selectCueSet(selectedTimestamps, unalignedOptions);
+            await api.session.selectInitialChapters(selectedTimestamps, unalignedOptions);
         } catch (err) {
             error = `Failed to select chapters: ${err.message}`;
             console.error("Error selecting chapters:", err);

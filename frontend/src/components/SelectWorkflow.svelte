@@ -16,6 +16,7 @@
     let loading = false;
     let selectedExistingSource = "";
     let selectedRealignSource = "";
+    let selectedQuickEditSource = "";
     let activeTab = "smart_detect";
     let isDramatized = false;
     let cueSources = {};
@@ -42,6 +43,9 @@
     // Get existing cue sources from session store
     $: if ($session.cueSources) {
         existingCueSources = $session.cueSources;
+        if (!selectedQuickEditSource && existingCueSources.some(s => s.id === 'abs')) {
+            selectedQuickEditSource = 'abs';
+        }
     }
 
     // Reactive statement to sync local config with session store
@@ -153,25 +157,32 @@
         try {
             if (activeTab === "smart_detect") {
                 const option = isDramatized ? "smart_detect_vad" : "smart_detect";
-                await api.session.selectCueSource(option);
+                await api.session.selectWorkflow(option);
             } else if (activeTab === "realign") {
                 if (!selectedRealignSource) {
-                    alert("Please select a source to realign.");
+                    alert("Please select a chapter source.");
                     loading = false;
                     return;
                 }
                 await api.session.realignChapter(selectedRealignSource, isDramatized);
             } else if (activeTab === "regenerate_titles") {
                 if (!selectedExistingSource) {
-                    alert("Please select a cue source option.");
+                    alert("Please select a chapter source.");
                     loading = false;
                     return;
                 }
-                await api.session.selectCueSource(selectedExistingSource);
+                await api.session.selectWorkflow(selectedExistingSource);
+            } else if (activeTab === "quick_edit") {
+                if (!selectedQuickEditSource) {
+                    alert("Please select a chapter source.");
+                    loading = false;
+                    return;
+                }
+                await api.session.selectWorkflow("quick_edit:" + selectedQuickEditSource);
             }
         } catch (error) {
-            console.error("Error selecting cue source:", error);
-            session.setError("Failed to select cue source: " + error.message);
+            console.error("Error selecting workflow:", error);
+            session.setError("Failed to select workflow: " + error.message);
         } finally {
             loading = false;
         }
@@ -179,7 +190,7 @@
 
     // Fetch detailed chapter data for modal display
     async function fetchChapterData(sourceId) {
-        if ($session.step !== "select_cue_source") return [];
+        if ($session.step !== "select_workflow") return [];
 
         chapterModalLoading = true;
         try {
@@ -242,7 +253,7 @@
 
     onMount(async () => {
         // Load smart detect config from backend
-        if ($session.step === "select_cue_source") {
+        if ($session.step === "select_workflow") {
             await session.loadSmartDetectConfig();
         }
     });
@@ -305,6 +316,15 @@
             >
                 Regenerate Titles
             </button>
+            {#if existingCueSources.length > 0}
+                <button
+                        class="mode-btn {activeTab === 'quick_edit' ? 'active' : ''}"
+                        on:click={() => activeTab = 'quick_edit'}
+                        type="button"
+                >
+                    Quick Edit
+                </button>
+            {/if}
         </div>
 
         <div class="options-grid">
@@ -642,6 +662,63 @@
                     <div class="no-sources-card">
                         <TriangleAlert size="16" />
                         <p>No chapter sources found</p>
+                    </div>
+                {/if}
+
+            {:else if activeTab === 'quick_edit'}
+                <p class="tab-description">
+                    The <b>Quick Edit</b> workflow skips audio analysis and loads chapters from an existing source directly into the editor. Use this when you only need to make quick changes, like using AI Cleanup or adding a missing chapter.
+                </p>
+
+                {#if existingCueSources.length > 0}
+                    {#each existingCueSources as source}
+                        <div class="option-card" class:selected={selectedQuickEditSource === source.id}>
+                            <label>
+                                <div class="option-layout">
+                                    <input
+                                            type="radio"
+                                            bind:group={selectedQuickEditSource}
+                                            value={source.id}
+                                            disabled={loading}
+                                    />
+                                    <div class="option-content">
+                                        <div class="option-header">
+                                            <b>{getOptionInfo(source.id).title}</b>
+                                            <div class="chapter-count-container">
+                                                <button
+                                                        class="chapter-count clickable"
+                                                        on:click={() => handleChapterCountClick(source.id)}
+                                                        title="Click to view chapter details"
+                                                >
+                                                    {source.cues.length} chapters
+                                                    <ExternalLink size="12"/>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <p class="description">
+                                            {getOptionInfo(source.id).description}
+                                        </p>
+                                    </div>
+                                </div>
+                            </label>
+                        </div>
+                    {/each}
+
+                    <div class="actions" style="margin-top: 1.5rem;">
+                        <button
+                                class="btn btn-verify"
+                                on:click={proceedWithSelection}
+                                disabled={loading || !selectedQuickEditSource}
+                        >
+                            {#if loading}
+                                <span class="btn-spinner"></span>
+                                Loading...
+                            {:else if selectedQuickEditSource}
+                                Open in Editor
+                            {:else}
+                                Select a Chapter Source
+                            {/if}
+                        </button>
                     </div>
                 {/if}
             {/if}
@@ -1204,7 +1281,7 @@
         border: 1px solid var(--border-color);
         border-radius: 8px;
         width: fit-content;
-        min-width: 500px;
+        min-width: 620px;
         margin-left: auto;
         margin-right: auto;
         overflow: hidden;

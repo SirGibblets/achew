@@ -20,7 +20,7 @@ class CreatePipelineRequest(BaseModel):
     item_id: str
 
 
-class CueSourceRequest(BaseModel):
+class SelectWorkflowRequest(BaseModel):
     option: str
 
 
@@ -84,7 +84,7 @@ async def create_pipeline(request: CreatePipelineRequest, background_tasks: Back
                 await app_state._broadcast_book_update()
 
                 await app_state.broadcast_step_change(
-                    Step.SELECT_CUE_SOURCE,
+                    Step.SELECT_WORKFLOW,
                     extras={"cue_sources": pipeline.existing_cue_sources},
                 )
 
@@ -226,19 +226,19 @@ async def goto_review():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/pipeline/cue-source")
-async def select_cue_source(request: CueSourceRequest, background_tasks: BackgroundTasks):
-    """Set cue source selection"""
+@router.post("/pipeline/select-workflow")
+async def select_workflow(request: SelectWorkflowRequest, background_tasks: BackgroundTasks):
+    """Set workflow"""
     try:
         app_state = get_app_state()
 
         if not app_state.pipeline:
             raise HTTPException(status_code=404, detail="Pipeline not found")
 
-        if app_state.step != Step.SELECT_CUE_SOURCE:
+        if app_state.step != Step.SELECT_WORKFLOW:
             raise HTTPException(
                 status_code=400,
-                detail="Pipeline must be in select_cue_source step to select option",
+                detail="Pipeline must be in select_workflow step to select option",
             )
 
         async def create_cues_from_source():
@@ -250,19 +250,19 @@ async def select_cue_source(request: CueSourceRequest, background_tasks: Backgro
         background_tasks.add_task(create_cues_from_source)
 
         return {
-            "message": f"Selected cue source '{request.option}'",
+            "message": f"Selected workflow '{request.option}'",
             "option": request.option,
         }
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to select cue source for pipeline: {e}")
+        logger.error(f"Failed to select workflow for pipeline: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/pipeline/cue-sets")
-async def get_cue_sets():
+@router.get("/pipeline/detected-cues")
+async def get_detected_cues():
     """Get all detected cues for initial chapter selection"""
     try:
         app_state = get_app_state()
@@ -270,7 +270,7 @@ async def get_cue_sets():
         if not app_state.pipeline:
             raise HTTPException(status_code=404, detail="Pipeline not found")
 
-        if app_state.step != Step.CUE_SET_SELECTION:
+        if app_state.step != Step.INITIAL_CHAPTER_SELECTION:
             raise HTTPException(
                 status_code=400, detail=f"Pipeline not in initial chapter selection step. Current step: {app_state.step.value}"
             )
@@ -301,12 +301,12 @@ async def get_cue_sets():
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get cue sets: {e}")
+        logger.error(f"Failed to get detected cues: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/pipeline/select-cue-set")
-async def select_cue_set(request: dict, background_tasks: BackgroundTasks):
+@router.post("/pipeline/select-initial-chapters")
+async def select_initial_chapters(request: dict, background_tasks: BackgroundTasks):
     """Select initial chapters by providing a list of cue timestamps"""
     try:
         app_state = get_app_state()
@@ -314,7 +314,7 @@ async def select_cue_set(request: dict, background_tasks: BackgroundTasks):
         if not app_state.pipeline:
             raise HTTPException(status_code=404, detail="Pipeline not found")
 
-        if app_state.step != Step.CUE_SET_SELECTION:
+        if app_state.step != Step.INITIAL_CHAPTER_SELECTION:
             raise HTTPException(status_code=400, detail="Pipeline not in initial chapter selection step")
 
         timestamps = request.get("timestamps")
@@ -336,13 +336,13 @@ async def select_cue_set(request: dict, background_tasks: BackgroundTasks):
                     detail=f"Invalid include_unaligned option: {option}. Available options: {available_source_ids}",
                 )
 
-        async def do_select_cue_set():
+        async def do_select_initial_chapters():
             try:
-                await app_state.pipeline.select_cue_set(timestamps, include_unaligned)
+                await app_state.pipeline.select_initial_chapters(timestamps, include_unaligned)
             except Exception as e:
-                logger.error(f"Failed to select cue set: {e}")
+                logger.error(f"Failed to select initial chapters: {e}")
 
-        background_tasks.add_task(do_select_cue_set)
+        background_tasks.add_task(do_select_initial_chapters)
 
         return {
             "message": "Initial chapters selected, extracting segments...",
@@ -352,7 +352,7 @@ async def select_cue_set(request: dict, background_tasks: BackgroundTasks):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to select cue set: {e}")
+        logger.error(f"Failed to select initial chapters: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -488,27 +488,27 @@ async def cancel_step():
             return {"message": "Pipeline cancelled and deleted", "action": "deleted"}
 
         elif step in [Step.AUDIO_ANALYSIS, Step.VAD_PREP, Step.VAD_ANALYSIS]:
-            await pipeline.restart_at_step(RestartStep.SELECT_CUE_SOURCE)
+            await pipeline.restart_at_step(RestartStep.SELECT_WORKFLOW)
             return {
-                "message": "Processing cancelled, returned to cue source selection",
+                "message": "Processing cancelled, returned to workflow selection",
                 "action": "restarted",
-                "restart_step": RestartStep.SELECT_CUE_SOURCE.value,
+                "restart_step": RestartStep.SELECT_WORKFLOW.value,
             }
 
         elif step == Step.AUDIO_EXTRACTION:
             if pipeline.initial_chapter_selection_available:
-                await pipeline.restart_at_step(RestartStep.CUE_SET_SELECTION)
+                await pipeline.restart_at_step(RestartStep.INITIAL_CHAPTER_SELECTION)
                 return {
                     "message": "Audio extraction cancelled, returned to initial chapter selection",
                     "action": "restarted",
-                    "restart_step": RestartStep.CUE_SET_SELECTION.value,
+                    "restart_step": RestartStep.INITIAL_CHAPTER_SELECTION.value,
                 }
             else:
-                await pipeline.restart_at_step(RestartStep.SELECT_CUE_SOURCE)
+                await pipeline.restart_at_step(RestartStep.SELECT_WORKFLOW)
                 return {
-                    "message": "Audio extraction cancelled, returned to cue source selection",
+                    "message": "Audio extraction cancelled, returned to workflow selection",
                     "action": "restarted",
-                    "restart_step": RestartStep.SELECT_CUE_SOURCE.value,
+                    "restart_step": RestartStep.SELECT_WORKFLOW.value,
                 }
 
         elif step in [Step.TRIMMING, Step.ASR_PROCESSING]:
@@ -528,11 +528,11 @@ async def cancel_step():
             }
 
         else:
-            await pipeline.restart_at_step(RestartStep.SELECT_CUE_SOURCE)
+            await pipeline.restart_at_step(RestartStep.SELECT_WORKFLOW)
             return {
-                "message": "Processing cancelled, returned to cue source selection",
+                "message": "Processing cancelled, returned to workflow selection",
                 "action": "restarted",
-                "restart_step": RestartStep.SELECT_CUE_SOURCE.value,
+                "restart_step": RestartStep.SELECT_WORKFLOW.value,
             }
 
     except HTTPException:
@@ -652,10 +652,10 @@ async def realign_chapter(request: RealignChapterRequest, background_tasks: Back
         if not app_state.pipeline:
             raise HTTPException(status_code=404, detail="Pipeline not found")
         
-        if app_state.step != Step.SELECT_CUE_SOURCE:
+        if app_state.step != Step.SELECT_WORKFLOW:
             raise HTTPException(
                 status_code=400,
-                detail="Pipeline must be in select_cue_source step to select option",
+                detail="Pipeline must be in select_workflow step to select option",
             )
 
         async def realign_chapters():

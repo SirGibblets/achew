@@ -8,14 +8,14 @@ class Step(str, Enum):
     VALIDATING = "validating"
     DOWNLOADING = "downloading"
     FILE_PREP = "file_prep"
-    SELECT_CUE_SOURCE = "select_cue_source"  # Interactive
+    SELECT_WORKFLOW = "select_workflow"  # Interactive
     AUDIO_ANALYSIS = "audio_analysis"
     VAD_PREP = "vad_prep"
     VAD_ANALYSIS = "vad_analysis"
     PARTIAL_SCAN_PREP = "partial_scan_prep"
     PARTIAL_AUDIO_ANALYSIS = "partial_audio_analysis"
     PARTIAL_VAD_ANALYSIS = "partial_vad_analysis"
-    CUE_SET_SELECTION = "cue_set_selection"  # Interactive
+    INITIAL_CHAPTER_SELECTION = "initial_chapter_selection"  # Interactive
     AUDIO_EXTRACTION = "audio_extraction"
     CONFIGURE_ASR = "configure_asr"  # Interactive
     TRIMMING = "trimming"
@@ -34,8 +34,8 @@ class RestartStep(str, Enum):
     """Potential restart points for session restart"""
 
     IDLE = Step.IDLE.value
-    SELECT_CUE_SOURCE = Step.SELECT_CUE_SOURCE.value
-    CUE_SET_SELECTION = Step.CUE_SET_SELECTION.value
+    SELECT_WORKFLOW = Step.SELECT_WORKFLOW.value
+    INITIAL_CHAPTER_SELECTION = Step.INITIAL_CHAPTER_SELECTION.value
     CONFIGURE_ASR = Step.CONFIGURE_ASR.value
     CHAPTER_EDITING = Step.CHAPTER_EDITING.value
 

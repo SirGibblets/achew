@@ -15,7 +15,7 @@
     import Icon from "./components/Icon.svelte";
     import LLMSetup from "./components/LLMSetup.svelte";
     import ProgressDisplay from "./components/ProgressDisplay.svelte";
-    import SelectCueSource from "./components/SelectCueSource.svelte";
+    import SelectWorkflow from "./components/SelectWorkflow.svelte";
 
     // Icons
     import ChevronLeft from "@lucide/svelte/icons/chevron-left";
@@ -102,9 +102,9 @@
             case "trimming":
             case "asr_processing":
                 return ProgressDisplay;
-            case "select_cue_source":
-                return SelectCueSource;
-            case "cue_set_selection":
+            case "select_workflow":
+                return SelectWorkflow;
+            case "initial_chapter_selection":
                 return InitialChapterSelection;
             case "configure_asr":
                 return ConfigureASR;
@@ -229,9 +229,9 @@
         switch (step) {
             case "idle":
                 return "New Audiobook";
-            case "select_cue_source":
-                return "Workflow Selection";
-            case "cue_set_selection":
+            case "select_workflow":
+                return "Select Workflow";
+            case "initial_chapter_selection":
                 return "Initial Chapter Selection";
             case "configure_asr":
                 return "Transcribe Titles";
@@ -246,7 +246,7 @@
         switch (step) {
             case "idle":
                 return Headphones;
-            case "select_cue_source":
+            case "select_workflow":
                 return Workflow;
             case "configure_asr":
                 return Mic;
@@ -282,8 +282,8 @@
             return true;
         }
         return ![
-            "select_cue_source",
-            "cue_set_selection",
+            "select_workflow",
+            "initial_chapter_selection",
             "configure_asr",
             "chapter_editing",
             "reviewing",
@@ -384,7 +384,7 @@
                                                 on:click={() => handleRestartFromStep(option)}
                                                 disabled={$session.loading}
                                         >
-                                            {#if option === "cue_set_selection"}
+                                            {#if option === "initial_chapter_selection"}
                                                 <Icon name="timeline" size="16"/>
                                             {:else}
                                                 <svelte:component this={getRestartOptionIcon(option)} size="16"/>

@@ -99,8 +99,8 @@ export const session = {
         return apiRequest('/status');
     },
 
-    async selectCueSource(option) {
-        return apiRequest('/pipeline/cue-source', {
+    async selectWorkflow(option) {
+        return apiRequest('/pipeline/select-workflow', {
             method: 'POST',
             body: {option},
         });
@@ -113,12 +113,12 @@ export const session = {
         });
     },
 
-    async getCueSets() {
-        return apiRequest('/pipeline/cue-sets');
+    async getDetectedCues() {
+        return apiRequest('/pipeline/detected-cues');
     },
 
-    async selectCueSet(timestamps, includeUnaligned = []) {
-        return apiRequest('/pipeline/select-cue-set', {
+    async selectInitialChapters(timestamps, includeUnaligned = []) {
+        return apiRequest('/pipeline/select-initial-chapters', {
             method: 'POST',
             body: {
                 timestamps: timestamps,

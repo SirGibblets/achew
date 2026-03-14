@@ -1,5 +1,4 @@
 import asyncio
-import json
 import logging
 import os
 import shutil
@@ -121,6 +120,7 @@ class ProcessingPipeline:
         self._vad_task = None
         self._ai_cleanup_task = None
         self.is_realignment: bool = False
+        self.is_quick_edit: bool = False
 
         # Create temporary directory
         sys_tmp_dir = tempfile.gettempdir()
@@ -155,7 +155,6 @@ class ProcessingPipeline:
         self.trimmed_segment_files: List[str] = []
         self.transcriptions: List[str] = []
         self.transcribed_chapters: List[ChapterData] = []
-        self.cue_sets: Dict[int, List[float]] = {}
         self.include_unaligned: List[str] = []
 
         self.detected_silences: List[Tuple[float, float]] = []  # List of (silence_start, silence_end)
@@ -385,20 +384,20 @@ class ProcessingPipeline:
             self.history_index = -1
             self.step = Step.CONFIGURE_ASR
 
-        if step_num <= RestartStep.CUE_SET_SELECTION.ordinal:
+        if step_num <= RestartStep.INITIAL_CHAPTER_SELECTION.ordinal:
             self.cleanup_segment_files()
             self.cues = []
             self.include_unaligned = []
-            self.step = Step.CUE_SET_SELECTION
+            self.step = Step.INITIAL_CHAPTER_SELECTION
 
-        if step_num <= RestartStep.SELECT_CUE_SOURCE.ordinal:
-            self.cue_sets = {}
+        if step_num <= RestartStep.SELECT_WORKFLOW.ordinal:
             self.detected_silences = []
             self.normal_scanned_regions = []
             self.vad_scanned_regions = []
             self.initial_chapter_selection_available = False
             self.is_realignment = False
-            self.step = Step.SELECT_CUE_SOURCE
+            self.is_quick_edit = False
+            self.step = Step.SELECT_WORKFLOW
 
         # Background tasks have been properly cancelled, safe to broadcast step change
         logger.info(f"Broadcasting step change to {self.step}")
@@ -793,11 +792,11 @@ class ProcessingPipeline:
 
                     logger.info(f"Successfully concatenated {original_file_count} files into: {concatenated_file}")
 
-                self.step = Step.SELECT_CUE_SOURCE
+                self.step = Step.SELECT_WORKFLOW
 
             return {
                 "success": True,
-                "step": Step.SELECT_CUE_SOURCE,
+                "step": Step.SELECT_WORKFLOW,
             }
 
         except Exception as e:
@@ -806,15 +805,21 @@ class ProcessingPipeline:
             raise
 
     async def create_cues_from_source(self, cue_source: str):
-        """Create cues from the user-selected cue source"""
+        """Create cues from the user-selected source"""
 
         try:
+            # Quick Edit: skip all processing and go straight to chapter editor
+            if cue_source.startswith("quick_edit:"):
+                source_id = cue_source.split(":", 1)[1]
+                await self._quick_edit(source_id)
+                return
+
             # Step 4: Determine chapter breaks based on user selection
             if cue_source == "smart_detect":
-                # Smart Detect (regular) - generate cue sets and pause for user selection
+                # Smart Detect (regular) - detect cues and pause for user selection
                 await self._detect_cues()
             elif cue_source == "smart_detect_vad":
-                # VAD-based smart detection - generate cue sets and pause for user selection
+                # VAD-based smart detection - detect cues and pause for user selection
                 await self._detect_cues_vad()
             else:
                 # Create cues from an existing source
@@ -834,8 +839,31 @@ class ProcessingPipeline:
 
         except Exception as e:
             logger.error(f"Failed to create cues: {e}", exc_info=True)
-            await self.restart_at_step(RestartStep.SELECT_CUE_SOURCE, f"Processing failed: {str(e)}")
+            await self.restart_at_step(RestartStep.SELECT_WORKFLOW, f"Processing failed: {str(e)}")
             raise
+
+    async def _quick_edit(self, source_id: str):
+        """Skip all processing and load chapters directly into the editor"""
+        existing_source = next((src for src in self.existing_cue_sources if src.id == source_id), None)
+
+        if not existing_source:
+            raise ValueError(f"Invalid quick edit source: {source_id}")
+
+        self.is_quick_edit = True
+        self.chapters = []
+
+        for cue in existing_source.cues:
+            chapter = ChapterData(
+                timestamp=cue.timestamp,
+                asr_title=cue.title,
+                current_title=cue.title,
+                selected=True,
+                audio_segment_path="",
+            )
+            self.chapters.append(chapter)
+
+        logger.info(f"Quick edit: loaded {len(self.chapters)} chapters from {existing_source.short_name}")
+        self._notify_progress(Step.CHAPTER_EDITING, 0)
 
     async def realign_chapters(self, source_id: str, dramatized: bool = False):
         """Realign chapter timestamps from the user-selected source"""
@@ -915,7 +943,7 @@ class ProcessingPipeline:
 
         except Exception as e:
             logger.error(f"Failed to align chapters: {e}", exc_info=True)
-            await self.restart_at_step(RestartStep.SELECT_CUE_SOURCE, f"Processing failed: {str(e)}")
+            await self.restart_at_step(RestartStep.SELECT_WORKFLOW, f"Processing failed: {str(e)}")
             raise
 
     async def _realign_chapters(self, source: ExistingCueSource, ransac_threshold: float):
@@ -974,7 +1002,7 @@ class ProcessingPipeline:
 
         except Exception as e:
             logger.error(f"Error during chapter alignment: {e}", exc_info=True)
-            await self.restart_at_step(RestartStep.SELECT_CUE_SOURCE, f"Alignment failed: {str(e)}")
+            await self.restart_at_step(RestartStep.SELECT_WORKFLOW, f"Alignment failed: {str(e)}")
             raise
 
     @staticmethod
@@ -992,7 +1020,7 @@ class ProcessingPipeline:
         return f"{diff_percent:.1f}% ({duration_str})"
 
     async def _detect_cues(self):
-        """Detect chapter breaks and generate cue sets for user selection"""
+        """Detect chapter breaks and generate cues for user selection"""
 
         # Initialize services
         audio_service = AudioProcessingService(self._notify_progress, self.smart_detect_config, self._running_processes)
@@ -1016,7 +1044,7 @@ class ProcessingPipeline:
         self.detected_silences = silences.copy() if silences else []
         self.normal_scanned_regions = [(0.0, self.book.duration)]
 
-        await self._transition_to_cue_selection()
+        await self._transition_to_initial_chapter_selection()
 
     async def _detect_cues_vad(self):
         """Detect potential chapter boundaries using VAD (Voice Activity Detection)."""
@@ -1047,7 +1075,7 @@ class ProcessingPipeline:
             self.detected_silences = silences.copy() if silences else []
             self.vad_scanned_regions = [(0.0, self.book.duration)]
 
-            await self._transition_to_cue_selection()
+            await self._transition_to_initial_chapter_selection()
 
         except asyncio.CancelledError:
             logger.info("VAD detection was cancelled")
@@ -1056,7 +1084,7 @@ class ProcessingPipeline:
         except Exception as e:
             logger.error(f"VAD detection failed: {e}", exc_info=True)
             self._vad_task = None
-            await self.restart_at_step(RestartStep.SELECT_CUE_SOURCE, f"VAD detection failed: {str(e)}")
+            await self.restart_at_step(RestartStep.SELECT_WORKFLOW, f"VAD detection failed: {str(e)}")
             raise ProcessingError(f"Error during VAD detection: {str(e)}")
 
     async def _detect_realignment_cues(self, segments: List[Tuple[float, str]]):
@@ -1116,17 +1144,17 @@ class ProcessingPipeline:
         except Exception as e:
             logger.error(f"VAD detection failed: {e}", exc_info=True)
             self._vad_task = None
-            await self.restart_at_step(RestartStep.SELECT_CUE_SOURCE, f"VAD detection failed: {str(e)}")
+            await self.restart_at_step(RestartStep.SELECT_WORKFLOW, f"VAD detection failed: {str(e)}")
             raise ProcessingError(f"Error during VAD detection: {str(e)}")
 
-    async def _transition_to_cue_selection(self):
+    async def _transition_to_initial_chapter_selection(self):
         """Transition to the initial chapter selection step after silence detection is complete"""
         self.initial_chapter_selection_available = True
         self._notify_progress(
-            Step.CUE_SET_SELECTION, 100,
+            Step.INITIAL_CHAPTER_SELECTION, 100,
             f"Ready for selection with {len(self.detected_silences)} detected silences"
         )
-        logger.info(f"Detected {len(self.detected_silences)} silences, ready for cue selection")
+        logger.info(f"Detected {len(self.detected_silences)} silences, ready for initial chapter selection")
 
     async def _extract_audio_segments(self):
         """Extract audio segments for transcription"""
@@ -1384,7 +1412,7 @@ class ProcessingPipeline:
 
         except Exception as e:
             logger.error(f"Initial segment extraction failed: {e}", exc_info=True)
-            await self.restart_at_step(RestartStep.CUE_SET_SELECTION, f"Initial extraction failed: {str(e)}")
+            await self.restart_at_step(RestartStep.INITIAL_CHAPTER_SELECTION, f"Initial extraction failed: {str(e)}")
             raise
 
     def _deduplicate_timestamps(
@@ -1481,8 +1509,8 @@ class ProcessingPipeline:
 
         return deduplicated_timestamps
 
-    async def select_cue_set(self, timestamps: List[float], include_unaligned: List[str] = None) -> Dict[str, Any]:
-        """Select a cue set from detected cues and proceed to CONFIGURE_ASR"""
+    async def select_initial_chapters(self, timestamps: List[float], include_unaligned: List[str] = None) -> Dict[str, Any]:
+        """Select initial chapters from detected cues and proceed to CONFIGURE_ASR"""
         try:
             # Set the selected cues directly from provided timestamps
             self.cues = sorted(timestamps)
@@ -1496,7 +1524,7 @@ class ProcessingPipeline:
                     self.include_unaligned,
                 )
 
-            logger.info(f"Selected cue set with {len(self.cues)} cues")
+            logger.info(f"Selected {len(self.cues)} initial chapters")
 
             # Extract initial segments first, then go to CONFIGURE_ASR
             await self.extract_segments()
@@ -1508,8 +1536,8 @@ class ProcessingPipeline:
             }
 
         except Exception as e:
-            logger.error(f"Failed to select cue set: {e}", exc_info=True)
-            await self.restart_at_step(RestartStep.CUE_SET_SELECTION, f"Initial chapter selection failed: {str(e)}")
+            logger.error(f"Failed to select initial chapters: {e}", exc_info=True)
+            await self.restart_at_step(RestartStep.INITIAL_CHAPTER_SELECTION, f"Initial chapter selection failed: {str(e)}")
             raise
 
     def get_segment_count(self) -> int:
@@ -1721,29 +1749,29 @@ class ProcessingPipeline:
         has_detected_silences = self.initial_chapter_selection_available
 
         match self.step:
-            case Step.SELECT_CUE_SOURCE:
+            case Step.SELECT_WORKFLOW:
                 restart_options.append(RestartStep.IDLE)
-            case Step.CUE_SET_SELECTION:
+            case Step.INITIAL_CHAPTER_SELECTION:
                 restart_options.append(RestartStep.IDLE)
-                restart_options.append(RestartStep.SELECT_CUE_SOURCE)
+                restart_options.append(RestartStep.SELECT_WORKFLOW)
             case Step.CONFIGURE_ASR:
                 restart_options.append(RestartStep.IDLE)
-                restart_options.append(RestartStep.SELECT_CUE_SOURCE)
+                restart_options.append(RestartStep.SELECT_WORKFLOW)
                 if has_detected_silences:
-                    restart_options.append(RestartStep.CUE_SET_SELECTION)
+                    restart_options.append(RestartStep.INITIAL_CHAPTER_SELECTION)
             case Step.CHAPTER_EDITING:
                 restart_options.append(RestartStep.IDLE)
-                restart_options.append(RestartStep.SELECT_CUE_SOURCE)
+                restart_options.append(RestartStep.SELECT_WORKFLOW)
                 if has_detected_silences:
-                    restart_options.append(RestartStep.CUE_SET_SELECTION)
-                if not self.is_realignment:
+                    restart_options.append(RestartStep.INITIAL_CHAPTER_SELECTION)
+                if not self.is_realignment and not self.is_quick_edit:
                     restart_options.append(RestartStep.CONFIGURE_ASR)
             case Step.REVIEWING | Step.COMPLETED:
                 restart_options.append(RestartStep.IDLE)
-                restart_options.append(RestartStep.SELECT_CUE_SOURCE)
+                restart_options.append(RestartStep.SELECT_WORKFLOW)
                 if has_detected_silences:
-                    restart_options.append(RestartStep.CUE_SET_SELECTION)
-                if not self.is_realignment:
+                    restart_options.append(RestartStep.INITIAL_CHAPTER_SELECTION)
+                if not self.is_realignment and not self.is_quick_edit:
                     restart_options.append(RestartStep.CONFIGURE_ASR)
                 restart_options.append(RestartStep.CHAPTER_EDITING)
             case _:
