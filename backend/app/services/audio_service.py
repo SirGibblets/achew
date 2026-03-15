@@ -4,6 +4,7 @@ import os
 import re
 import shutil
 import subprocess
+import time
 from pathlib import Path
 from typing import List, Tuple, Optional
 
@@ -167,6 +168,7 @@ class AudioProcessingService:
             pattern_end = re.compile(r"silence_end:\s*([\d\.]+)")
 
             last_progress = 0.0
+            last_feed_time = 0.0
 
             for line in process.stderr:
                 if "silence_start" in line:
@@ -185,13 +187,21 @@ class AudioProcessingService:
                             file_progress = min((timestamp / duration) * 100, 100)
                             message = f"Analyzing audio... ({_format_time(timestamp)} / {_format_time(duration)})"
 
+                            # Throttle feed_text to max 2 updates/sec
+                            cue_count = len(silence_ends)
+                            now = time.monotonic()
+                            details = None
+                            if now - last_feed_time >= 0.5:
+                                details = {"feed_text": f"Found {cue_count} potential chapter cue{'s' if cue_count != 1 else ''}"}
+                                last_feed_time = now
+
                             # Store progress for later async processing
                             self._progress_queue.append(
                                 {
                                     "step": Step.AUDIO_ANALYSIS,
                                     "percent": file_progress,
                                     "message": message,
-                                    "details": None,
+                                    "details": details,
                                 }
                             )
 

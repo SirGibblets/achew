@@ -95,7 +95,9 @@ def process_multiple_chunks(chunk_files_with_indices, segment_duration, min_sile
                 wav, sr = librosa.load(chunk_file, sr=16000, mono=True)
 
             if len(wav) == 0:
-                results.append({"chunk_index": chunk_index, "gaps": [], "error": "Empty audio"})
+                result = {"chunk_index": chunk_index, "gaps": [], "error": "Empty audio"}
+                results.append(result)
+                print(f"RESULT:{json.dumps(result)}", flush=True)
                 continue
 
             # Progress callback for this specific chunk
@@ -148,10 +150,14 @@ def process_multiple_chunks(chunk_files_with_indices, segment_duration, min_sile
             # Convert speech timestamps to gaps
             gaps = find_gaps_in_speech(speech_timestamps, start_time, end_time, min_silence_duration)
 
-            results.append({"chunk_index": chunk_index, "gaps": gaps, "error": None})
+            result = {"chunk_index": chunk_index, "gaps": gaps, "error": None}
+            results.append(result)
+            print(f"RESULT:{json.dumps(result)}", flush=True)
 
         except Exception as e:
-            results.append({"chunk_index": chunk_index, "gaps": [], "error": str(e)})
+            result = {"chunk_index": chunk_index, "gaps": [], "error": str(e)}
+            results.append(result)
+            print(f"RESULT:{json.dumps(result)}", flush=True)
 
     return results
 
@@ -167,13 +173,9 @@ if __name__ == "__main__":
         min_silence_duration = float(sys.argv[3])
         enable_progress = len(sys.argv) >= 5 and sys.argv[4].lower() == "true"
 
-        results = process_multiple_chunks(
+        process_multiple_chunks(
             chunk_files_with_indices, segment_duration, min_silence_duration, enable_progress
         )
-
-        # Output all results
-        for result in results:
-            print(f"RESULT:{json.dumps(result)}")
 
     except (json.JSONDecodeError, ValueError) as e:
         print(json.dumps({"error": f"Failed to parse arguments: {str(e)}"}))

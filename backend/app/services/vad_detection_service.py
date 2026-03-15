@@ -254,7 +254,12 @@ class VadDetectionService:
                             logger.warning(f"Failed to parse progress data: {e}")
                     elif line_text.startswith("RESULT:"):
                         try:
-                            results.append(json.loads(line_text[7:]))
+                            result_data = json.loads(line_text[7:])
+                            results.append(result_data)
+                            # Update gap count immediately for feed display
+                            result_gaps = result_data.get("gaps", [])
+                            if result_gaps:
+                                progress_tracker["_gaps_found"] = progress_tracker.get("_gaps_found", 0) + len(result_gaps)
                         except json.JSONDecodeError as e:
                             logger.error(f"Failed to parse result data: {e}")
 
@@ -414,21 +419,28 @@ class VadDetectionService:
                 # Throttle updates to every 0.1 seconds
                 if current_time - last_update_time >= 0.1:
                     # Calculate overall progress across all chunks
-                    if progress_tracker:
-                        avg_progress = sum(progress_tracker.values()) / len(progress_tracker)
+                    chunk_values = [v for k, v in progress_tracker.items() if isinstance(k, int)]
+                    if chunk_values:
+                        avg_progress = sum(chunk_values) / len(chunk_values)
 
                         # Calculate completed chunks for display
                         completed_chunks = (avg_progress / 100.0) * total_chunks
                         current_duration = completed_chunks * self.segment_duration
 
+                        # Include gap count as feed_text
+                        gaps_found = progress_tracker.get("_gaps_found", 0)
+                        details = {"chunk": int(completed_chunks), "total_chunks": total_chunks}
+                        if gaps_found > 0:
+                            details["feed_text"] = f"Found {gaps_found} potential chapter cue{'s' if gaps_found != 1 else ''}"
+
                         if avg_progress < 0.01:
-                            self._notify_progress(Step.VAD_ANALYSIS, 0, "Starting analysis, please wait...")
+                            self._notify_progress(Step.VAD_ANALYSIS, 0, "Starting analysis, please wait...", details)
                         else:
                             self._notify_progress(
                                 Step.VAD_ANALYSIS,
                                 avg_progress,
                                 f"Analyzing audio... ({_format_time(current_duration)} / {_format_time(total_duration)})",
-                                {"chunk": int(completed_chunks), "total_chunks": total_chunks},
+                                details,
                             )
 
                         last_update_time = current_time

@@ -534,6 +534,7 @@ class ProcessingPipeline:
                     file_index=i,
                     files_completed=completed_files,
                     total_downloaded_so_far=total_downloaded_bytes,
+                    file_name=audio_file.metadata.relPath,
                 ):
                     # Check for cancellation during download progress updates
                     if self.step != Step.DOWNLOADING:
@@ -560,6 +561,7 @@ class ProcessingPipeline:
                                 "current_file_progress": (downloaded_current / total_current) * 100,
                                 "files_completed": files_completed,
                                 "speed_bps": speed_bps,
+                                "feed_text": f"Downloading {file_name}...",
                             },
                         )
 

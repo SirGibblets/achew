@@ -77,6 +77,7 @@ class ASRService(ABC):
                     {
                         "completed_segments": i + 1,
                         "total_segments": total_files,
+                        "feed_text": f"\u201c{result}\u201d",
                     },
                 )
 
