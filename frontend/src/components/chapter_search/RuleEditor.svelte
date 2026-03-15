@@ -15,6 +15,7 @@
 
     import SortableItem from "./SortableItem.svelte";
     import RuleEditor from "./RuleEditor.svelte";
+    import EmptyDropZone from "./EmptyDropZone.svelte";
     import RuleEditDialog from "./RuleEditDialog.svelte";
     import RuleSetEditDialog from "./RuleSetEditDialog.svelte";
     import {
@@ -138,10 +139,44 @@
 
     function handleDragOver(event) {
         if (!isRoot || isOverlay) return;
-        // Prevent a ruleset from being moved into itself or its descendants
+
         const sourceId = event.operation?.source?.id;
+        const targetId = event.operation?.target?.id;
+
+        // Custom handling for empty drop zone
+        if (targetId && String(targetId).endsWith("_empty")) {
+            const destContainerId = String(targetId).replace("_empty", "");
+
+            // Prevent a ruleset from being moved into itself or its descendants
+            if (sourceId && sourceId in rootItemsMap) {
+                if (isOrDescendantOf(destContainerId, sourceId)) {
+                    return;
+                }
+            }
+
+            const sourceContainerId = findContainerOf(sourceId);
+            if (!sourceContainerId || sourceContainerId === destContainerId)
+                return;
+
+            // Move the item manually from source container to destination container
+            const itemIndex = rootItemsMap[sourceContainerId].findIndex(
+                (item) => item.id === sourceId,
+            );
+            if (itemIndex > -1) {
+                const item = rootItemsMap[sourceContainerId][itemIndex];
+                rootItemsMap = {
+                    ...rootItemsMap,
+                    [sourceContainerId]: rootItemsMap[sourceContainerId].filter(
+                        (it) => it.id !== sourceId,
+                    ),
+                    [destContainerId]: [item], // It was empty, so now it only has this item
+                };
+            }
+            return;
+        }
+
+        // Prevent a ruleset from being moved into itself or its descendants
         if (sourceId && sourceId in rootItemsMap) {
-            const targetId = event.operation?.target?.id;
             if (targetId) {
                 const targetContainer = findContainerOf(targetId);
                 if (
@@ -233,9 +268,14 @@
         const original = e.detail;
         const clone = deepCloneWithNewIds(original);
         const idx = currentItems.findIndex((item) => item.id === original.id);
-        const newItems = idx >= 0
-            ? [...currentItems.slice(0, idx + 1), clone, ...currentItems.slice(idx + 1)]
-            : [...currentItems, clone];
+        const newItems =
+            idx >= 0
+                ? [
+                      ...currentItems.slice(0, idx + 1),
+                      clone,
+                      ...currentItems.slice(idx + 1),
+                  ]
+                : [...currentItems, clone];
         onchange?.({ ...ruleset, items: newItems });
         ruleDialogOpen = false;
         editingRule = null;
@@ -253,9 +293,14 @@
 
     function handleCloneChildRuleSet(itemId, cloned) {
         const idx = currentItems.findIndex((item) => item.id === itemId);
-        const newItems = idx >= 0
-            ? [...currentItems.slice(0, idx + 1), cloned, ...currentItems.slice(idx + 1)]
-            : [...currentItems, cloned];
+        const newItems =
+            idx >= 0
+                ? [
+                      ...currentItems.slice(0, idx + 1),
+                      cloned,
+                      ...currentItems.slice(idx + 1),
+                  ]
+                : [...currentItems, cloned];
         onchange?.({ ...ruleset, items: newItems });
     }
 
@@ -327,70 +372,79 @@
         </div>
 
         <div class="items-list">
-            {#each currentItems as item, i (item.id)}
-                {@const isContainer = isRuleSet(item)}
-                <SortableItem
-                    id={item.id}
-                    index={i}
-                    type={isContainer ? "ruleset" : "rule"}
-                    accept={["rule", "ruleset"]}
-                    group={rulesetId}
-                    data={{ group: rulesetId }}
-                    {isOverlay}
-                    collisionPriority={isContainer
-                        ? CollisionPriority.Low
-                        : undefined}
-                >
-                    {#snippet children()}
-                        {#if isContainer}
-                            <RuleEditor
-                                ruleset={item}
-                                isRoot={false}
-                                inheritedItemsMap={effectiveItemsMap}
-                                ancestorDisabled={!ruleset.enabled ||
-                                    ancestorDisabled}
-                                {isOverlay}
-                                onchange={(updated) =>
-                                    handleChildChange(i, updated)}
-                                ondeleteSelf={() =>
-                                    handleDeleteChildRuleSet(item.id)}
-                                oncloneSelf={(cloned) =>
-                                    handleCloneChildRuleSet(item.id, cloned)}
-                                {onresetToDefaults}
-                            />
-                        {:else}
-                            <div
-                                class="rule-row"
-                                class:disabled={!item.enabled &&
-                                    !ancestorDisabled}
-                            >
-                                <label
-                                    class="enable-toggle"
-                                    title={item.enabled ? "Disable" : "Enable"}
+            {#if currentItems.length === 0}
+                <EmptyDropZone {rulesetId} {isOverlay} />
+            {:else}
+                {#each currentItems as item, i (item.id)}
+                    {@const isContainer = isRuleSet(item)}
+                    <SortableItem
+                        id={item.id}
+                        index={i}
+                        type={isContainer ? "ruleset" : "rule"}
+                        accept={["rule", "ruleset"]}
+                        group={rulesetId}
+                        data={{ group: rulesetId }}
+                        {isOverlay}
+                        collisionPriority={isContainer
+                            ? CollisionPriority.Low
+                            : undefined}
+                    >
+                        {#snippet children()}
+                            {#if isContainer}
+                                <RuleEditor
+                                    ruleset={item}
+                                    isRoot={false}
+                                    inheritedItemsMap={effectiveItemsMap}
+                                    ancestorDisabled={!ruleset.enabled ||
+                                        ancestorDisabled}
+                                    {isOverlay}
+                                    onchange={(updated) =>
+                                        handleChildChange(i, updated)}
+                                    ondeleteSelf={() =>
+                                        handleDeleteChildRuleSet(item.id)}
+                                    oncloneSelf={(cloned) =>
+                                        handleCloneChildRuleSet(
+                                            item.id,
+                                            cloned,
+                                        )}
+                                    {onresetToDefaults}
+                                />
+                            {:else}
+                                <div
+                                    class="rule-row"
+                                    class:disabled={!item.enabled &&
+                                        !ancestorDisabled}
                                 >
-                                    <input
-                                        type="checkbox"
-                                        checked={item.enabled}
-                                        onchange={() => handleToggle(item)}
-                                    />
-                                </label>
-                                <span
-                                    class="rule-name"
-                                    title={autoRuleName(item)}
-                                    >{autoRuleName(item)}</span
-                                >
-                                <button
-                                    class="edit-btn"
-                                    onclick={() => openEditRule(item)}
-                                    aria-label="Edit rule"
-                                >
-                                    <Pencil size="14" />
-                                </button>
-                            </div>
-                        {/if}
-                    {/snippet}
-                </SortableItem>
-            {/each}
+                                    <label
+                                        class="enable-toggle"
+                                        title={item.enabled
+                                            ? "Disable"
+                                            : "Enable"}
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={item.enabled}
+                                            onchange={() => handleToggle(item)}
+                                        />
+                                    </label>
+                                    <span
+                                        class="rule-name"
+                                        title={autoRuleName(item)}
+                                        >{autoRuleName(item)}</span
+                                    >
+                                    <button
+                                        class="edit-btn"
+                                        onclick={() => openEditRule(item)}
+                                        aria-label="Edit rule"
+                                    >
+                                        <Pencil size="14" />
+                                    </button>
+                                </div>
+                            {/if}
+                        {/snippet}
+                    </SortableItem>
+                {/each}
+            {/if}
         </div>
 
         <!-- Add buttons -->
