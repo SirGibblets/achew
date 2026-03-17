@@ -5,6 +5,10 @@
     // Icons
     import CircleQuestionMark from "@lucide/svelte/icons/circle-question-mark";
     import X from "@lucide/svelte/icons/x";
+    import Play from "@lucide/svelte/icons/play";
+    import Pause from "@lucide/svelte/icons/pause";
+
+    import {audio, currentSegmentId, isPlaying} from "../stores/audio.js";
 
     const dispatch = createEventDispatcher();
 
@@ -28,8 +32,24 @@
     }
 
     function closeModal() {
+        if ($isPlaying && $currentSegmentId?.startsWith('chapter-modal-')) {
+            audio.stop();
+        }
         dialog?.close();
         dispatch("close");
+    }
+
+    async function previewAudio(timestamp, index) {
+        const segId = `chapter-modal-${index}`;
+        try {
+            if ($currentSegmentId === segId && $isPlaying) {
+                audio.stop();
+            } else {
+                await audio.play(segId, timestamp);
+            }
+        } catch (err) {
+            console.error("Failed to preview audio:", err);
+        }
     }
 
     // React to isOpen prop changes
@@ -81,7 +101,16 @@
                     </div>
                     {#each chapters as chapter, index}
                         <div class="chapter-row">
-                            <span class="chapter-time">{formatTime(chapter.timestamp)}</span>
+                            <div class="chapter-time-container">
+                                <button class="preview-play-btn" on:click|preventDefault={() => previewAudio(chapter.timestamp, index)} title="Preview audio">
+                                    {#if $isPlaying && $currentSegmentId === `chapter-modal-${index}`}
+                                        <Pause size="14"/>
+                                    {:else}
+                                        <Play size="14"/>
+                                    {/if}
+                                </button>
+                                <span class="chapter-time">{formatTime(chapter.timestamp)}</span>
+                            </div>
                             <span class="chapter-title"
                             >{chapter.title || `Chapter ${index + 1}`}</span
                             >
@@ -241,6 +270,34 @@
 
     .chapter-row:last-child {
         border-bottom: none;
+    }
+
+    .chapter-time-container {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .preview-play-btn {
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 1.5rem;
+        height: 1.5rem;
+        border: none;
+        border-radius: 0.25rem;
+        background: transparent;
+        color: var(--primary-color);
+        cursor: pointer;
+        padding: 0;
+        opacity: 0.6;
+        transition: opacity 0.2s, background-color 0.2s;
+    }
+
+    .preview-play-btn:hover {
+        background: var(--bg-tertiary);
+        opacity: 1;
     }
 
     .chapter-time {
