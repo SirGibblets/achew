@@ -145,17 +145,6 @@ export const session = {
         return apiRequest('/pipeline/cue-sources');
     },
 
-    async getSmartDetectConfig() {
-        return apiRequest('/pipeline/smart-detect-config');
-    },
-
-    async updateSmartDetectConfig(config) {
-        return apiRequest('/pipeline/smart-detect-config', {
-            method: 'PUT',
-            body: config,
-        });
-    },
-
     async getASROptions() {
         return apiRequest('/pipeline/asr-options');
     },
@@ -293,6 +282,18 @@ export const chapters = {
         return apiRequest('/chapters/shift-timestamps', {
             method: 'POST',
             body: { shifts },
+        });
+    },
+
+    async transcribe(chapterId) {
+        return apiRequest(`/chapters/${chapterId}/transcribe`, {
+            method: 'POST',
+        });
+    },
+
+    async transcribeSelected() {
+        return apiRequest('/chapters/transcribe-selected', {
+            method: 'POST',
         });
     },
 };

@@ -5,6 +5,7 @@ This module provides the Parakeet MLX ASR service for Apple Silicon acceleration
 with auto-registration.
 """
 
+import asyncio
 import logging
 import sys
 
@@ -41,7 +42,8 @@ class ParakeetMLXASRService(ASRService):
             self._notify_progress(
                 Step.ASR_PROCESSING, 0, f"Loading Parakeet MLX model {self.model_path}. This may take a while..."
             )
-            self.model = parakeet_mlx.from_pretrained(self.model_path)
+            loop = asyncio.get_event_loop()
+            self.model = await loop.run_in_executor(None, parakeet_mlx.from_pretrained, self.model_path)
             self._notify_progress(Step.ASR_PROCESSING, 0, "Parakeet MLX ASR ready")
 
         except ImportError as e:
@@ -95,6 +97,7 @@ if sys.platform == "darwin":
             uses_gpu=True,
             variants=PARAKEET_MLX_VARIANTS,
             priority=90,
+            asr_buffer=0.9,
         )
         class ParakeetMLXService(ParakeetMLXASRService):
             """MLX-accelerated Parakeet service for Apple Silicon"""

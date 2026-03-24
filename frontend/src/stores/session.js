@@ -35,13 +35,8 @@ function createSessionStore() {
 
         restartOptions: [],
 
-        // Smart Detect Configuration
-        smartDetectConfig: {
-            segment_length: 8.0,
-            min_clip_length: 1.0,
-            asr_buffer: 0.25,
-        },
-        smartDetectConfigLoading: false,
+        // Transcription state
+        transcriptionStatuses: {},
 
         // App version
         version: null,
@@ -132,6 +127,16 @@ function createSessionStore() {
                         selected: data.selected,
                         unselected: data.unselected
                     }
+                }));
+            })
+        );
+
+        // Transcribing state updates
+        unsubscribeFunctions.push(
+            onWebSocketMessage(WS_MESSAGE_TYPES.TRANSCRIBING_UPDATE, (data) => {
+                update(state => ({
+                    ...state,
+                    transcriptionStatuses: data.statuses || {}
                 }));
             })
         );
@@ -257,12 +262,7 @@ function createSessionStore() {
                     book: null,
                     cueSources: [],
                     restartOptions: [],
-                    smartDetectConfig: {
-                        segment_length: 8.0,
-                        min_clip_length: 1.0,
-                        asr_buffer: 0.25,
-                    },
-                    smartDetectConfigLoading: false,
+                    transcriptionStatuses: {},
                     version: null,
                     loading: false,
                     error: null
@@ -293,12 +293,7 @@ function createSessionStore() {
                 book: null,
                 cueSources: [],
                 restartOptions: [],
-                smartDetectConfig: {
-                    segment_length: 8.0,
-                    min_clip_length: 1.0,
-                    asr_buffer: 0.25,
-                },
-                smartDetectConfigLoading: false,
+                transcriptionStatuses: {},
                 version: null,
                 loading: false,
                 error: null
@@ -431,58 +426,6 @@ function createSessionStore() {
             }));
         },
 
-        // Smart Detect Configuration management
-        async loadSmartDetectConfig() {
-            update(state => ({...state, smartDetectConfigLoading: true, error: null}));
-
-            try {
-                const response = await api.session.getSmartDetectConfig();
-                update(state => ({
-                    ...state,
-                    smartDetectConfig: response.config,
-                    smartDetectConfigLoading: false
-                }));
-            } catch (error) {
-                console.error('Failed to load smart detect config:', error);
-                update(state => ({
-                    ...state,
-                    smartDetectConfigLoading: false
-                }));
-            }
-        },
-
-        // Debounced smart detect config update
-        async updateSmartDetectConfig(config) {
-            update(state => ({
-                ...state,
-                smartDetectConfig: config,
-                smartDetectConfigLoading: true
-            }));
-
-            try {
-                await api.session.updateSmartDetectConfig(config);
-                update(state => ({
-                    ...state,
-                    smartDetectConfigLoading: false
-                }));
-            } catch (error) {
-                console.error('Failed to update smart detect config:', error);
-                const errorMessage = handleApiError(error);
-                update(state => ({
-                    ...state,
-                    error: errorMessage,
-                    smartDetectConfigLoading: false
-                }));
-            }
-        },
-
-        updateSmartDetectConfigLocal(config) {
-            update(state => ({
-                ...state,
-                smartDetectConfig: config
-            }));
-        },
-
         // Connect WebSocket independently of session state
         connectWebSocket() {
             connectWebSocket();
@@ -557,6 +500,7 @@ export const canRedo = derived(session, $session => $session.canRedo);
 export const progress = derived(session, $session => $session.progress);
 export const loading = derived(session, $session => $session.loading);
 export const error = derived(session, $session => $session.error);
+export const transcriptionStatuses = derived(session, $session => $session.transcriptionStatuses);
 
 // Initialize session on page load - check for active session
 export async function initializeSession() {

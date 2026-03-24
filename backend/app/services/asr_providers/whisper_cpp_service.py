@@ -157,18 +157,25 @@ class WhisperCppASRService(ASRService):
         if hasattr(self, "model") and self.model:
             del self.model
 
-    def _transcribe_file(self, audio_file: str) -> str:
-        """Transcribe a single audio file"""
+    def _transcribe_file(self, audio_file: str, retry_on_empty: bool = True) -> str:
+        """Transcribe a single audio file, retrying with lower no_speech_thold if blank"""
+        no_speech_thresholds = [0.6, 0.5, 0.4] if retry_on_empty else [0.6]
 
         try:
-            results = self.model.transcribe(
-                audio_file,
-                language=self.language,
-                suppress_blank=True,
-                initial_prompt=self.bias_words,
-            )
+            for threshold in no_speech_thresholds:
+                results = self.model.transcribe(
+                    audio_file,
+                    language=self.language,
+                    suppress_blank=True,
+                    initial_prompt=self.bias_words,
+                    no_speech_thold=threshold,
+                )
+                text = "".join([result.text for result in results]).strip()
+                if text:
+                    return text
+                logger.info(f"Blank result for {audio_file} with no_speech_thold={threshold}")
 
-            return "".join([result.text for result in results]).strip()
+            return text
 
         except Exception as e:
             logger.error(f"Transcription error for {audio_file}: {e}")
@@ -366,6 +373,7 @@ WHISPER_VARIANTS = [
     supports_bias_words=True,
     variants=WHISPER_VARIANTS,
     priority=80,
+    asr_buffer=0.1,
 )
 class WhisperCPUService(WhisperCppASRService):
     """CPU-only Whisper service"""

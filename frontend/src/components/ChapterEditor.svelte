@@ -10,6 +10,7 @@
         selectionStats,
         session,
         pendingAddChapterDialog,
+        transcriptionStatuses,
     } from "../stores/session.js";
     import {api, handleApiError} from "../utils/api.js";
     import AddChapterDialog from "./AddChapterDialog.svelte";
@@ -35,6 +36,7 @@
     import Undo from "@lucide/svelte/icons/undo";
     import X from "@lucide/svelte/icons/x";
     import CircleHelp from "@lucide/svelte/icons/circle-help";
+    import Mic from "@lucide/svelte/icons/mic";
 
     let mounted = false;
     let loading = $state(false);
@@ -348,6 +350,24 @@
             await api.chapters.deleteBySelection(target);
             audio.clearSegmentCache();
             showSettings = false;
+        } catch (err) {
+            error = handleApiError(err);
+        }
+    }
+
+    // Transcription
+    async function transcribeChapter(chapterId) {
+        try {
+            await api.chapters.transcribe(chapterId);
+        } catch (err) {
+            error = handleApiError(err);
+        }
+    }
+
+    async function transcribeSelected() {
+        showSettings = false;
+        try {
+            await api.chapters.transcribeSelected();
         } catch (err) {
             error = handleApiError(err);
         }
@@ -755,7 +775,7 @@
                 </thead>
                 <tbody>
                 {#each $chapters.filter((ch) => ch.id !== undefined && ch.id !== null) as chapter (chapter.id)}
-                    <tr class="chapter-row" class:dimmed={!chapter.selected}>
+                    <tr class="chapter-row" class:dimmed={!chapter.selected} class:transcribing={$transcriptionStatuses[chapter.id]}>
                         <td>
                             <input
                                     type="checkbox"
@@ -763,6 +783,20 @@
                                     onchange={(e) =>
                     toggleChapterSelection(chapter.id, e.target.checked)}
                             />
+                            {#if $transcriptionStatuses[chapter.id]}
+                                <div class="transcribing-overlay">
+                                    {#if $transcriptionStatuses[chapter.id] === "finished"}
+                                        Finished
+                                    {:else}
+                                        <div class="transcribing-spinner"></div>
+                                        {#if $transcriptionStatuses[chapter.id] === "transcribing"}
+                                            Transcribing...
+                                        {:else}
+                                            Pending...
+                                        {/if}
+                                    {/if}
+                                </div>
+                            {/if}
                         </td>
                         <td class="timestamp" class:editing={editingTimestampId === chapter.id}>
                             {#if editingTimestampId === chapter.id}
@@ -883,6 +917,14 @@
                         </td>
                         <td>
                             <div class="action-buttons">
+                                <button
+                                        class="transcribe-button"
+                                        onclick={() => transcribeChapter(chapter.id)}
+                                        title="Transcribe chapter title"
+                                        disabled={!!$transcriptionStatuses[chapter.id]}
+                                >
+                                    <Mic size="16"/>
+                                </button>
                                 <button
                                         class="play-button"
                                         class:playing={$currentSegmentId === chapter.id &&
@@ -1006,6 +1048,12 @@
                                     onclick={() => showShiftTimestampsDialog = true}>
                                     <Clock size="16" color="var(--primary-color)"/>
                                     Shift Timestamps
+                                </button>
+                                <button class="btn btn-cancel btn-sm tool-btn full-width" title="Transcribe Selected"
+                                    onclick={transcribeSelected}
+                                    disabled={$selectionStats.selected === 0 || Object.keys($transcriptionStatuses).length > 0}>
+                                    <Mic size="16" color="var(--primary-color)"/>
+                                    Transcribe Selected
                                 </button>
                             </div>
                         </div>
@@ -1219,6 +1267,54 @@
 
     .chapter-row.dimmed:hover {
         background-color: var(--bg-chapter-disabled);
+    }
+
+    .chapter-row.transcribing {
+        position: relative;
+        pointer-events: none;
+    }
+
+    .chapter-row.transcribing > td:not(:first-child) {
+        opacity: 0.1;
+    }
+
+    .chapter-row.transcribing > td:first-child {
+        position: static;
+    }
+
+    .chapter-row.transcribing > td:first-child > :not(.transcribing-overlay) {
+        opacity: 0.1;
+    }
+
+    .transcribing-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        color: var(--primary-color);
+        font-size: 0.875rem;
+        font-weight: 500;
+        opacity: 1;
+        z-index: 1;
+        pointer-events: none;
+    }
+
+    .transcribing-spinner {
+        width: 16px;
+        height: 16px;
+        border: 2px solid transparent;
+        border-top-color: var(--primary-color);
+        border-radius: 50%;
+        animation: transcribe-spin 0.8s linear infinite;
+    }
+
+    @keyframes transcribe-spin {
+        to { transform: rotate(360deg); }
     }
 
     .timestamp {
@@ -1507,6 +1603,32 @@
         background-color: var(--primary-color);
     }
 
+    .transcribe-button {
+        width: 2rem;
+        height: 2rem;
+        border-radius: 50%;
+        border: none;
+        background-color: transparent;
+        color: var(--text-secondary);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+        transition: all 0.2s ease;
+    }
+
+    .transcribe-button:hover:not(:disabled) {
+        color: var(--text-primary);
+        background-color: #8883;
+        transform: scale(1.1);
+    }
+
+    .transcribe-button:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+
     .chapter-row td {
         vertical-align: middle !important;
     }
@@ -1517,10 +1639,11 @@
 
     .action-buttons {
         display: flex;
-        gap: 0.5rem;
+        gap: 0.25rem;
         align-items: center;
         height: 100%;
         justify-content: flex-start;
+        margin-left: -0.35rem;
     }
 
     .delete-btn {

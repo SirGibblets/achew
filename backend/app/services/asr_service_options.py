@@ -10,10 +10,12 @@ import importlib
 import logging
 import os
 import pkgutil
-from typing import Dict, List, Optional, Tuple, Type, Any
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Type, Any
 
 from app.models.progress import ProgressCallback
-from app.services.asr_service import ASRService
+
+if TYPE_CHECKING:
+    from app.services.asr_service import ASRService
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +50,7 @@ class ASRServiceOption:
         supports_bias_words: bool = False,
         variants: List[ASRModelVariant] = None,
         priority: int = 0,
+        asr_buffer: float = 0.1,
     ):
         self.service_id = service_id
         self.name = name
@@ -56,6 +59,7 @@ class ASRServiceOption:
         self.supports_bias_words = supports_bias_words
         self.variants = variants or []
         self.priority = priority
+        self.asr_buffer = asr_buffer
 
     def __repr__(self):
         return f"ASRServiceOption(id={self.service_id}, name={self.name}, desc={self.desc}, uses_gpu={self.uses_gpu}, supports_bias_words={self.supports_bias_words}, priority={self.priority})"
@@ -110,7 +114,7 @@ class ASRServiceRegistry:
         entry = self._services.get(service_id)
         return entry["option"] if entry else None
 
-    def create_service(self, **kwargs) -> ASRService:
+    def create_service(self, **kwargs) -> "ASRService":
         """Factory method to create an ASR service instance"""
         if not self._initialized:
             self._discover_services()
@@ -249,6 +253,7 @@ def register_asr_service(
     supports_bias_words: bool = False,
     variants: List[ASRModelVariant] = None,
     priority: int = 0,
+    asr_buffer: float = 0.1,
 ):
     """
     Decorator to register an ASR service class
@@ -266,7 +271,7 @@ def register_asr_service(
     """
 
     def decorator(service_class):
-        option = ASRServiceOption(service_id, name, desc, uses_gpu, supports_bias_words, variants or [], priority)
+        option = ASRServiceOption(service_id, name, desc, uses_gpu, supports_bias_words, variants or [], priority, asr_buffer)
         _registry.register(service_id, service_class, option)
         return service_class
 
@@ -292,3 +297,16 @@ def set_preferred_service(service_id: str, variant_model_id: str = None, languag
 def create_asr_service(progress_callback: ProgressCallback = None):
     """Factory function to create an appropriate ASR service"""
     return _registry.create_service(progress_callback=progress_callback)
+
+
+def get_asr_buffer() -> float:
+    """Get the ASR silence buffer for the current preferred service."""
+    service = _registry.get_preferred_service()
+    return service.asr_buffer if service else 0.1
+
+
+def get_asr_config_key() -> tuple:
+    """Get the current ASR config key (service_id, variant_id, language) for cache invalidation"""
+    from app.core.config import get_user_preferences
+    prefs = get_user_preferences()
+    return (prefs.preferred_asr_service, prefs.preferred_asr_variant, prefs.preferred_asr_language)

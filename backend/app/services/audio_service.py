@@ -8,6 +8,14 @@ import time
 from pathlib import Path
 from typing import List, Tuple, Optional
 
+from app.core.config import get_app_config
+from app.core.constants import (
+    CHAPTER_START_PADDING,
+    END_OF_BOOK_EXCLUSION_ZONE,
+    MIN_SEGMENT_GAP,
+    MIN_SILENCE_DURATION,
+    MIN_TRIMMED_SEGMENT_LENGTH,
+)
 from app.models.enums import Step
 from app.models.progress import ProgressCallback
 
@@ -22,47 +30,39 @@ def _format_time(seconds: float) -> str:
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
 
+def crop_start_to_tempfile(audio_file: str, crop_seconds: float) -> str | None:
+    """Crop audio from the start and write to a temporary file.
+
+    Returns the temp file path on success, None on failure.
+    """
+    from uuid import uuid4
+
+    p = Path(audio_file)
+    temp_path = str(p.with_name(f"{p.stem}_jitter_{uuid4().hex[:8]}{p.suffix}"))
+
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y", "-ss", str(crop_seconds), "-i", audio_file, "-c", "copy", temp_path],
+            capture_output=True,
+            check=True,
+        )
+        return temp_path
+    except subprocess.CalledProcessError as e:
+        logger.warning(f"Failed to crop audio {audio_file}: {e}")
+        return None
+
+
 class AudioProcessingService:
     """Service for audio processing operations using ffmpeg"""
 
-    def __init__(self, progress_callback: ProgressCallback, smart_detect_config=None, running_processes=None):
+    def __init__(self, progress_callback: ProgressCallback, running_processes=None, asr_buffer: float = 0.1):
         self.progress_callback: ProgressCallback = progress_callback
-        self._progress_queue = []
         self._running_processes = running_processes if running_processes is not None else []
-
-        # Use smart detect config if provided, otherwise use defaults
-        if smart_detect_config:
-            self.segment_length = smart_detect_config.segment_length
-            self.min_clip_length = smart_detect_config.min_clip_length
-            self.asr_buffer = smart_detect_config.asr_buffer
-        else:
-            # Default values (same as before)
-            self.segment_length = 8.0
-            self.min_clip_length = 1.0
-            self.asr_buffer = 0.25
-        self.min_silence_duration = 1.0
+        self.asr_buffer = asr_buffer
 
     def _notify_progress(self, step: Step, percent: float, message: str = "", details: dict = None):
         """Notify progress via callback"""
         self.progress_callback(step, percent, message, details or {})
-
-    async def _process_queued_progress(self):
-        """Process any queued progress updates from thread"""
-        if not self._progress_queue or not self.progress_callback:
-            return
-
-        # Process all queued progress updates
-        while self._progress_queue:
-            progress_data = self._progress_queue.pop(0)
-            try:
-                self.progress_callback(
-                    progress_data["step"],
-                    progress_data["percent"],
-                    progress_data["message"],
-                    progress_data["details"],
-                )
-            except Exception as e:
-                logger.warning(f"Progress callback failed: {e}")
 
     def clean_up_orphaned_segment_files(self, output_dir: str):
         """Clean up any orphaned segment files from previous runs"""
@@ -86,7 +86,6 @@ class AudioProcessingService:
         self,
         input_file: List[str],
         silence_threshold: float = -30,
-        min_silence_duration: float = None,
         duration: Optional[float] = None,
         publish_progress: bool = True,
     ) -> Optional[List[Tuple[float, float]]]:
@@ -96,9 +95,6 @@ class AudioProcessingService:
         Returns a list of tuples containing (silence_start, silence_end) timestamps.
         For multiple files, timestamps are adjusted to a continuous timeline.
         """
-        if min_silence_duration is None:
-            min_silence_duration = self.min_silence_duration
-
         if publish_progress:
             self._notify_progress(Step.AUDIO_ANALYSIS, 0, "Starting audio analysis...")
 
@@ -110,7 +106,7 @@ class AudioProcessingService:
             "-i",
             input_file,
             "-af",
-            f"silencedetect=n={silence_threshold}dB:d={min_silence_duration}",
+            f"silencedetect=n={silence_threshold}dB:d={MIN_SILENCE_DURATION}",
             "-f",
             "null",
             "-",
@@ -126,12 +122,6 @@ class AudioProcessingService:
             duration,
         )
 
-        # Process queued progress updates while waiting
-        while not executor_task.done():
-            await self._process_queued_progress()
-            await asyncio.sleep(0.1)  # Brief sleep to avoid busy loop
-
-        # Get the result for this file
         file_silences = await executor_task
 
         # Check if processing was cancelled
@@ -141,10 +131,10 @@ class AudioProcessingService:
 
         all_silences.extend(file_silences)
 
-        if publish_progress:
-            # Process any remaining progress updates
-            await self._process_queued_progress()
+        if duration:
+            all_silences = [s for s in all_silences if s[1] < duration - END_OF_BOOK_EXCLUSION_ZONE]
 
+        if publish_progress:
             self._notify_progress(Step.AUDIO_ANALYSIS, 100, f"Found {len(all_silences)} potential chapter breaks")
 
         return all_silences
@@ -192,18 +182,12 @@ class AudioProcessingService:
                             now = time.monotonic()
                             details = None
                             if now - last_feed_time >= 0.5:
-                                details = {"feed_text": f"Found {cue_count} potential chapter cue{'s' if cue_count != 1 else ''}"}
+                                details = {
+                                    "feed_text": f"Found {cue_count} potential chapter cue{'s' if cue_count != 1 else ''}"
+                                }
                                 last_feed_time = now
 
-                            # Store progress for later async processing
-                            self._progress_queue.append(
-                                {
-                                    "step": Step.AUDIO_ANALYSIS,
-                                    "percent": file_progress,
-                                    "message": message,
-                                    "details": details,
-                                }
-                            )
+                            self._notify_progress(Step.AUDIO_ANALYSIS, file_progress, message, details)
 
                             last_progress = timestamp
 
@@ -253,16 +237,8 @@ class AudioProcessingService:
             allow_retry,
         )
 
-        # Process queued progress updates while waiting
-        while not executor_task.done():
-            await self._process_queued_progress()
-            await asyncio.sleep(0.1)  # Brief sleep to avoid busy loop
-
-        # Get the result
+        
         result = await executor_task
-
-        # Process any remaining progress updates
-        await self._process_queued_progress()
 
         # Check if extraction was cancelled (empty result could indicate cancellation)
         if not result:
@@ -273,18 +249,61 @@ class AudioProcessingService:
 
         return result
 
+    def extract_single_segment(
+        self,
+        audio_file: str,
+        start_time: float,
+        duration: float,
+        output_path: str,
+    ) -> str:
+        """Extract a single audio segment using ffmpeg -ss/-t for direct seeking.
+
+        This is more efficient than the segment-split approach for small numbers of chapters.
+        """
+        extension = Path(output_path).suffix.lstrip(".")
+        use_copy = extension not in ["wav"]
+
+        command = [
+            "ffmpeg",
+            "-y",
+            "-ss",
+            str(start_time + CHAPTER_START_PADDING - self.asr_buffer),
+            "-t",
+            str(duration),
+            "-i",
+            audio_file,
+        ]
+
+        if use_copy:
+            command.extend(["-acodec", "copy"])
+
+        command.append(output_path)
+
+        process = subprocess.Popen(command, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
+        self._running_processes.append(process)
+
+        try:
+            process.wait()
+            if process.returncode != 0:
+                logger.warning(f"Failed to extract segment at {start_time}s: ffmpeg returned {process.returncode}")
+                return None
+            return output_path
+        finally:
+            if process in self._running_processes:
+                self._running_processes.remove(process)
+
     def _trim_segment(self, segment_path: str, extension: str):
         """Trim a segment at its longest silence"""
-        silences = self._sync_get_silence_boundaries(segment_path, min_silence_duration=1.0)
+        silences = self._sync_get_silence_boundaries(segment_path)
 
-        # Filter out silences before the first 2 seconds
+        # Filter out silences that are too close to the beginning
         if silences:
-            silences = [s for s in silences if s[1] >= 2.0]
+            silences = [s for s in silences if s[1] >= self.asr_buffer + MIN_TRIMMED_SEGMENT_LENGTH]
 
         if silences:
             # Sort by duration and get the longest silence
             longest = sorted(silences, key=lambda x: (x[1] - x[0]), reverse=True)[0]
-            trim_point = longest[0] + 0.5  # Add 0.5s to avoid cutting off speech
+            trim_point = max(MIN_TRIMMED_SEGMENT_LENGTH, longest[0] + self.asr_buffer)
 
             # Create temp file for trimmed audio
             temp_path = segment_path.replace(f".{extension}", f"_tmp.{extension}")
@@ -301,6 +320,37 @@ class AudioProcessingService:
             ]
             subprocess.run(trim_cmd, capture_output=True, check=True)
             os.replace(temp_path, segment_path)
+
+    def _trim_segment_to_path(self, segment_path: str, output_path: str):
+        """Trim a segment at its longest silence, writing to a specific output path"""
+        silences = self._sync_get_silence_boundaries(segment_path)
+
+        # Filter out silences that are too close to the beginning
+        original_silences = silences.copy() if silences else []
+        if silences:
+            silences = [s for s in silences if s[1] >= self.asr_buffer + MIN_TRIMMED_SEGMENT_LENGTH]
+
+        if silences:
+            longest = sorted(silences, key=lambda x: (x[1] - x[0]), reverse=True)[0]
+            trim_point = max(MIN_TRIMMED_SEGMENT_LENGTH, longest[0] + self.asr_buffer)
+
+            trim_cmd = [
+                "ffmpeg",
+                "-y",
+                "-i",
+                segment_path,
+                "-t",
+                str(trim_point),
+                "-c",
+                "copy",
+                output_path,
+            ]
+            subprocess.run(trim_cmd, capture_output=True, check=True)
+        else:
+            # No silence found, just copy
+            import shutil
+
+            shutil.copy2(segment_path, output_path)
 
     def _run_segment_extraction(
         self,
@@ -320,24 +370,26 @@ class AudioProcessingService:
             else:
                 milliseconds = int(timestamp * 1000)
             return f"{milliseconds}"
-        
+
         # Generate expanded timestamps for segment extraction
         expanded_timestamps = []
-        
+
         if isinstance(timestamps[0], tuple):
             for start_ts, end_ts in timestamps:
                 expanded_timestamps.append(start_ts)
                 expanded_timestamps.append(end_ts)
         else:
+            segment_length = get_app_config().asr_options.segment_length
             for i, ts in enumerate(timestamps):
-                expanded_timestamps.append(ts)  # Original timestamp
-                # Calculate additional timestamp (segment_length seconds later)
-                extra_ts = ts + self.segment_length
-                # Check if the extra timestamp overlaps with the next original timestamp
-                if i < len(timestamps) - 1 and extra_ts >= timestamps[i + 1] - self.min_clip_length:
-                    # Set it to min_clip_length before the next timestamp if it would overlap
-                    extra_ts = timestamps[i + 1] - self.min_clip_length
-                expanded_timestamps.append(extra_ts)
+                start_ts = max(0, ts - self.asr_buffer)
+                expanded_timestamps.append(start_ts)
+                end_ts = ts + segment_length
+
+                # Adjust if the end timestamp overlaps with the next start timestamp
+                if i < len(timestamps) - 1:
+                    next_start_ts = timestamps[i + 1] - self.asr_buffer
+                    end_ts = min(end_ts, next_start_ts - MIN_SEGMENT_GAP)  # Add a small gap to avoid overlap
+                expanded_timestamps.append(end_ts)
 
         segment_times = ",".join(
             str(ts) for ts in expanded_timestamps[1:]
@@ -397,15 +449,7 @@ class AudioProcessingService:
                         message = f"Extracted chapter {corrected_segments} of {total_segments}..."
                         details = {"segments_created": corrected_segments, "total_segments": total_segments}
 
-                        # Store progress for later async processing
-                        self._progress_queue.append(
-                            {
-                                "step": Step.AUDIO_EXTRACTION,
-                                "percent": progress_percent,
-                                "message": message,
-                                "details": details,
-                            }
-                        )
+                        self._notify_progress(Step.AUDIO_EXTRACTION, progress_percent, message, details)
 
             process.wait()
 
@@ -468,16 +512,7 @@ class AudioProcessingService:
             copy_only,
         )
 
-        # Process queued progress updates while waiting
-        while not executor_task.done():
-            await self._process_queued_progress()
-            await asyncio.sleep(0.1)  # Brief sleep to avoid busy loop
-
-        # Get the result
         result = await executor_task
-
-        # Process any remaining progress updates
-        await self._process_queued_progress()
 
         # Check if extraction was cancelled (empty result indicates cancellation)
         if not result:
@@ -513,18 +548,18 @@ class AudioProcessingService:
                     continue
 
                 # Use synchronous version for trimming (called from thread)
-                silences = self._sync_get_silence_boundaries(path, min_silence_duration=1.0)
+                silences = self._sync_get_silence_boundaries(path)
 
-                # Filter out silences at the beginning
-                # This avoids trimming too early in the audio
-                # and potentially cutting off speech
+                # Filter out silences that are too close to the beginning
                 if silences:
-                    silences = [s for s in silences if s[0] >= 0.5]
+                    silences = [
+                        s for s in silences if s[1] >= self.asr_buffer + MIN_TRIMMED_SEGMENT_LENGTH
+                    ]
 
                 if silences:
                     # Sort by duration and get the longest silence
                     longest = sorted(silences, key=lambda x: (x[1] - x[0]), reverse=True)[0]
-                    trim_point = longest[0] + 0.5  # Add 0.5s to avoid cutting off speech
+                    trim_point = max(MIN_TRIMMED_SEGMENT_LENGTH, longest[0] + self.asr_buffer)
 
                     trim_cmd = [
                         "ffmpeg",
@@ -572,15 +607,7 @@ class AudioProcessingService:
                     message = f"Trimmed chapter {i + 1} of {len(paths)}..."
                     details = {"trimmed_segments": i + 1, "total_segments": len(paths)}
 
-                    # Store progress for later async processing
-                    self._progress_queue.append(
-                        {
-                            "step": Step.TRIMMING,
-                            "percent": trim_progress,
-                            "message": message,
-                            "details": details,
-                        }
-                    )
+                    self._notify_progress(Step.TRIMMING, trim_progress, message, details)
 
             except Exception as e:
                 logger.warning(f"Failed to trim segment {path}: {e}")
@@ -592,19 +619,16 @@ class AudioProcessingService:
         self,
         input_file: str,
         silence_threshold: float = -30,
-        min_silence_duration: float = None,
+        duration: Optional[float] = None,
     ) -> Optional[List[Tuple[float, float]]]:
         """Synchronous version of silence detection for use in threads"""
-        if min_silence_duration is None:
-            min_silence_duration = self.min_silence_duration
-
         # noinspection SpellCheckingInspection
         cmd = [
             "ffmpeg",
             "-i",
             input_file,
             "-af",
-            f"silencedetect=n={silence_threshold}dB:d={min_silence_duration}",
+            f"silencedetect=n={silence_threshold}dB:d={MIN_SILENCE_DURATION}",
             "-f",
             "null",
             "-",
@@ -644,7 +668,10 @@ class AudioProcessingService:
                 )
                 return None
 
-            return list(zip(silence_starts, silence_ends))
+            silences = list(zip(silence_starts, silence_ends))
+            if duration:
+                silences = [s for s in silences if s[1] < duration - END_OF_BOOK_EXCLUSION_ZONE]
+            return silences
         finally:
             try:
                 self._running_processes.remove(process)
@@ -666,16 +693,7 @@ class AudioProcessingService:
         # Start the concatenation in background
         executor_task = loop.run_in_executor(None, self._run_concat_files, input_files, total_duration)
 
-        # Process queued progress updates while waiting
-        while not executor_task.done():
-            await self._process_queued_progress()
-            await asyncio.sleep(0.1)
-
-        # Get the result
         output_file = await executor_task
-
-        # Process any remaining progress updates
-        await self._process_queued_progress()
 
         if not output_file:
             logger.info("File concatenation was cancelled or failed")
@@ -704,14 +722,7 @@ class AudioProcessingService:
         output_file = os.path.join(os.path.dirname(input_files[0]), "concatenated." + ext)
 
         if not total_duration:
-            self._progress_queue.append(
-                {
-                    "step": Step.FILE_PREP,
-                    "percent": 0,
-                    "message": "Preparing files, please wait...",
-                    "details": {},
-                }
-            )
+            self._notify_progress(Step.FILE_PREP, 0, "Preparing files, please wait...")
 
         # Create a temporary file list for ffmpeg concat demuxer
         filelist_path = os.path.join(os.path.dirname(input_files[0]), "concat_filelist.txt")
@@ -741,7 +752,9 @@ class AudioProcessingService:
                 "copy",
                 output_file,
             ]
-            process = subprocess.Popen(cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
+            process = subprocess.Popen(
+                cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE, text=True, encoding="utf-8", errors="replace"
+            )
             self._running_processes.append(process)
 
             stderr_output = []
@@ -775,15 +788,7 @@ class AudioProcessingService:
                                 "files_count": len(input_files),
                             }
 
-                            # Queue progress update for async processing
-                            self._progress_queue.append(
-                                {
-                                    "step": Step.FILE_PREP,
-                                    "percent": progress_percent,
-                                    "message": message,
-                                    "details": details,
-                                }
-                            )
+                            self._notify_progress(Step.FILE_PREP, progress_percent, message, details)
 
                             last_progress_update = current_time
 
@@ -792,28 +797,32 @@ class AudioProcessingService:
                 elif line.startswith("progress=") and line.endswith("end"):
                     # Concatenation completed
                     if total_duration:
-                        self._progress_queue.append(
+                        self._notify_progress(
+                            Step.FILE_PREP,
+                            100.0,
+                            "File concatenation completed",
                             {
-                                "step": Step.FILE_PREP,
-                                "percent": 100.0,
-                                "message": "File concatenation completed",
-                                "details": {
-                                    "current_time": total_duration,
-                                    "total_duration": total_duration,
-                                    "files_count": len(input_files),
-                                },
-                            }
+                                "current_time": total_duration,
+                                "total_duration": total_duration,
+                                "files_count": len(input_files),
+                            },
                         )
 
             # Wait for process to complete
             process.wait()
 
             if process.returncode != 0:
-                logger.error(f"ffmpeg concat failed with return code {process.returncode}.\nffmpeg output:\n" + "\n".join(stderr_output))
+                logger.error(
+                    f"ffmpeg concat failed with return code {process.returncode}.\nffmpeg output:\n"
+                    + "\n".join(stderr_output)
+                )
                 return None
 
             if not os.path.exists(output_file) or os.path.getsize(output_file) == 0:
-                logger.error(f"Concatenated output file was not created or is empty: {output_file}.\nffmpeg output:\n" + "\n".join(stderr_output))
+                logger.error(
+                    f"Concatenated output file was not created or is empty: {output_file}.\nffmpeg output:\n"
+                    + "\n".join(stderr_output)
+                )
                 return None
 
             return output_file

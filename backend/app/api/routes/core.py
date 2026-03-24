@@ -227,3 +227,59 @@ async def complete_abs_setup():
     except Exception as e:
         logger.error(f"Failed to complete ABS setup: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/goto-asr-setup")
+async def goto_asr_setup():
+    """Transition to ASR setup step"""
+    try:
+        app_state: AppState = get_app_state()
+
+        previous_step = None
+
+        # Note the previous step if we have an active pipeline
+        if app_state.pipeline and app_state.step != Step.ASR_SETUP:
+            previous_step = app_state.step
+
+        # Set step to ASR_SETUP
+        app_state.step = Step.ASR_SETUP
+
+        # Broadcast step change
+        await app_state.broadcast_step_change(Step.ASR_SETUP)
+
+        return {
+            "message": "Transitioned to ASR setup",
+            "step": Step.ASR_SETUP.value,
+            "previous_step": previous_step.value if previous_step else None,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to transition to ASR setup: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/complete-asr-setup")
+async def complete_asr_setup():
+    """Complete ASR setup and return to previous step"""
+    try:
+        app_state = get_app_state()
+
+        if app_state.step != Step.ASR_SETUP:
+            raise HTTPException(status_code=400, detail="Must be in ASR setup step to complete")
+
+        # Release warm ASR service so it picks up new config on next use
+        await app_state.release_asr_service()
+
+        # Transition back to idle (loadActiveSession will restore the correct step)
+        app_state.step = None
+        await app_state.broadcast_step_change(Step.IDLE)
+
+        return {"message": "ASR setup completed", "step": Step.IDLE.value}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to complete ASR setup: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

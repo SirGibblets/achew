@@ -4,6 +4,7 @@ Parakeet ASR Service Provider
 This module provides CPU-based Parakeet ASR services using the onnx-asr library, with auto-registration.
 """
 
+import asyncio
 import logging
 
 import librosa
@@ -40,7 +41,10 @@ class ParakeetASRService(ASRService):
             import onnx_asr
 
             self._notify_progress(Step.ASR_PROCESSING, 0, "Loading Parakeet ASR model...")
-            self.model = onnx_asr.load_model(self.model_path)
+
+            loop = asyncio.get_event_loop()
+            self.model = await loop.run_in_executor(None, onnx_asr.load_model, self.model_path)
+
             self._notify_progress(Step.ASR_PROCESSING, 0, "Parakeet ASR model loaded successfully")
         except ImportError as e:
             logger.error(f"Required libraries not available: {e}")
@@ -56,7 +60,7 @@ class ParakeetASRService(ASRService):
         if self.model:
             del self.model
 
-    def _transcribe_file(self, audio_file: str) -> str:
+    def _transcribe_file(self, audio_file: str, retry_on_empty: bool = True) -> str:
         """Transcribe a single audio file"""
         try:
             audio_array = self._convert_audio_to_array(audio_file)
@@ -107,6 +111,7 @@ try:
         uses_gpu=False,
         variants=PARAKEET_VARIANTS,
         priority=70,
+        asr_buffer=0.9,
     )
     class ParakeetCPUService(ParakeetASRService):
         """CPU-only Parakeet service"""

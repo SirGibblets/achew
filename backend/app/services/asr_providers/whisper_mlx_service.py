@@ -5,6 +5,7 @@ This module provides the Whisper MLX ASR service for Apple Silicon acceleration,
 with auto-registration.
 """
 
+import asyncio
 import logging
 import sys
 from typing import List, Tuple
@@ -43,7 +44,8 @@ class WhisperMLXASRService(ASRService):
             logger.info(f"Initializing Whisper MLX ASR with model '{self.model_path}'")
             self._notify_progress(Step.ASR_PROCESSING, 0, "Loading Whisper MLX model. This may take a while...")
 
-            mlx_whisper.load_models.load_model(self.model_path)
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, mlx_whisper.load_models.load_model, self.model_path)
 
             logger.info("Whisper MLX model loaded successfully")
             self._notify_progress(Step.ASR_PROCESSING, 0, "Whisper MLX ASR ready")
@@ -58,28 +60,37 @@ class WhisperMLXASRService(ASRService):
         """Cleanup resources"""
         pass
 
-    def _transcribe_file(self, audio_file: str) -> str:
-        """Transcribe a single audio file using Whisper MLX"""
+    def _transcribe_file(self, audio_file: str, retry_on_empty: bool = True) -> str:
+        """Transcribe a single audio file using Whisper MLX, retrying with lower no_speech_threshold if blank"""
+        no_speech_thresholds = [0.6, 0.5, 0.4] if retry_on_empty else [0.6]
+
         try:
-            # Build transcription arguments
-            transcribe_kwargs = {}
-
-            # Add language parameter if specified and not "auto"
+            kwargs = {}
             if self.language and self.language != "auto":
-                transcribe_kwargs["language"] = self.language
+                kwargs["language"] = self.language
 
-            result = self.mlx_whisper.transcribe(
-                audio_file,
-                initial_prompt=self.bias_words,
-                **transcribe_kwargs,
-            )
+            for threshold in no_speech_thresholds:
+                result = self.mlx_whisper.transcribe(
+                    audio_file,
+                    initial_prompt=self.bias_words,
+                    no_speech_threshold=threshold,
+                    temperature=0.0,
+                    condition_on_previous_text=False,
+                    **kwargs,
+                )
 
-            if isinstance(result, dict) and "text" in result:
-                return result["text"].strip()
-            elif hasattr(result, "text"):
-                return result.text.strip()
-            else:
-                return str(result).strip()
+                if isinstance(result, dict) and "text" in result:
+                    text = result["text"].strip()
+                elif hasattr(result, "text"):
+                    text = result.text.strip()
+                else:
+                    text = str(result).strip()
+
+                if text:
+                    return text
+                logger.info(f"Blank result for {audio_file} with no_speech_threshold={threshold}")
+
+            return text
 
         except Exception as e:
             logger.error(f"MLX transcription error for {audio_file}: {e}")
@@ -279,6 +290,7 @@ if sys.platform == "darwin":
             supports_bias_words=True,
             variants=MLX_WHISPER_VARIANTS,
             priority=100,
+            asr_buffer=0.1,
         )
         class WhisperMLXService(WhisperMLXASRService):
             """MLX-accelerated Whisper service for Apple Silicon"""

@@ -4,6 +4,7 @@ from enum import Enum
 class Step(str, Enum):
     ABS_SETUP = "abs_setup"  # Interactive
     LLM_SETUP = "llm_setup"  # Interactive
+    ASR_SETUP = "asr_setup"  # Interactive
     IDLE = "idle"  # Interactive
     VALIDATING = "validating"
     DOWNLOADING = "downloading"
@@ -16,8 +17,8 @@ class Step(str, Enum):
     PARTIAL_AUDIO_ANALYSIS = "partial_audio_analysis"
     PARTIAL_VAD_ANALYSIS = "partial_vad_analysis"
     INITIAL_CHAPTER_SELECTION = "initial_chapter_selection"  # Interactive
-    AUDIO_EXTRACTION = "audio_extraction"
     CONFIGURE_ASR = "configure_asr"  # Interactive
+    AUDIO_EXTRACTION = "audio_extraction"
     TRIMMING = "trimming"
     ASR_PROCESSING = "asr_processing"
     CHAPTER_EDITING = "chapter_editing"  # Interactive

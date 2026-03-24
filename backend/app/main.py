@@ -59,6 +59,11 @@ async def lifespan(achew_app: FastAPI):
     get_app_state()
     logger.info("App state initialized")
 
+    # Pre-discover ASR services to improve initial API responsiveness
+    from .services.asr_service_options import get_available_services
+    services = get_available_services()
+    logger.info(f"ASR services discovered: {len(services)}")
+
     # Initialize chapter search database
     from .services.chapter_search.database import init_db
     await init_db()
