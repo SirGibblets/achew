@@ -1,5 +1,6 @@
 import logging
 import importlib.metadata
+import os
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -19,8 +20,18 @@ def get_app_version():
     try:
         return importlib.metadata.version("achew")
     except importlib.metadata.PackageNotFoundError:
-        # Fallback to a default version if package is not installed
         return "vDEV"
+
+
+def get_build_meta():
+    """Parse BUILD_META env var (format: 'branch short_sha full_sha') into a dict, or None"""
+    raw = os.environ.get("BUILD_META", "").strip()
+    if not raw:
+        return None
+    parts = raw.split()
+    if len(parts) != 3:
+        return None
+    return {"branch": parts[0], "commit_short": parts[1], "commit": parts[2]}
 
 
 class ValidateItemRequest(BaseModel):
@@ -96,6 +107,7 @@ async def get_app_status():
             "abs_configured": config_status["abs_configured"],
             "config_status": config_status,
             "version": get_app_version(),
+            "build_meta": get_build_meta(),
         }
 
         if app_state.pipeline:

@@ -539,25 +539,37 @@
     <!-- Version display in bottom right corner -->
     {#if $session.version}
         <div class="version-container">
-            <a
-                    href="https://github.com/SirGibblets/achew/releases/tag/v{$session.version}"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="version-display"
-                    title="View release notes on GitHub"
-            >
-                v{$session.version}
-            </a>
-            {#if updateAvailable}
+            {#if $session.buildMeta}
                 <a
-                        href={updateUrl}
+                        href="https://github.com/SirGibblets/achew/commit/{$session.buildMeta.commit}"
                         target="_blank"
                         rel="noopener noreferrer"
-                        class="update-button"
-                        title="New version available: v{latestVersion}"
+                        class="version-display"
+                        title="View commit on GitHub"
                 >
-                    <Download size={14} />
+                    v{$session.version} · {$session.buildMeta.branch} ({$session.buildMeta.commit_short})
                 </a>
+            {:else}
+                <a
+                        href="https://github.com/SirGibblets/achew/releases/tag/v{$session.version}"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="version-display"
+                        title="View release notes on GitHub"
+                >
+                    v{$session.version}
+                </a>
+                {#if updateAvailable}
+                    <a
+                            href={updateUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="update-button"
+                            title="New version available: v{latestVersion}"
+                    >
+                        <Download size={14} />
+                    </a>
+                {/if}
             {/if}
         </div>
     {/if}
