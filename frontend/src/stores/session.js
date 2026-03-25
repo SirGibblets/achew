@@ -45,6 +45,7 @@ function createSessionStore() {
 
         // App version
         version: null,
+        buildMeta: null,
 
         // UI state
         loading: false,
@@ -264,6 +265,7 @@ function createSessionStore() {
                     },
                     smartDetectConfigLoading: false,
                     version: null,
+                    buildMeta: null,
                     loading: false,
                     error: null
                 });
@@ -300,6 +302,7 @@ function createSessionStore() {
                 },
                 smartDetectConfigLoading: false,
                 version: null,
+                buildMeta: null,
                 loading: false,
                 error: null
             });
@@ -504,7 +507,8 @@ function createSessionStore() {
                     update(state => ({
                         ...state,
                         step: response.step,
-                        version: response.version || null
+                        version: response.version || null,
+                        buildMeta: response.build_meta || null
                     }));
                 }
 

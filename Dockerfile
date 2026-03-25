@@ -23,8 +23,10 @@ FROM astral/uv:0.8.11-python3.11-trixie-slim
 ARG VERSION="UNKNOWN"
 ARG REVISION=""
 ARG BUILD_DATE=""
+ARG BUILD_META=""
 
 ENV MODEL_CACHE_DIR="/root/.cache/huggingface/hub"
+ENV BUILD_META="${BUILD_META}"
 
 # Container image metadata
 LABEL org.opencontainers.image.authors="Sir Gibblets <gibbletssir@gmail.com>" \
