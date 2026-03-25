@@ -279,13 +279,13 @@ class AudioProcessingService:
 
         command.append(output_path)
 
-        process = subprocess.Popen(command, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
+        process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
         self._running_processes.append(process)
 
         try:
-            process.wait()
+            _, stderr_output = process.communicate()
             if process.returncode != 0:
-                logger.warning(f"Failed to extract segment at {start_time}s: ffmpeg returned {process.returncode}")
+                logger.warning(f"Failed to extract segment at {start_time}s: ffmpeg returned {process.returncode}: {stderr_output[-500:] if stderr_output else ''}")
                 return None
             return output_path
         finally:

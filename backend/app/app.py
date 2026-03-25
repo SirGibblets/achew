@@ -328,7 +328,10 @@ class AppState:
                         jitter = random.uniform(0.0, MAX_JITTER_CROP)
                         start_time = max(jitter, chapter.timestamp - jitter)
 
-                        segment_path = audio_service.extract_single_segment(
+                        loop = asyncio.get_event_loop()
+                        segment_path = await loop.run_in_executor(
+                            None,
+                            audio_service.extract_single_segment,
                             self.pipeline.audio_file_path,
                             start_time,
                             duration,
@@ -342,7 +345,12 @@ class AppState:
                         # Trim the segment
                         trimmed_path = os.path.join(temp_dir, f"trimmed_{chapter_id}.{ext}")
                         if config.asr_options.trim:
-                            audio_service._trim_segment_to_path(segment_path, trimmed_path)
+                            await loop.run_in_executor(
+                                None,
+                                audio_service._trim_segment_to_path,
+                                segment_path,
+                                trimmed_path,
+                            )
                             if os.path.exists(trimmed_path):
                                 segment_path = trimmed_path
                         # If trim produced nothing or trim disabled, use the raw segment
