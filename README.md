@@ -11,6 +11,8 @@
 #### **achew** is an Audiobook Chapter Extraction Wizard.
 Designed to work with [Audiobookshelf](https://www.audiobookshelf.org/), **achew** helps you analyze your audiobook files to find chapters and generate titles.
 
+> **⚠️ Do not expose achew directly to the internet.** achew does not include authentication or other security hardening, and should only be used within your LAN. If you do need remote access, I recommend using a VPN like Tailscale, or placing achew behind a reverse proxy that has its own authentication layer.
+
 ### Features
 
 - **Search**: Quickly find audiobooks in your Audiobookshelf libraries.
