@@ -11,6 +11,9 @@
 #### **achew** is an Audiobook Chapter Extraction Wizard.
 Designed to work with [Audiobookshelf](https://www.audiobookshelf.org/), **achew** helps you analyze your audiobook files to find chapters and generate titles.
 
+> [!IMPORTANT]
+> **Do not expose achew directly to the internet.** achew does not include authentication or other security hardening, and should only be used within a trusted LAN. If you need remote access, I recommend using a VPN like Tailscale, or placing achew behind a reverse proxy that has its own authentication layer.
+
 ### Features
 
 - **Search**: Quickly find audiobooks in your Audiobookshelf libraries.
@@ -54,6 +57,8 @@ https://github.com/user-attachments/assets/cde5b668-2849-4fe5-88b7-db0f97d73019
 ### 3. Set Up the Compose File
 - Download the [docker-compose.yml](docker-compose.yml) file. This can go anywhere (e.g. inside a new directory named `achew` in your home directory).
 - Change the port and volume mappings if desired.
+
+> **Older CPUs:** If your CPU lacks AVX2 support (Intel pre-2013, AMD pre-2015), use the `legacy-cpu` image tag to avoid crashes when transcribing with Whisper. See the docker-compose.yml for details.
 
 
 ### 4. Run

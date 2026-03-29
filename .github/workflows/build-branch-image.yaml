@@ -57,3 +57,17 @@ jobs:
             REVISION=${{ steps.meta.outputs.full_sha }}
             BUILD_DATE=${{ steps.meta.outputs.build_date }}
             BUILD_META=${{ steps.meta.outputs.branch }} ${{ steps.meta.outputs.short_sha }} ${{ steps.meta.outputs.full_sha }}
+
+      - name: Build and push legacy-cpu Docker image
+        uses: docker/build-push-action@v6.18.0
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}-legacy-cpu
+          build-args: |
+            VERSION=${{ steps.meta.outputs.tag }}-legacy-cpu
+            REVISION=${{ steps.meta.outputs.full_sha }}
+            BUILD_DATE=${{ steps.meta.outputs.build_date }}
+            BUILD_META=${{ steps.meta.outputs.branch }} ${{ steps.meta.outputs.short_sha }} ${{ steps.meta.outputs.full_sha }}
+            LEGACY_CPU=1
