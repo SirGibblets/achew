@@ -23,8 +23,11 @@ FROM astral/uv:0.8.11-python3.11-trixie-slim
 ARG VERSION="UNKNOWN"
 ARG REVISION=""
 ARG BUILD_DATE=""
+ARG BUILD_META=""
+ARG LEGACY_CPU=0
 
 ENV MODEL_CACHE_DIR="/root/.cache/huggingface/hub"
+ENV BUILD_META="${BUILD_META}"
 
 # Container image metadata
 LABEL org.opencontainers.image.authors="Sir Gibblets <gibbletssir@gmail.com>" \
@@ -53,6 +56,19 @@ COPY backend/ ./
 
 # Install Python dependencies using uv
 RUN uv sync
+
+# When LEGACY_CPU=1, rebuild pywhispercpp from source without AVX2/FMA.
+# The pre-built PyPI wheel includes AVX2 instructions in libggml-cpu.so that cause
+# SIGILL (exit code 132) on CPUs without AVX2 support.
+# See: https://github.com/SirGibblets/achew/issues/27
+RUN if [ "$LEGACY_CPU" = "1" ]; then \
+    apt-get update && apt-get install -y --no-install-recommends cmake g++ \
+    && CMAKE_ARGS="-DGGML_NATIVE=OFF -DGGML_AVX2=OFF -DGGML_FMA=OFF" \
+    uv pip install --reinstall --no-binary pywhispercpp "pywhispercpp==1.3.3" \
+    && apt-get purge -y cmake g++ \
+    && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/*; \
+    fi
 
 # Copy in built frontend
 COPY --from=frontend-builder /app/frontend/dist ../frontend/dist
