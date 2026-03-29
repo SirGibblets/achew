@@ -3,12 +3,13 @@
 # Stop with: docker-compose down
 # Update: docker-compose pull && docker-compose up -d
 
-version: '3.8'
-
 services:
   achew:
     # Official achew image
     image: sirgibblets/achew
+    # For CPUs without AVX2 support (pre-2013 Intel, pre-2015 AMD), use
+    # the legacy-cpu variant to avoid crashes during whisper transcription:
+    # image: sirgibblets/achew:legacy-cpu
     
     # Port mapping: host:container
     # achew runs on port 8000. Only change the host port.

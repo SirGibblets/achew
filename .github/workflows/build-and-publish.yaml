@@ -57,3 +57,28 @@ jobs:
             VERSION=${{ steps.git.outputs.version }}
             REVISION=${{ steps.git.outputs.revision }}
             BUILD_DATE=${{ steps.git.outputs.build_date }}
+
+      - name: Extract metadata for legacy-cpu image
+        id: meta-legacy-cpu
+        uses: docker/metadata-action@v5.7.0
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          flavor: |
+            latest=false
+          tags: |
+            type=semver,pattern={{version}},suffix=-legacy-cpu
+            type=raw,value=legacy-cpu
+
+      - name: Build and push legacy-cpu Docker image
+        uses: docker/build-push-action@v6.18.0
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta-legacy-cpu.outputs.tags }}
+          labels: ${{ steps.meta-legacy-cpu.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.git.outputs.version }}-legacy-cpu
+            REVISION=${{ steps.git.outputs.revision }}
+            BUILD_DATE=${{ steps.git.outputs.build_date }}
+            LEGACY_CPU=1
