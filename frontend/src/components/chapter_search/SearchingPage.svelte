@@ -4,6 +4,7 @@
     const TASK_LABELS = {
         'sync': 'Syncing library…',
         'search': 'Searching…',
+        'stats': 'Computing stats…',
     };
 
     $: task = $chapterSearch.currentTask;

@@ -48,6 +48,14 @@ async def init_db() -> None:
             )
         """)
         await db.execute("CREATE INDEX IF NOT EXISTS idx_books_library ON books(library_id)")
+
+        # Migration: add end_time column and invalidate cache so next sync populates it
+        try:
+            await db.execute("ALTER TABLE chapters ADD COLUMN end_time REAL")
+            await db.execute("DELETE FROM books")
+        except Exception:
+            pass  # Column already exists
+
         await db.commit()
     logger.info(f"Chapter search database initialized at {DB_PATH}")
 
@@ -80,8 +88,8 @@ async def upsert_book(
         # Replace chapters entirely
         await db.execute("DELETE FROM chapters WHERE book_id = ?", (id,))
         await db.executemany(
-            "INSERT INTO chapters (book_id, position, title, start_time) VALUES (?, ?, ?, ?)",
-            [(id, i, ch["title"], ch["start_time"]) for i, ch in enumerate(chapters)],
+            "INSERT INTO chapters (book_id, position, title, start_time, end_time) VALUES (?, ?, ?, ?, ?)",
+            [(id, i, ch["title"], ch["start_time"], ch.get("end_time")) for i, ch in enumerate(chapters)],
         )
         await db.commit()
 
@@ -110,7 +118,7 @@ async def get_books_for_library(library_id: str) -> list[dict]:
 
         for book in books:
             async with db.execute(
-                "SELECT title, start_time FROM chapters WHERE book_id = ? ORDER BY position",
+                "SELECT title, start_time, end_time FROM chapters WHERE book_id = ? ORDER BY position",
                 (book["id"],),
             ) as cursor:
                 book["chapters"] = [dict(row) for row in await cursor.fetchall()]
@@ -147,7 +155,7 @@ async def get_book(book_id: str) -> Optional[dict]:
             return None
         book = dict(row)
         async with db.execute(
-            "SELECT title, start_time FROM chapters WHERE book_id = ? ORDER BY position",
+            "SELECT title, start_time, end_time FROM chapters WHERE book_id = ? ORDER BY position",
             (book_id,),
         ) as cursor:
             book["chapters"] = [dict(r) for r in await cursor.fetchall()]
@@ -164,8 +172,8 @@ async def upsert_chapters_for_book(book_id: str, chapters: list[dict]) -> None:
                 return  # Book not in cache, nothing to update
         await db.execute("DELETE FROM chapters WHERE book_id = ?", (book_id,))
         await db.executemany(
-            "INSERT INTO chapters (book_id, position, title, start_time) VALUES (?, ?, ?, ?)",
-            [(book_id, i, ch["title"], ch["start_time"]) for i, ch in enumerate(chapters)],
+            "INSERT INTO chapters (book_id, position, title, start_time, end_time) VALUES (?, ?, ?, ?, ?)",
+            [(book_id, i, ch["title"], ch["start_time"], ch.get("end_time")) for i, ch in enumerate(chapters)],
         )
         await db.commit()
 
