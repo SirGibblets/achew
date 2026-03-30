@@ -52,7 +52,7 @@ _EXCLUDED_WORDS = {
     "chapter", "part", "credits", "opening", "end",
     "the", "a", "an", "of", "and", "in", "to", "for", "is", "it", "on", "at", "from", "with",
     "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
-    "eleven", "evelen", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
+    "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
     "seventeen", "eighteen", "nineteen", "twenty", "thirty", "forty", "fourty",
     "fifty", "sixty", "seventy", "eighty", "ninety", "hundred",
     "i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x", 
