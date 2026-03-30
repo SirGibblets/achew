@@ -26,6 +26,9 @@ function createChapterSearchStore() {
         libraryName: null,
         results: [],                // [{id, name, author, series, has_cover, is_ignored, chapters, matched_rule_ids}]
 
+        // Stats page state
+        stats: null,
+
         // Frontend-only state (not synced)
         highlightedBookId: null,
         showIgnored: false,
@@ -73,6 +76,13 @@ function createChapterSearchStore() {
                         currentTask: state.current_task || null,
                         progress: state.progress || null,
                     }));
+                } else if (page === 'stats') {
+                    update(s => ({
+                        ...s,
+                        page: 'stats',
+                        stats: state.stats || null,
+                        libraryName: state.library_name || null,
+                    }));
                 } else if (page === 'results') {
                     const results = state.results || [];
                     const firstNonIgnored = results.find(b => !b.is_ignored) || null;
@@ -119,6 +129,10 @@ function createChapterSearchStore() {
 
     function startSearch(libraryId, libraryName) {
         _send('start_search', {library_id: libraryId, library_name: libraryName});
+    }
+
+    function startStats(libraryId, libraryName) {
+        _send('start_stats', {library_id: libraryId, library_name: libraryName});
     }
 
     function cancel() {
@@ -198,6 +212,7 @@ function createChapterSearchStore() {
         connect,
         disconnect,
         startSearch,
+        startStats,
         cancel,
         backToLanding,
         refreshResults,

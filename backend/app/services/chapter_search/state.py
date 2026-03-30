@@ -46,6 +46,7 @@ class ChapterSearchState:
             self.results: Optional[list[dict]] = None
             self.current_task: Optional[str] = None
             self.progress: Optional[dict] = None
+            self.stats: Optional[dict] = None
             self._ws_connections: list[WebSocket] = []
             self._cancel_event: Optional[asyncio.Event] = None
             self._active_task: Optional[asyncio.Task] = None
@@ -107,6 +108,14 @@ class ChapterSearchState:
                     "progress": self.progress,
                 },
             }
+        elif self.page == "stats":
+            return {
+                "page": "stats",
+                "state": {
+                    "stats": self.stats or {},
+                    "library_name": self.selected_library_name,
+                },
+            }
         else:  # results
             ruleset = load_ruleset()
             return {
@@ -148,6 +157,11 @@ class ChapterSearchState:
             await self._cancel()
         elif action == "back_to_landing":
             await self._back_to_landing()
+        elif action == "start_stats":
+            library_id = msg.get("library_id")
+            library_name = msg.get("library_name", library_id)
+            if library_id:
+                await self._start_stats(library_id, library_name)
         elif action == "refresh_results":
             await self._refresh_results()
         else:
@@ -210,6 +224,52 @@ class ChapterSearchState:
             logger.error(f"Chapter search failed: {e}", exc_info=True)
             await self._back_to_landing()
 
+    async def _start_stats(self, library_id: str, library_name: str) -> None:
+        if self._active_task and not self._active_task.done():
+            logger.warning("Chapter search already in progress, ignoring stats request")
+            return
+
+        self.selected_library_id = library_id
+        self.selected_library_name = library_name
+        self.page = "searching"
+        self.current_task = "sync"
+        self.progress = {"current": 0, "total": 0}
+        self._cancel_event = asyncio.Event()
+
+        await self.broadcast_state()
+
+        self._active_task = asyncio.create_task(
+            self._run_sync_and_stats(library_id)
+        )
+
+    async def _run_sync_and_stats(self, library_id: str) -> None:
+        cancel = self._cancel_event
+
+        def progress_cb(task: str, current: int, total: int) -> None:
+            self.current_task = task
+            self.progress = {"current": current, "total": total}
+            asyncio.create_task(self.broadcast_state())
+
+        try:
+            synced, skipped = await sync_library(library_id, progress_cb, cancel)
+            if cancel.is_set():
+                await self._back_to_landing()
+                return
+            logger.info(f"Stats sync complete: {synced} synced, {skipped} skipped")
+
+            self.current_task = "stats"
+            self.progress = {"current": 0, "total": 0}
+            await self.broadcast_state()
+
+            from .stats import compute_library_stats
+            self.stats = await compute_library_stats(library_id)
+            self.page = "stats"
+            await self.broadcast_state()
+
+        except Exception as e:
+            logger.error(f"Stats computation failed: {e}", exc_info=True)
+            await self._back_to_landing()
+
     async def _cancel(self) -> None:
         if self._cancel_event:
             self._cancel_event.set()
@@ -220,6 +280,7 @@ class ChapterSearchState:
     async def _back_to_landing(self) -> None:
         self.page = "landing"
         self.results = None
+        self.stats = None
         self.current_task = None
         self.progress = None
         await self.broadcast_state()

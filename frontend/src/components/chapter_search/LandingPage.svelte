@@ -1,4 +1,5 @@
 <script>
+    import BarChart3 from '@lucide/svelte/icons/bar-chart-3';
     import CircleQuestionMark from '@lucide/svelte/icons/circle-question-mark';
     import Search from '@lucide/svelte/icons/search';
     import Trash2 from '@lucide/svelte/icons/trash-2';
@@ -44,6 +45,11 @@
         } catch (e) {
             console.error('Error resetting ruleset:', e);
         }
+    }
+
+    function handleStats() {
+        if (!selectedLibrary) return;
+        chapterSearch.startStats(selectedLibrary.id, selectedLibrary.name);
     }
 
     async function clearCache() {
@@ -108,8 +114,17 @@
         <div class="loading-rules">Loading rules…</div>
     {/if}
 
-    <!-- Cache controls -->
+    <!-- Bottom controls -->
     <div class="cache-row">
+        <button
+            class="stats-btn"
+            on:click={handleStats}
+            disabled={!selectedLibrary}
+            title="View library statistics"
+        >
+            <BarChart3 size="14"/>
+            Library Stats
+        </button>
         <button
             class="cache-btn"
             on:click={clearCache}
@@ -203,8 +218,23 @@
 
     .cache-row {
         display: flex;
-        justify-content: flex-end;
+        justify-content: space-between;
     }
+
+    .stats-btn {
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.375rem 0.75rem;
+        background: none;
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        color: var(--text-secondary);
+        font-size: 0.8125rem;
+        cursor: pointer;
+    }
+    .stats-btn:hover { color: var(--primary); border-color: var(--primary); }
+    .stats-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
     .cache-btn {
         display: flex;
