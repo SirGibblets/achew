@@ -274,6 +274,14 @@ async def websocket_endpoint(websocket: WebSocket):
 
         await websocket.send_text(welcome_message.model_dump_json())
 
+        # Send current transcription status
+        if app_state._transcription_statuses:
+            transcription_message = WSMessage(
+                type=WSMessageType.TRANSCRIBING_UPDATE,
+                data={"statuses": dict(app_state._transcription_statuses)},
+            )
+            await websocket.send_text(transcription_message.model_dump_json())
+
         # Keep connection alive and handle incoming messages
         try:
             while True:
