@@ -251,8 +251,8 @@ function createSessionStore() {
             try {
                 await api.session.delete();
 
-                // Reset to initial state
-                set({
+                // Reset to initial state, preserving app-level version info
+                update(state => ({
                     step: 'idle',
                     itemId: '',
                     progress: {step: 'idle', percent: 0, message: '', details: {}},
@@ -264,11 +264,11 @@ function createSessionStore() {
                     cueSources: [],
                     restartOptions: [],
                     transcriptionStatuses: {},
-                    version: null,
-                    buildMeta: null,
+                    version: state.version,
+                    buildMeta: state.buildMeta,
                     loading: false,
                     error: null
-                });
+                }));
 
             } catch (error) {
                 const errorMessage = handleApiError(error);
@@ -283,8 +283,8 @@ function createSessionStore() {
 
         // Reset session state without making API call (for when backend already deleted session)
         resetToIdle() {
-            // Reset to initial state (same as deleteSession but without API call)
-            set({
+            // Reset to initial state, preserving app-level version info
+            update(state => ({
                 step: 'idle',
                 itemId: '',
                 progress: {step: 'idle', percent: 0, message: '', details: {}},
@@ -296,11 +296,11 @@ function createSessionStore() {
                 cueSources: [],
                 restartOptions: [],
                 transcriptionStatuses: {},
-                version: null,
-                buildMeta: null,
+                version: state.version,
+                buildMeta: state.buildMeta,
                 loading: false,
                 error: null
-            });
+            }));
         },
 
         async restartSession(restartAtStep) {

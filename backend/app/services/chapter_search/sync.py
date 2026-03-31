@@ -177,7 +177,11 @@ async def _fetch_and_cache_book(
     chapters_raw = media.get("chapters", [])
 
     chapters = [
-        {"title": ch.get("title", ""), "start_time": float(ch.get("start", 0))}
+        {
+            "title": ch.get("title", ""),
+            "start_time": float(ch.get("start", 0)),
+            "end_time": float(ch.get("end", 0)),
+        }
         for ch in chapters_raw
     ]
 

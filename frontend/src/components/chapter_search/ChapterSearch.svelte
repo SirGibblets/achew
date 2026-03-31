@@ -4,6 +4,7 @@
     import LandingPage from './LandingPage.svelte';
     import SearchingPage from './SearchingPage.svelte';
     import ResultsPage from './ResultsPage.svelte';
+    import StatsPage from './StatsPage.svelte';
 
     onMount(() => {
         chapterSearch.connect();
@@ -19,6 +20,8 @@
         <SearchingPage />
     {:else if $chapterSearch.page === 'results'}
         <ResultsPage />
+    {:else if $chapterSearch.page === 'stats'}
+        <StatsPage />
     {:else}
         <LandingPage />
     {/if}
