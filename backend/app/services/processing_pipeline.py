@@ -7,14 +7,16 @@ import tempfile
 import uuid
 from typing import Optional, List, Dict, Any, Tuple
 
+from app.api.routes.chapters import DetectedCue, ExistingCue
 from app.app import get_app_state
 from app.models.abs import AudioFile, Book
 from pydantic import BaseModel, Field
 from .abs_service import ABSService
-from .asr_service import create_asr_service
 from .audio_service import AudioProcessingService
 from .vad_detection_service import VadDetectionService
 from ..core.config import get_app_config
+from ..core.constants import CHAPTER_START_PADDING
+from .asr_service_options import get_asr_buffer
 from ..models.chapter import ChapterData, RealignmentData
 from ..models.enums import RestartStep, Step
 from ..models.progress import ProgressCallback
@@ -37,49 +39,13 @@ class PipelineProgress(BaseModel):
     details: Dict[str, Any] = Field(default_factory=dict)
 
 
-class SimpleChapter(BaseModel):
-    timestamp: float
-    title: str
-
-
 class ExistingCueSource(BaseModel):
     id: str
     name: str
     short_name: str
     description: str
-    cues: List[SimpleChapter]
+    cues: List[ExistingCue]
     duration: float
-
-
-class SmartDetectConfig:
-    def __init__(
-        self,
-        segment_length: float = 8.0,
-        min_clip_length: float = 1.0,
-        asr_buffer: float = 0.25,
-        **kwargs,
-    ):
-        self.segment_length = segment_length
-        self.min_clip_length = min_clip_length
-        self.asr_buffer = asr_buffer
-
-    def validate_constraints(self) -> List[str]:
-        """Validate configuration constraints and return list of errors"""
-        errors = []
-
-        # Range validations
-        if not (3.0 <= self.segment_length <= 30.0):
-            errors.append("Segment length must be between 3 and 30 seconds")
-        if not (0.5 <= self.min_clip_length <= 5.0):
-            errors.append("Min clip length must be between 0.5 and 5 seconds")
-        if not (0.0 <= self.asr_buffer <= 1.0):
-            errors.append("ASR buffer must be between 0 and 1 seconds")
-
-        # Cross-parameter validations
-        if self.segment_length < self.min_clip_length:
-            errors.append("Segment length cannot be shorter than min clip length")
-
-        return errors
 
 
 class AIOptions:
@@ -109,7 +75,7 @@ class AIOptions:
 class ProcessingPipeline:
     """Main processing pipeline that orchestrates the entire chapter generation workflow"""
 
-    def __init__(self, item_id: str, progress_callback: ProgressCallback, smart_detect_config=None):
+    def __init__(self, item_id: str, progress_callback: ProgressCallback):
         self.progress_callback: ProgressCallback = progress_callback
         self.item_id = item_id
         self._running_processes = []
@@ -140,9 +106,6 @@ class ProcessingPipeline:
 
         # Configuration options (per-pipeline)
         self.ai_options: AIOptions = AIOptions()
-        self.smart_detect_config: SmartDetectConfig = (
-            smart_detect_config if smart_detect_config else SmartDetectConfig()
-        )
 
         # Processing data
         self.book: Optional[Book] = None
@@ -157,8 +120,8 @@ class ProcessingPipeline:
         self.transcribed_chapters: List[ChapterData] = []
         self.include_unaligned: List[str] = []
 
-        self.detected_silences: List[Tuple[float, float]] = []  # List of (silence_start, silence_end)
-        self.initial_chapter_selection_available: bool = False  # True only after smart-detect populates detected_silences
+        self.detected_cues: List[DetectedCue] = []
+        self.initial_chapter_selection_available: bool = False  # True only after smart-detect populates detected_cues
 
         # Scan coverage tracking
         self.normal_scanned_regions: List[Tuple[float, float]] = []
@@ -362,11 +325,15 @@ class ProcessingPipeline:
         """Restart the pipeline at a specific step"""
         logger.info(f"Restarting pipeline at step: {step}")
 
+        # Invalidate any in-flight progress callbacks before cancelling
+        get_app_state().progress_dispatcher.increment_epoch()
+
         # Cancel any running processes first and wait for them to complete
         await self.cancel_processing()
+        await get_app_state().cancel_transcriptions()
 
         if step == RestartStep.IDLE:
-            get_app_state().delete_pipeline()
+            await get_app_state().delete_pipeline()
             asyncio.create_task(get_app_state().broadcast_step_change(Step.IDLE, error_message=error_message))
             return
 
@@ -376,6 +343,7 @@ class ProcessingPipeline:
             self.step = Step.CHAPTER_EDITING
 
         if step_num <= RestartStep.CONFIGURE_ASR.ordinal:
+            self.cleanup_segment_files()
             self.cleanup_trimmed_files()
             self.transcriptions = []
             self.transcribed_chapters = []
@@ -391,7 +359,7 @@ class ProcessingPipeline:
             self.step = Step.INITIAL_CHAPTER_SELECTION
 
         if step_num <= RestartStep.SELECT_WORKFLOW.ordinal:
-            self.detected_silences = []
+            self.detected_cues = []
             self.normal_scanned_regions = []
             self.vad_scanned_regions = []
             self.initial_chapter_selection_available = False
@@ -447,31 +415,20 @@ class ProcessingPipeline:
 
         self.history_index += 1
 
-    def update_smart_detect_config(self, config_data: Dict[str, float]) -> Dict[str, Any]:
-        """Update smart detect configuration with validation"""
-        try:
-            # Create new config with provided data
-            new_config = SmartDetectConfig(**config_data)
-
-            # Validate constraints
-            errors = new_config.validate_constraints()
-            if errors:
-                return {"success": False, "errors": errors}
-
-            # Update the configuration
-            self.smart_detect_config = new_config
-
-            return {"success": True, "config": new_config.__dict__}
-        except Exception as e:
-            return {"success": False, "errors": [f"Invalid configuration: {str(e)}"]}
 
     def _notify_progress(self, step: Step, percent: float, message: str = "", details: dict = None):
-        """Notify progress via callback"""
-        old_step = self.step
+        """Notify progress. Non-blocking, thread-safe via ProgressDispatcher."""
         self.step = step
-        if old_step != step:
-            asyncio.create_task(get_app_state().broadcast_step_change(step))
         self.progress_callback(step, percent, message, details or {})
+
+    def _scoped_progress_callback(self) -> ProgressCallback:
+        """Return a progress callback bound to the current dispatcher epoch.
+
+        After a restart (which increments the epoch), any callbacks captured
+        from a previous epoch become no-ops, preventing stale progress
+        updates from overwriting the pipeline step.
+        """
+        return get_app_state().progress_dispatcher.scoped_callback()
 
     def _get_existing_cue_source(self, id: str) -> Optional[ExistingCueSource]:
         """Get an existing cue source by ID"""
@@ -643,10 +600,10 @@ class ProcessingPipeline:
 
                 # Check for existing Audiobookshelf cues
                 if book.media.chapters:
-                    abs_cues: List[SimpleChapter] = []
+                    abs_cues: List[ExistingCue] = []
                     for chapter in book.media.chapters:
                         abs_cues.append(
-                            SimpleChapter(
+                            ExistingCue(
                                 timestamp=chapter.start,
                                 title=chapter.title,
                             )
@@ -665,12 +622,12 @@ class ProcessingPipeline:
 
                 # Check for existing embedded cues
                 if audio_files:
-                    embedded_cues: List[SimpleChapter] = []
+                    embedded_cues: List[ExistingCue] = []
                     for audio_file in audio_files:
                         if audio_file.chapters:
                             for chapter in audio_file.chapters:
                                 embedded_cues.append(
-                                    SimpleChapter(
+                                    ExistingCue(
                                         timestamp=chapter.start,
                                         title=chapter.title,
                                     )
@@ -692,10 +649,10 @@ class ProcessingPipeline:
                 if book.media.metadata.asin:
                     audnexus_chapter_data = await abs_service.get_audnexus_chapters(book.media.metadata.asin)
                 if audnexus_chapter_data:
-                    audnexus_cues: List[SimpleChapter] = []
+                    audnexus_cues: List[ExistingCue] = []
                     for chapter in audnexus_chapter_data.chapters:
                         audnexus_cues.append(
-                            SimpleChapter(
+                            ExistingCue(
                                 timestamp=chapter.startOffsetMs / 1000,
                                 title=chapter.title,
                             )
@@ -714,11 +671,11 @@ class ProcessingPipeline:
 
                 # Check for file start cues
                 if audio_files and len(audio_files) > 1:
-                    file_start_cues: List[SimpleChapter] = []
+                    file_start_cues: List[ExistingCue] = []
                     current_start = 0.0
                     for audio_file in audio_files:
                         file_start_cues.append(
-                            SimpleChapter(
+                            ExistingCue(
                                 timestamp=current_start,
                                 title=audio_file.metadata.filename,
                             )
@@ -773,9 +730,7 @@ class ProcessingPipeline:
 
                     total_duration = sum(file_durations) if file_durations else None
 
-                    audio_service = AudioProcessingService(
-                        self._notify_progress, self.smart_detect_config, self._running_processes
-                    )
+                    audio_service = AudioProcessingService(self._notify_progress, self._running_processes)
                     concatenated_file = await audio_service.concat_files(audio_file_paths, total_duration)
 
                     if not concatenated_file or not os.path.exists(concatenated_file):
@@ -830,14 +785,8 @@ class ProcessingPipeline:
                 if not existing_source:
                     raise ValueError(f"Invalid cue source: {cue_source}")
 
-                self._notify_progress(
-                    Step.AUDIO_EXTRACTION,
-                    0,
-                    f"Using {len(existing_source.cues)} cues from {existing_source.short_name}...",
-                )
                 self.cues = [c.timestamp for c in existing_source.cues]
-                self._extraction_task = asyncio.create_task(self.extract_segments())
-                await self._extraction_task
+                self._notify_progress(Step.CONFIGURE_ASR, 0, "Ready for transcription configuration")
 
         except Exception as e:
             logger.error(f"Failed to create cues: {e}", exc_info=True)
@@ -877,11 +826,6 @@ class ProcessingPipeline:
                 raise ValueError(f"Invalid realignment source: {source_id}")
             
             self.is_realignment = True
-
-            self.smart_detect_config = SmartDetectConfig(
-                asr_buffer=0.5,
-                min_silence_duration=1.5,
-            )
 
             self._notify_progress(
                 Step.AUDIO_EXTRACTION,
@@ -934,12 +878,9 @@ class ProcessingPipeline:
             else:
                 await self._detect_realignment_cues(segments)
 
-            if self.detected_silences is None or self.step not in [Step.AUDIO_ANALYSIS, Step.VAD_ANALYSIS]:
+            if self.detected_cues is None or self.step not in [Step.AUDIO_ANALYSIS, Step.VAD_ANALYSIS]:
                 # Detection was canceled
                 return
-
-            if self.detected_silences:
-                self.detected_silences = [(start, end - 0.25) for start, end in self.detected_silences]
             
             await self._realign_chapters(existing_source, padding)
 
@@ -953,22 +894,13 @@ class ProcessingPipeline:
         self._notify_progress(Step.AUDIO_ANALYSIS, 100, "Aligning chapters...")
 
         try:
-            source_chapters = [{'time': c.timestamp, 'title': c.title} for c in source.cues]
-            
-            detected_cues = []
-            for start, end in self.detected_silences:
-                detected_cues.append({
-                    'time': end,
-                    'silence_duration': end - start
-                })
-
             aligner = ChapterAligner(
                 ransac_threshold=ransac_threshold,
             )
             
             aligned_chapters, _ = aligner.align(
-                source_chapters, 
-                detected_cues, 
+                source.cues.copy(), 
+                self.detected_cues.copy() if self.detected_cues else [], 
                 source.duration, 
                 self.book.duration
             )
@@ -1025,7 +957,7 @@ class ProcessingPipeline:
         """Detect chapter breaks and generate cues for user selection"""
 
         # Initialize services
-        audio_service = AudioProcessingService(self._notify_progress, self.smart_detect_config, self._running_processes)
+        audio_service = AudioProcessingService(self._notify_progress, self._running_processes)
 
         self._notify_progress(Step.AUDIO_ANALYSIS, 0, "Analyzing audio...")
 
@@ -1043,7 +975,7 @@ class ProcessingPipeline:
 
         self._notify_progress(Step.AUDIO_ANALYSIS, 100, f"Found {len(silences)} silence segments")
 
-        self.detected_silences = silences.copy() if silences else []
+        self.detected_cues = [DetectedCue.from_silences(start, end) for start, end in silences]
         self.normal_scanned_regions = [(0.0, self.book.duration)]
 
         await self._transition_to_initial_chapter_selection()
@@ -1051,15 +983,12 @@ class ProcessingPipeline:
     async def _detect_cues_vad(self):
         """Detect potential chapter boundaries using VAD (Voice Activity Detection)."""
         try:
-            if not self.smart_detect_config:
-                raise ProcessingError("Smart detection configuration is required for VAD detection")
-
             self._notify_progress(Step.VAD_PREP, 0, "Preparing files...")
 
             service = VadDetectionService(
                 progress_callback=self._notify_progress,
-                smart_detect_config=self.smart_detect_config,
                 running_processes=self._running_processes,
+                tmp_dir=self.temp_dir,
             )
 
             # Create VAD task for proper cancellation handling
@@ -1074,7 +1003,7 @@ class ProcessingPipeline:
                 logger.info("Processing was cancelled during VAD analysis, stopping cue detection")
                 return
 
-            self.detected_silences = silences.copy() if silences else []
+            self.detected_cues = [DetectedCue.from_silences(start, end) for start, end in silences]
             self.vad_scanned_regions = [(0.0, self.book.duration)]
 
             await self._transition_to_initial_chapter_selection()
@@ -1092,7 +1021,7 @@ class ProcessingPipeline:
     async def _detect_realignment_cues(self, segments: List[Tuple[float, str]]):
         """Detect chapter cues for realignment"""
 
-        audio_service = AudioProcessingService(self._notify_progress, self.smart_detect_config, self._running_processes)
+        audio_service = AudioProcessingService(self._notify_progress, self._running_processes)
 
         self._notify_progress(Step.AUDIO_ANALYSIS, 0, "Analyzing audio...")
 
@@ -1101,7 +1030,6 @@ class ProcessingPipeline:
         for idx, (segment_start, segment_file) in enumerate(segments):
             segment_silences = await audio_service.get_silence_boundaries(
                 segment_file,
-                min_silence_duration=1,
                 publish_progress=False,
             )
             if segment_silences:
@@ -1114,7 +1042,7 @@ class ProcessingPipeline:
             logger.info("Processing was cancelled during audio analysis, stopping cue detection")
             return
 
-        self.detected_silences = silences.copy()
+        self.detected_cues = [DetectedCue.from_silences(start, end) for start, end in silences]
 
     async def _detect_realignment_cues_vad(self, segments: List[Tuple[float, str]]):
         """Detect potential chapter boundaries using VAD (Voice Activity Detection)."""
@@ -1123,12 +1051,12 @@ class ProcessingPipeline:
 
             service = VadDetectionService(
                 progress_callback=self._notify_progress,
-                smart_detect_config=self.smart_detect_config,
                 running_processes=self._running_processes,
+                tmp_dir=self.temp_dir,
             )
 
             self._vad_task = asyncio.create_task(
-                service.get_vad_silence_boundaries_from_segments(segments)
+                service.get_vad_silence_boundaries_from_segments(segments, duration=self.book.duration if self.book else None)
             )
             silences = await self._vad_task
             self._vad_task = None
@@ -1137,7 +1065,7 @@ class ProcessingPipeline:
                 logger.info("Processing was cancelled during VAD analysis, stopping cue detection")
                 return
 
-            self.detected_silences = silences.copy() if silences else []
+            self.detected_cues = [DetectedCue.from_silences(start, end) for start, end in silences]
 
         except asyncio.CancelledError:
             logger.info("VAD detection was cancelled")
@@ -1154,9 +1082,9 @@ class ProcessingPipeline:
         self.initial_chapter_selection_available = True
         self._notify_progress(
             Step.INITIAL_CHAPTER_SELECTION, 100,
-            f"Ready for selection with {len(self.detected_silences)} detected silences"
+            f"Ready for selection with {len(self.detected_cues)} detected cues"
         )
-        logger.info(f"Detected {len(self.detected_silences)} silences, ready for initial chapter selection")
+        logger.info(f"Detected {len(self.detected_cues)} cues, ready for initial chapter selection")
 
     async def _extract_audio_segments(self):
         """Extract audio segments for transcription"""
@@ -1166,7 +1094,7 @@ class ProcessingPipeline:
         # Filter chapter breaks to remove any that occur after the audiobook ends
         self.cues = self._filter_cues_by_duration(self.cues)
 
-        audio_service = AudioProcessingService(self._notify_progress, self.smart_detect_config, self._running_processes)
+        audio_service = AudioProcessingService(self._scoped_progress_callback(), self._running_processes, asr_buffer=get_asr_buffer())
 
         self.segment_files = await audio_service.extract_segments(self.audio_file_path, self.cues, self.temp_dir)
 
@@ -1185,7 +1113,7 @@ class ProcessingPipeline:
 
         self._notify_progress(Step.AUDIO_EXTRACTION, 0, "Performing targeted audio extraction...")
 
-        audio_service = AudioProcessingService(self._notify_progress, self.smart_detect_config, self._running_processes)
+        audio_service = AudioProcessingService(self._scoped_progress_callback(), self._running_processes)
 
         self.segment_files = await audio_service.extract_segments(
             audio_file=self.audio_file_path,
@@ -1207,9 +1135,7 @@ class ProcessingPipeline:
             app_config = get_app_config()
             copy_only = not app_config.asr_options.trim
 
-            audio_service = AudioProcessingService(
-                self._notify_progress, self.smart_detect_config, self._running_processes
-            )
+            audio_service = AudioProcessingService(self._scoped_progress_callback(), self._running_processes, asr_buffer=get_asr_buffer())
 
             # Create trimmed segments from original segments
             self._trimming_task = asyncio.create_task(audio_service.trim_segments(self.segment_files, copy_only))
@@ -1241,32 +1167,17 @@ class ProcessingPipeline:
             "Initializing. This may take a while the first time...",
         )
 
-        # Run ASR operations in a thread pool to avoid blocking the event loop
-        def run_transcription():
-            """Run transcription in a separate thread"""
-            import asyncio
+        # Get or create the warm ASR service
+        asr_service = await get_app_state().get_or_create_asr_service(
+            progress_callback=self._notify_progress
+        )
 
-            # Create a new event loop for this thread
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-            try:
-                # Run the ASR service in this thread's event loop
-                async def transcribe():
-                    async with create_asr_service(self._notify_progress) as asr_service:
-                        self._transcription_task = asyncio.create_task(
-                            asr_service.transcribe(self.trimmed_segment_files)
-                        )
-                        result = await self._transcription_task
-                        self.transcription_task = None
-                        return result
-
-                return loop.run_until_complete(transcribe())
-            finally:
-                loop.close()
-
-        # Run in thread pool executor to avoid blocking main event loop
-        self.transcriptions = await asyncio.get_event_loop().run_in_executor(None, run_transcription)
+        # Run transcription
+        self._transcription_task = asyncio.create_task(
+            asr_service.transcribe(self.trimmed_segment_files)
+        )
+        self.transcriptions = await self._transcription_task
+        self._transcription_task = None
 
         # Check if processing was cancelled during transcription
         if self.step != Step.ASR_PROCESSING:
@@ -1319,11 +1230,19 @@ class ProcessingPipeline:
         logger.info(f"Created {len(self.transcribed_chapters)} initial chapters")
 
     async def proceed_with_transcription(self):
-        """Proceed with trimming and transcription from CONFIGURE_ASR step"""
+        """Proceed with extraction, trimming and transcription from CONFIGURE_ASR step"""
         try:
+            # First extract audio segments with the model-appropriate buffer
+            await self.extract_segments()
+
+            # Check if extraction was cancelled
+            if self.segment_files is None or self.step != Step.AUDIO_EXTRACTION:
+                logger.info("Processing was cancelled during segment extraction")
+                return {"success": False, "message": "Processing was cancelled"}
+
             self._notify_progress(Step.ASR_PROCESSING, 0, "Preparing files...")
 
-            # First create trimmed segments for transcription
+            # Then create trimmed segments for transcription
             await self._create_trimmed_segments()
 
             # Then transcribe the trimmed segments
@@ -1398,8 +1317,10 @@ class ProcessingPipeline:
             raise
 
     async def extract_segments(self) -> None:
-        """Extract initial audio segments without trimming for CONFIGURE_ASR step"""
+        """Extract initial audio segments after CONFIGURE_ASR step"""
         try:
+            # Clean up any stale segments from a previous run before re-extracting
+            self.cleanup_segment_files()
             await self._extract_audio_segments()
 
             # Check if extraction was cancelled
@@ -1407,14 +1328,11 @@ class ProcessingPipeline:
                 logger.info("Processing was cancelled during segment extraction")
                 return
 
-            # Transition to CONFIGURE_ASR step (the _notify_progress method will handle the broadcast)
-            self._notify_progress(Step.CONFIGURE_ASR, 0, "Ready for transcription configuration")
-
-            logger.info(f"Extracted {len(self.segment_files)} segments, transitioned to CONFIGURE_ASR")
+            logger.info(f"Extracted {len(self.segment_files)} segments")
 
         except Exception as e:
-            logger.error(f"Initial segment extraction failed: {e}", exc_info=True)
-            await self.restart_at_step(RestartStep.INITIAL_CHAPTER_SELECTION, f"Initial extraction failed: {str(e)}")
+            logger.error(f"Segment extraction failed: {e}", exc_info=True)
+            await self.restart_at_step(RestartStep.CONFIGURE_ASR, f"Extraction failed: {str(e)}")
             raise
 
     def _deduplicate_timestamps(
@@ -1528,8 +1446,8 @@ class ProcessingPipeline:
 
             logger.info(f"Selected {len(self.cues)} initial chapters")
 
-            # Extract initial segments first, then go to CONFIGURE_ASR
-            await self.extract_segments()
+            # Transition to CONFIGURE_ASR; extraction happens when user proceeds
+            self._notify_progress(Step.CONFIGURE_ASR, 0, "Ready for transcription configuration")
 
             return {
                 "success": True,
@@ -1748,8 +1666,6 @@ class ProcessingPipeline:
 
         restart_options: List[RestartStep] = []
 
-        has_detected_silences = self.initial_chapter_selection_available
-
         match self.step:
             case Step.SELECT_WORKFLOW:
                 restart_options.append(RestartStep.IDLE)
@@ -1759,19 +1675,19 @@ class ProcessingPipeline:
             case Step.CONFIGURE_ASR:
                 restart_options.append(RestartStep.IDLE)
                 restart_options.append(RestartStep.SELECT_WORKFLOW)
-                if has_detected_silences:
+                if self.initial_chapter_selection_available:
                     restart_options.append(RestartStep.INITIAL_CHAPTER_SELECTION)
             case Step.CHAPTER_EDITING:
                 restart_options.append(RestartStep.IDLE)
                 restart_options.append(RestartStep.SELECT_WORKFLOW)
-                if has_detected_silences:
+                if self.initial_chapter_selection_available:
                     restart_options.append(RestartStep.INITIAL_CHAPTER_SELECTION)
                 if not self.is_realignment and not self.is_quick_edit:
                     restart_options.append(RestartStep.CONFIGURE_ASR)
             case Step.REVIEWING | Step.COMPLETED:
                 restart_options.append(RestartStep.IDLE)
                 restart_options.append(RestartStep.SELECT_WORKFLOW)
-                if has_detected_silences:
+                if self.initial_chapter_selection_available:
                     restart_options.append(RestartStep.INITIAL_CHAPTER_SELECTION)
                 if not self.is_realignment and not self.is_quick_edit:
                     restart_options.append(RestartStep.CONFIGURE_ASR)
@@ -2085,7 +2001,7 @@ class ProcessingPipeline:
                 self._notify_progress(Step.PARTIAL_SCAN_PREP, 100, "Audio extracted")
 
                 # ── Step 6: Run analysis ────────────────────────────────────────
-                new_silences: List[Tuple[float, float]] = []
+                new_cues: List[DetectedCue] = []
 
                 if scan_type == "vad":
                     target_step = Step.PARTIAL_VAD_ANALYSIS
@@ -2107,8 +2023,8 @@ class ProcessingPipeline:
 
                         vad_service = VadDetectionService(
                             progress_callback=make_vad_callback(base_progress, len(scan_files)),
-                            smart_detect_config=self.smart_detect_config,
                             running_processes=self._running_processes,
+                            tmp_dir=self.temp_dir,
                         )
                         file_silences = await vad_service.get_vad_silence_boundaries(file_path, file_duration)
 
@@ -2125,7 +2041,6 @@ class ProcessingPipeline:
 
                         audio_service = AudioProcessingService(
                             make_audio_callback(base_progress, len(scan_files)),
-                            self.smart_detect_config,
                             self._running_processes,
                         )
                         file_silences = await audio_service.get_silence_boundaries(
@@ -2140,22 +2055,22 @@ class ProcessingPipeline:
                     if file_silences:
                         # Offset timestamps to global time
                         adjusted = [(s + global_offset, e + global_offset) for s, e in file_silences]
-                        new_silences.extend(adjusted)
+                        new_cues.extend([DetectedCue.from_silences(s, e) for s, e in adjusted])
 
                 # ── Step 7: Merge results (drop near-duplicates) ─────────
                 near_dup_threshold = 0.75
-                for s_start, s_end in new_silences:
+                for new_cue in new_cues:
                     is_duplicate = any(
-                        abs(existing_start - s_start) < near_dup_threshold
-                        for existing_start, _ in self.detected_silences
+                        abs(existing_cue.timestamp - new_cue.timestamp) < near_dup_threshold
+                        for existing_cue in self.detected_cues
                     )
                     if not is_duplicate:
-                        self.detected_silences.append((s_start, s_end))
+                        self.detected_cues.append(new_cue)
 
-                self.detected_silences.sort(key=lambda x: x[0])
+                self.detected_cues.sort(key=lambda x: x.timestamp)
                 logger.info(
-                    f"Partial scan added {len(new_silences)} new silences; "
-                    f"total detected silences: {len(self.detected_silences)}"
+                    f"Partial scan added {len(new_cues)} new cues; "
+                    f"total detected cues: {len(self.detected_cues)}"
                 )
 
                 # ── Step 8: Update coverage tracking ──────────────────────────

@@ -1,5 +1,7 @@
 import asyncio
 import logging
+import os
+import random
 from abc import ABC, abstractmethod
 from typing import List
 
@@ -7,6 +9,38 @@ from app.models.enums import Step
 from app.models.progress import ProgressCallback
 
 logger = logging.getLogger(__name__)
+
+
+def _deduplicate_words(text: str) -> str:
+    """De-duplicate consecutive repeated words (4+ occurrences).
+    Single non-digit character repetitions are discarded entirely.
+    Digit-only repetitions are de-duped regardless of length"""
+    words = text.split()
+    if len(words) < 2:
+        return text
+
+    result = []
+    i = 0
+    while i < len(words):
+        word_lower = words[i].lower()
+        j = i + 1
+        while j < len(words) and words[j].lower() == word_lower:
+            j += 1
+        count = j - i
+
+        if count >= 2 and words[i].isdigit():
+            result.append(words[i])
+        elif count >= 4:
+            if len(words[i]) == 1:
+                i = j
+                continue
+            result.append(words[i])
+        else:
+            result.extend(words[i:j])
+
+        i = j
+
+    return " ".join(result)
 
 
 class ASRService(ABC):
@@ -21,8 +55,38 @@ class ASRService(ABC):
         """Notify progress via callback"""
         self.progress_callback(step, percent, message, details or {})
 
+    def _clean_transcription(self, result: str) -> str:
+        return _deduplicate_words(result.strip(". \t\n\r\x0b\x0c"))
+
+    def transcribe_file(self, audio_file: str) -> str:
+        from app.core.constants import MAX_JITTER_CROP, MAX_JITTER_RETRIES
+        from app.services.audio_service import crop_start_to_tempfile
+
+        result = self._clean_transcription(self._transcribe_file(audio_file))
+        if result:
+            return result
+
+        for _ in range(MAX_JITTER_RETRIES):
+            crop_seconds = random.uniform(0.0, MAX_JITTER_CROP)
+            jittered_file = crop_start_to_tempfile(audio_file, crop_seconds)
+            if jittered_file is None:
+                continue
+            try:
+                result = self._clean_transcription(
+                    self._transcribe_file(jittered_file, retry_on_empty=False)
+                )
+                if result:
+                    return result
+            finally:
+                try:
+                    os.remove(jittered_file)
+                except OSError:
+                    pass
+
+        return ""
+
     @abstractmethod
-    def _transcribe_file(self, audio_file: str) -> str:
+    def _transcribe_file(self, audio_file: str, retry_on_empty: bool = True) -> str:
         """Transcribe a single audio file - implemented by subclasses"""
         pass
 
@@ -62,7 +126,7 @@ class ASRService(ABC):
                 # Run transcription in thread pool
                 result = await asyncio.get_event_loop().run_in_executor(
                     None,
-                    self._transcribe_file,
+                    self.transcribe_file,
                     audio_file,
                 )
 

@@ -116,6 +116,26 @@ class AICleanupOperation(ChapterOperation):
         chapter.selected = True
 
 
+class TranscribeOperation(ChapterOperation):
+    chapter_id: str
+    new_asr_title: str
+    new_current_title: str
+    old_asr_title: str = ""
+    old_current_title: str = ""
+
+    def apply(self, pipeline: "ProcessingPipeline"):
+        chapter = self.find_chapter(pipeline, self.chapter_id)
+        self.old_asr_title = chapter.asr_title
+        self.old_current_title = chapter.current_title
+        chapter.asr_title = self.new_asr_title
+        chapter.current_title = self.new_current_title
+
+    def undo(self, pipeline: "ProcessingPipeline"):
+        chapter = self.find_chapter(pipeline, self.chapter_id)
+        chapter.asr_title = self.old_asr_title
+        chapter.current_title = self.old_current_title
+
+
 class EditTimestampOperation(ChapterOperation):
     chapter_id: str
     old_timestamp: float = 0.0

@@ -12,6 +12,7 @@ class WSMessageType(str, Enum):
     HISTORY_UPDATE = "history_update"
     SELECTION_STATS = "selection_stats"
     BATCH_OPERATION = "batch_operation"
+    TRANSCRIBING_UPDATE = "transcribing_update"
     ERROR = "error"
     STATUS = "status"
 

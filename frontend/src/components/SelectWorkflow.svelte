@@ -7,11 +7,8 @@
     import ChapterModal from "./ChapterModal.svelte";
 
     // Icons
-    import ChevronDown from "@lucide/svelte/icons/chevron-down";
     import CircleQuestionMark from "@lucide/svelte/icons/circle-question-mark";
     import ExternalLink from "@lucide/svelte/icons/external-link";
-    import Settings2 from "@lucide/svelte/icons/settings-2";
-    import TriangleAlert from "@lucide/svelte/icons/triangle-alert";
 
     let loading = false;
     let selectedExistingSource = "";
@@ -29,11 +26,6 @@
     let chapterModalData = [];
     let chapterModalLoading = false;
 
-    // Settings state
-    let settingsExpanded = false;
-    let debounceTimeout = null;
-    let localConfig = {...$session.smartDetectConfig};
-
     // Get cue sources from session data
     $: if ($session.cueSources) {
         cueSources = $session.cueSources;
@@ -46,78 +38,6 @@
         if (!selectedQuickEditSource && existingCueSources.some(s => s.id === 'abs')) {
             selectedQuickEditSource = 'abs';
         }
-    }
-
-    // Reactive statement to sync local config with session store
-    $: if (
-        $session.smartDetectConfig &&
-        JSON.stringify(localConfig) !== JSON.stringify($session.smartDetectConfig)
-    ) {
-        localConfig = {...$session.smartDetectConfig};
-    }
-
-    // Individual slider change handlers
-    function handleSliderChange(paramName, value) {
-        localConfig = {
-            ...localConfig,
-            [paramName]: parseFloat(value),
-        };
-        updateConfigWithDebounce(localConfig);
-    }
-
-    // Smart Detect Settings functions
-    function validateConfig(config) {
-        const errors = [];
-
-        // Range validations
-        if (config.segment_length < 3 || config.segment_length > 60) {
-            errors.push("Segment length must be between 3 and 60 seconds");
-        }
-        if (config.min_clip_length < 0.5 || config.min_clip_length > 5) {
-            errors.push("Min clip length must be between 0.5 and 5 seconds");
-        }
-        if (config.asr_buffer < 0 || config.asr_buffer > 1) {
-            errors.push("Silence buffer must be between 0 and 1 seconds");
-        }
-
-        // Cross-parameter validations
-        if (config.segment_length < config.min_clip_length) {
-            errors.push("Segment length cannot be shorter than min clip length");
-        }
-
-        return errors;
-    }
-
-    function updateConfigWithDebounce(newConfig) {
-        // Update local state immediately for responsive UI
-        localConfig = {...newConfig};
-        session.updateSmartDetectConfigLocal(newConfig);
-
-        // Clear existing timeout
-        if (debounceTimeout) {
-            clearTimeout(debounceTimeout);
-        }
-
-        // Set new timeout for API update
-        debounceTimeout = setTimeout(async () => {
-            const errors = validateConfig(newConfig);
-            if (errors.length === 0) {
-                try {
-                    await session.updateSmartDetectConfig(newConfig);
-                } catch (error) {
-                    console.error("Failed to update smart detect config:", error);
-                }
-            }
-        }, 500);
-    }
-
-    function resetToDefaults() {
-        const defaultConfig = {
-            segment_length: 8.0,
-            min_clip_length: 1.0,
-            asr_buffer: 0.25,
-        };
-        updateConfigWithDebounce(defaultConfig);
     }
 
     // Format time for display
@@ -252,10 +172,6 @@
     }
 
     onMount(async () => {
-        // Load smart detect config from backend
-        if ($session.step === "select_workflow") {
-            await session.loadSmartDetectConfig();
-        }
     });
 </script>
 
@@ -338,139 +254,6 @@
                     {/if}
                 </p>
 
-                <!-- Settings -->
-                <div class="settings-section">
-                    <button
-                            class="settings-toggle"
-                            on:click={() => (settingsExpanded = !settingsExpanded)}
-                            type="button"
-                    >
-                        <Settings2 size="16"/>
-                        Detection Settings
-                        <span class="chevron" class:expanded={settingsExpanded}>
-                            <ChevronDown size="12"/>
-                        </span>
-                    </button>
-
-                    {#if settingsExpanded}
-                        <div class="settings-panel" transition:slide={{ duration: 300 }}>
-                            <!-- Smart Detect Settings Section -->
-                            <div class="settings-subsection">
-                                <div class="settings-grid">
-                                    <!-- Segment Length -->
-                                    <div class="setting-item">
-                                        <div class="setting-header">
-                                            <label for="segment-length">Segment Length</label>
-                                            <div
-                                                    class="help-icon"
-                                                    data-tooltip="The initial length of the audio segment extracted at each chapter cue to be used for ASR. If your audiobook features music at the start of chapters, increasing this may improve ASR accuracy."
-                                            >
-                                                <CircleQuestionMark size="14"/>
-                                            </div>
-                                        </div>
-                                        <div class="slider-container">
-                                            <input
-                                                    id="segment-length"
-                                                    type="range"
-                                                    min="3"
-                                                    max="30"
-                                                    step="1"
-                                                    value={localConfig.segment_length}
-                                                    on:input={(e) =>
-                        handleSliderChange("segment_length", e.target.value)}
-                                                    class="slider"
-                                            />
-                                            <div class="slider-value">
-                                                {localConfig.segment_length}s
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- Min Clip Length -->
-                                    <div class="setting-item">
-                                        <div class="setting-header">
-                                            <label for="min-clip-length">Min Segment Length</label>
-                                            <div
-                                                    class="help-icon"
-                                                    data-tooltip="The minimum segment length to use for ASR in the event that segments overlap."
-                                            >
-                                                <CircleQuestionMark size="14"/>
-                                            </div>
-                                        </div>
-                                        <div class="slider-container">
-                                            <input
-                                                    id="min-clip-length"
-                                                    type="range"
-                                                    min="0.5"
-                                                    max="5"
-                                                    step="0.25"
-                                                    value={localConfig.min_clip_length}
-                                                    on:input={(e) =>
-                        handleSliderChange("min_clip_length", e.target.value)}
-                                                    class="slider"
-                                            />
-                                            <div class="slider-value">
-                                                {localConfig.min_clip_length}s
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- Silence Buffer -->
-                                    <div class="setting-item">
-                                        <div class="setting-header">
-                                            <label for="asr-buffer">Silence Buffer</label>
-                                            <div
-                                                    class="help-icon"
-                                                    data-tooltip="The amount of buffer silence to add at the beginning of each segment for the benefit of Automatic Speech Recognition (ASR). A higher buffer may help improve ASR accuracy, depending on the model used."
-                                            >
-                                                <CircleQuestionMark size="14"/>
-                                            </div>
-                                        </div>
-                                        <div class="slider-container">
-                                            <input
-                                                    id="asr-buffer"
-                                                    type="range"
-                                                    min="0"
-                                                    max="1"
-                                                    step="0.05"
-                                                    value={localConfig.asr_buffer}
-                                                    on:input={(e) =>
-                        handleSliderChange("asr_buffer", e.target.value)}
-                                                    class="slider"
-                                            />
-                                            <div class="slider-value">{localConfig.asr_buffer}s</div>
-                                        </div>
-                                    </div>
-
-                                </div>
-
-                                <div class="settings-actions">
-                                    <button
-                                            class="btn btn-outline btn-sm"
-                                            on:click={resetToDefaults}
-                                            type="button"
-                                    >
-                                        Reset to Defaults
-                                    </button>
-                                    {#if $session.smartDetectConfigLoading}
-                  <span class="config-status">
-                    <div class="mini-spinner"></div>
-                    Saving...
-                  </span>
-                                    {:else}
-                                        {@const errors = validateConfig(localConfig)}
-                                        {#if errors.length > 0}
-                    <span class="config-status error">
-                      <TriangleAlert size="14"/>
-                        {errors[0]}
-                    </span>
-                                        {/if}
-                                    {/if}
-                                </div>
-                            </div>
-                        </div>
-                    {/if}
-                </div>
 
                 <div class="dramatized-toggle">
                     <label>
@@ -982,73 +765,6 @@
         margin-left: 1rem;
     }
 
-    /* Settings Styles */
-    .settings-section {
-        margin-top: -1.5rem;
-    }
-
-    .settings-toggle {
-        background: none;
-        border: none;
-        color: var(--text-muted);
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 0.5rem;
-        font-size: 1rem;
-        padding: 0.5rem 0;
-        text-align: center;
-        transition: color 0.2s ease;
-        font-weight: 500;
-        margin: 0 auto;
-        width: auto;
-    }
-
-    .settings-toggle:hover {
-        color: var(--text-primary);
-    }
-
-    .settings-toggle .chevron {
-        margin-left: auto;
-        transition: transform 0.2s ease;
-        display: flex;
-        align-items: center;
-    }
-
-    .settings-toggle .chevron.expanded {
-        transform: rotate(180deg);
-    }
-
-    .settings-panel {
-        margin: 1rem 3rem;
-    }
-
-    .settings-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-        gap: 1.5rem;
-        margin-bottom: 1.5rem;
-    }
-
-    .setting-item {
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-    }
-
-    .setting-header {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-    }
-
-    .setting-header label {
-        font-weight: 500;
-        color: var(--text-primary);
-        font-size: 0.9rem;
-    }
-
     .help-icon {
         border: none;
         display: inline-flex;
@@ -1113,118 +829,6 @@
         to {
             opacity: 1;
             transform: translateX(-50%) translateY(0);
-        }
-    }
-
-    .slider-container {
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-    }
-
-    .slider {
-        flex: 1;
-        height: 6px;
-        border-radius: 3px;
-        background: var(--bg-tertiary);
-        outline: none;
-        appearance: none;
-        cursor: pointer;
-        -webkit-appearance: none;
-    }
-
-    .slider::-webkit-slider-thumb {
-        appearance: none;
-        -webkit-appearance: none;
-        width: 20px;
-        height: 20px;
-        border-radius: 50%;
-        background: var(--primary-color);
-        cursor: pointer;
-        transition: all 0.2s ease;
-    }
-
-    .slider::-webkit-slider-thumb:hover {
-        transform: scale(1.1);
-    }
-
-    .slider::-moz-range-thumb {
-        width: 20px;
-        height: 20px;
-        border-radius: 50%;
-        background: var(--primary-color);
-        cursor: pointer;
-        border: none;
-        transition: all 0.2s ease;
-        --moz-appearance: none;
-    }
-
-    .slider::-moz-range-thumb:hover {
-        transform: scale(1.1);
-    }
-
-    .slider-value {
-        min-width: 2.5rem;
-        text-align: left;
-        font-weight: 500;
-        color: var(--text-primary);
-        font-size: 0.9rem;
-    }
-
-    .settings-actions {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 1rem;
-        flex-wrap: wrap;
-    }
-
-    .config-status {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        font-size: 0.85rem;
-        font-weight: 500;
-    }
-
-    .config-status.error {
-        color: var(--warning);
-    }
-
-    .mini-spinner {
-        width: 14px;
-        height: 14px;
-        border: 2px solid transparent;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-    }
-
-    /* ASR Settings Styles */
-    .settings-subsection {
-        margin-bottom: 2rem;
-        border-bottom: 1px solid var(--border-color);
-    }
-
-    .settings-subsection:last-child {
-        border-bottom: none;
-        margin-bottom: 0;
-    }
-
-    /* Responsive design */
-    @media (max-width: 768px) {
-        .settings-grid {
-            grid-template-columns: 1fr;
-            gap: 1rem;
-        }
-
-        .settings-actions {
-            flex-direction: column;
-            align-items: stretch;
-            gap: 0.75rem;
-        }
-
-        .config-status {
-            justify-content: center;
         }
     }
 

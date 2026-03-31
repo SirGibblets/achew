@@ -9,6 +9,7 @@ import sys
 import threading
 from typing import List, Tuple, Dict, Optional
 
+from app.core.constants import MIN_SILENCE_DURATION
 from app.models.enums import Step
 from app.models.progress import ProgressCallback
 
@@ -26,24 +27,12 @@ def _format_time(seconds: float) -> str:
 class VadDetectionService:
     """Service for detecting chapter boundaries using Voice Activity Detection (VAD)"""
 
-    def __init__(self, progress_callback: ProgressCallback, smart_detect_config=None, running_processes=None):
+    def __init__(self, progress_callback: ProgressCallback, running_processes=None, tmp_dir: Optional[str] = None):
         self.progress_callback: ProgressCallback = progress_callback
-        self._progress_queue = []
         self._running_processes = running_processes if running_processes is not None else []
+        self.tmp_dir = tmp_dir
         self._vad_processes = []  # Track spawned VAD processes for cancellation
         self._is_cancelled = False  # Track cancellation state
-
-        # Use smart detect config if provided, otherwise use defaults
-        if smart_detect_config:
-            self.asr_buffer = smart_detect_config.asr_buffer
-            self.segment_length = smart_detect_config.segment_length
-            self.min_clip_length = smart_detect_config.min_clip_length
-        else:
-            # Default values (same as SmartDetectionService)
-            self.asr_buffer = 0.25
-            self.segment_length = 8.0
-            self.min_clip_length = 1.0
-        self.min_silence_duration = 1.0
 
         # VAD-specific parameters
         self.segment_duration = 600  # 10 minutes in seconds
@@ -64,24 +53,6 @@ class VadDetectionService:
     def _notify_progress(self, step: Step, percent: float, message: str = "", details: dict = None):
         """Notify progress via callback"""
         self.progress_callback(step, percent, message, details or {})
-
-    async def _process_queued_progress(self):
-        """Process any queued progress updates from thread"""
-        if not self._progress_queue or not self.progress_callback:
-            return
-
-        # Process all queued progress updates
-        while self._progress_queue:
-            progress_data = self._progress_queue.pop(0)
-            try:
-                self.progress_callback(
-                    progress_data["step"],
-                    progress_data["percent"],
-                    progress_data["message"],
-                    progress_data["details"],
-                )
-            except Exception as e:
-                logger.warning(f"Progress callback failed: {e}")
 
     def _get_vad_worker_path(self) -> str:
         """Get path to the permanent VAD worker script"""
@@ -145,14 +116,11 @@ class VadDetectionService:
                 match = segment_pattern.search(line)
                 if match:
                     segments_created += 1
-                    # Queue progress update for async processing
-                    self._progress_queue.append(
-                        {
-                            "step": Step.VAD_PREP,
-                            "percent": segments_created / expected_segments * 100,
-                            "message": f"Preparing...",
-                            "details": {"chunks_created": segments_created},
-                        }
+                    self._notify_progress(
+                        Step.VAD_PREP,
+                        segments_created / expected_segments * 100,
+                        "Preparing...",
+                        {"chunks_created": segments_created},
                     )
 
             process.wait()
@@ -201,7 +169,7 @@ class VadDetectionService:
             vad_worker_path,
             chunk_data,
             str(duration_to_use),
-            str(self.min_silence_duration),
+            str(MIN_SILENCE_DURATION),
             "true",  # Enable progress tracking
         ]
 
@@ -481,7 +449,7 @@ class VadDetectionService:
 
         if not speech_timestamps:
             # If no speech detected, treat entire segment as silence
-            if segment_end - segment_start >= self.min_silence_duration:
+            if segment_end - segment_start >= MIN_SILENCE_DURATION:
                 gaps.append((segment_start, segment_end))
             return gaps
 
@@ -490,7 +458,7 @@ class VadDetectionService:
 
         # Check for gap at the beginning of segment
         first_speech_start = speech_timestamps[0]["start"] + segment_start
-        if first_speech_start - segment_start >= self.min_silence_duration:
+        if first_speech_start - segment_start >= MIN_SILENCE_DURATION:
             gaps.append((segment_start, first_speech_start))
 
         # Check for gaps between speech segments
@@ -499,12 +467,12 @@ class VadDetectionService:
             next_start = speech_timestamps[i + 1]["start"] + segment_start
             gap_duration = next_start - current_end
 
-            if gap_duration >= self.min_silence_duration:
+            if gap_duration >= MIN_SILENCE_DURATION:
                 gaps.append((current_end, next_start))
 
         # Check for gap at the end of segment
         last_speech_end = speech_timestamps[-1]["end"] + segment_start
-        if segment_end - last_speech_end >= self.min_silence_duration:
+        if segment_end - last_speech_end >= MIN_SILENCE_DURATION:
             gaps.append((last_speech_end, segment_end))
 
         return gaps
@@ -530,7 +498,7 @@ class VadDetectionService:
                 merged_gaps.append(current_gap)
 
         # Filter out gaps shorter than minimum duration after merging
-        final_gaps = [gap for gap in merged_gaps if gap[1] - gap[0] >= self.min_silence_duration]
+        final_gaps = [gap for gap in merged_gaps if gap[1] - gap[0] >= MIN_SILENCE_DURATION]
 
         logger.info(f"Merged {len(all_gaps)} gaps into {len(final_gaps)} final silence segments")
         return final_gaps
@@ -550,9 +518,8 @@ class VadDetectionService:
             self._check_cancellation()
             self._notify_progress(Step.VAD_PREP, 0, "Preparing...")
 
-            # Create temporary directory for chunks in the same directory as the source file
-            audio_dir = os.path.dirname(audio_file)
-            temp_dir = tempfile.mkdtemp(prefix="vad_chunks_", dir=audio_dir)
+            # Create temporary directory for chunks under the pipeline's base temp dir
+            temp_dir = tempfile.mkdtemp(prefix="vad_chunks_", dir=self.tmp_dir)
             logger.info(f"Created temporary directory: {temp_dir}")
 
             self._check_cancellation()
@@ -658,14 +625,12 @@ class VadDetectionService:
                 future.cancel()
                 return []
 
-            # Process any queued progress from the chunking process
-            await self._process_queued_progress()
-
         return await future
 
     async def get_vad_silence_boundaries_from_segments(
         self,
         segments: List[Tuple[float, str]],
+        duration: Optional[float] = None,
     ) -> Optional[List[Tuple[float, float]]]:
         """
         Detect silence boundaries from a list of audio segments.

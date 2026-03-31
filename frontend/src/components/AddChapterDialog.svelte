@@ -12,6 +12,7 @@
     import MoveHorizontal from "@lucide/svelte/icons/move-horizontal";
     import Pause from "@lucide/svelte/icons/pause";
     import Play from "@lucide/svelte/icons/play";
+    import Mic from "@lucide/svelte/icons/mic";
     import ScanSearch from "@lucide/svelte/icons/scan-search";
     import X from "@lucide/svelte/icons/x";
 
@@ -199,9 +200,10 @@
             addOptions = await api.chapters.getAddOptions(chapterId);
             
             if (addOptions) {
-                originalTimestamp = addOptions.min_timestamp;
-                manualTimestamp = formatTimestamp(addOptions.min_timestamp);
-                selectedTimestamp = addOptions.min_timestamp;
+                if (editorSettings.show_formatted_time) {
+                    addOptions.min_timestamp = Math.ceil(addOptions.min_timestamp);
+                    addOptions.max_timestamp = Math.floor(addOptions.max_timestamp);
+                }
 
                 if (defaultTab && getAvailableTabs().includes(defaultTab)) {
                     activeTab = defaultTab;
@@ -209,6 +211,12 @@
                     activeTab = "detected_cue";
                 } else {
                     activeTab = "timestamp";
+                }
+
+                originalTimestamp = addOptions.min_timestamp;
+                manualTimestamp = formatTimestamp(addOptions.min_timestamp);
+                if (activeTab === "timestamp") {
+                    selectedTimestamp = addOptions.min_timestamp;
                 }
             }
         } catch (err) {
@@ -273,23 +281,23 @@
         }
     }
 
-    async function handleConfirm() {
+    async function handleConfirm(transcribe = false) {
         if (!selectedTimestamp) return;
-        
+
+        const timestamp = selectedTimestamp;
+        const title = selectedTitle;
+
+        dispatch('confirm', { timestamp, title });
+        close();
+
         try {
             await api.chapters.add({
-                timestamp: selectedTimestamp,
-                title: selectedTitle
+                timestamp,
+                title,
+                transcribe,
             });
-            
-            dispatch('confirm', {
-                timestamp: selectedTimestamp,
-                title: selectedTitle
-            });
-            
-            close();
         } catch (err) {
-            error = handleApiError(err);
+            console.error("Failed to add chapter:", err);
         }
     }
 
@@ -302,6 +310,14 @@
         if ($isPlaying) {
             audio.stop();
         }
+        addOptions = null;
+        selectedTimestamp = null;
+        selectedTitle = "";
+        manualTimestamp = "";
+        originalTimestamp = null;
+        activeTab = "timestamp";
+        error = null;
+        scanning = false;
         isOpen = false;
     }
 
@@ -653,13 +669,23 @@
                     <button class="btn btn-secondary" onclick={handleCancel}>
                         Cancel
                     </button>
-                    <button 
-                        class="btn btn-primary" 
-                        onclick={handleConfirm}
-                        disabled={!selectedTimestamp}
-                    >
-                        Add chapter at {selectedTimestamp ? formatTimestamp(selectedTimestamp) : ""}
-                    </button>
+                    <div class="segmented-button">
+                        <button
+                            class="btn btn-primary segmented-left"
+                            onclick={() => handleConfirm(false)}
+                            disabled={!selectedTimestamp}
+                        >
+                            Add chapter at {selectedTimestamp ? formatTimestamp(selectedTimestamp) : ""}
+                        </button>
+                        <button
+                            class="btn btn-primary segmented-right"
+                            onclick={() => handleConfirm(true)}
+                            disabled={!selectedTimestamp}
+                            title="Add and transcribe"
+                        >
+                            <Mic size="16"/>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1075,6 +1101,23 @@
 
     .btn-primary:hover:not(:disabled) {
         background: var(--primary-hover);
+    }
+
+    .segmented-button {
+        display: flex;
+    }
+
+    .segmented-left {
+        border-top-right-radius: 0;
+        border-bottom-right-radius: 0;
+        border-right: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .segmented-right {
+        border-top-left-radius: 0;
+        border-bottom-left-radius: 0;
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
     }
 
     .btn-secondary {

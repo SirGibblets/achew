@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 
 from ...core.config import is_abs_configured
+from ...core.constants import CHAPTER_START_PADDING
 from ...models.abs import Book
 from ...models.enums import RestartStep, Step
 from ...app import get_app_state
@@ -28,16 +29,11 @@ class RestartPipelineRequest(BaseModel):
     restart_step: RestartStep
 
 
-class SmartDetectConfigRequest(BaseModel):
-    segment_length: float
-    min_clip_length: float
-    asr_buffer: float
-
-
 class ASROptionsRequest(BaseModel):
     trim: bool
     use_bias_words: bool = False
     bias_words: str = ""
+    segment_length: float = 8.0
 
 
 class ConfigureASRRequest(BaseModel):
@@ -149,7 +145,7 @@ async def delete_pipeline():
     """Delete the current pipeline and cleanup resources"""
     try:
         app_state = get_app_state()
-        success = app_state.delete_pipeline()
+        success = await app_state.delete_pipeline()
 
         if not success:
             raise HTTPException(status_code=404, detail="Pipeline not found")
@@ -275,22 +271,12 @@ async def get_detected_cues():
                 status_code=400, detail=f"Pipeline not in initial chapter selection step. Current step: {app_state.step.value}"
             )
 
-        silences = app_state.pipeline.detected_silences
-        if not silences:
+        if not app_state.pipeline.detected_cues:
             raise HTTPException(status_code=400, detail="No detected cues available")
 
-        asr_buffer = app_state.pipeline.smart_detect_config.asr_buffer
-
-        # Build list of detected cues with gap info; filter to gaps >= 1s
-        detected_cues = []
-        for silence_start, silence_end in silences:
-            gap = silence_end - silence_start
-            if gap >= 1.0:
-                timestamp = max(0.0, silence_end - asr_buffer)
-                detected_cues.append({"timestamp": round(timestamp, 3), "gap": round(gap, 3)})
-
         # Sort by timestamp
-        detected_cues.sort(key=lambda x: x["timestamp"])
+        detected_cues = app_state.pipeline.detected_cues.copy()
+        detected_cues.sort(key=lambda x: x.timestamp)
 
         return {
             "detected_cues": detected_cues,
@@ -482,7 +468,7 @@ async def cancel_step():
         step = pipeline.step
 
         if step in [Step.VALIDATING, Step.DOWNLOADING]:
-            success = app_state.delete_pipeline()
+            success = await app_state.delete_pipeline()
             if not success:
                 raise HTTPException(status_code=404, detail="Pipeline not found")
             return {"message": "Pipeline cancelled and deleted", "action": "deleted"}
@@ -496,20 +482,13 @@ async def cancel_step():
             }
 
         elif step == Step.AUDIO_EXTRACTION:
-            if pipeline.initial_chapter_selection_available:
-                await pipeline.restart_at_step(RestartStep.INITIAL_CHAPTER_SELECTION)
-                return {
-                    "message": "Audio extraction cancelled, returned to initial chapter selection",
-                    "action": "restarted",
-                    "restart_step": RestartStep.INITIAL_CHAPTER_SELECTION.value,
-                }
-            else:
-                await pipeline.restart_at_step(RestartStep.SELECT_WORKFLOW)
-                return {
-                    "message": "Audio extraction cancelled, returned to workflow selection",
-                    "action": "restarted",
-                    "restart_step": RestartStep.SELECT_WORKFLOW.value,
-                }
+            restart_step = RestartStep.SELECT_WORKFLOW if pipeline.is_realignment else RestartStep.CONFIGURE_ASR
+            await pipeline.restart_at_step(restart_step)
+            return {
+                "message": f"Audio extraction cancelled, returned to {restart_step.value}",
+                "action": "restarted",
+                "restart_step": restart_step.value,
+            }
 
         elif step in [Step.TRIMMING, Step.ASR_PROCESSING]:
             await pipeline.restart_at_step(RestartStep.CONFIGURE_ASR)
@@ -542,37 +521,6 @@ async def cancel_step():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.put("/pipeline/smart-detect-config")
-async def update_smart_detect_config(request: SmartDetectConfigRequest):
-    """Update smart detect configuration for the pipeline"""
-    try:
-        app_state = get_app_state()
-
-        if not app_state.pipeline:
-            raise HTTPException(status_code=404, detail="Pipeline not found")
-
-        # Update smart detect configuration in pipeline
-        config_data = {
-            "segment_length": request.segment_length,
-            "min_clip_length": request.min_clip_length,
-            "asr_buffer": request.asr_buffer,
-        }
-
-        result = app_state.pipeline.update_smart_detect_config(config_data)
-
-        if not result["success"]:
-            raise HTTPException(status_code=400, detail={"errors": result["errors"]})
-
-        return {
-            "message": "Smart detect configuration updated successfully",
-            "config": result["config"],
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to update smart detect config for pipeline: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.put("/pipeline/asr-options")
@@ -586,6 +534,7 @@ async def update_asr_options(request: ASROptionsRequest):
         app_config.asr_options.trim = request.trim
         app_config.asr_options.use_bias_words = request.use_bias_words
         app_config.asr_options.bias_words = request.bias_words
+        app_config.asr_options.segment_length = request.segment_length
 
         success = update_app_config(app_config)
         if not success:
@@ -623,24 +572,6 @@ async def get_asr_options():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/pipeline/smart-detect-config")
-async def get_smart_detect_config():
-    """Get smart detect configuration for the current pipeline"""
-    try:
-        app_state = get_app_state()
-
-        if not app_state.pipeline:
-            raise HTTPException(status_code=404, detail="Pipeline not found")
-
-        return {
-            "config": app_state.pipeline.smart_detect_config.__dict__,
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to get smart detect config for pipeline: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/pipeline/realign")

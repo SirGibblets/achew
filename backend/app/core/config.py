@@ -57,6 +57,7 @@ class ASROptions(BaseModel):
     trim: bool = True
     use_bias_words: bool = False
     bias_words: str = ""
+    segment_length: float = 8.0
 
 
 class EditorSettings(BaseModel):

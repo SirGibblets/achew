@@ -23,6 +23,7 @@ from pydantic import BaseModel
 from typing import Literal
 
 from ...app import get_app_state
+from ...core.constants import CHAPTER_START_PADDING
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +107,13 @@ class DetectedCue(BaseModel):
     timestamp: float
     gap: float
 
+    @classmethod
+    def from_silences(cls, start: float, end: float) -> "DetectedCue":
+        return cls(
+            timestamp=max(0.0, end - CHAPTER_START_PADDING),
+            gap=end - start
+        )
+
 
 class ExistingCue(BaseModel):
     timestamp: float
@@ -134,6 +142,7 @@ class PartialScanRequest(BaseModel):
 class AddChapterRequest(BaseModel):
     timestamp: float
     title: str = ""
+    transcribe: bool = False
 
 
 class CustomInstructionRequest(BaseModel):
@@ -829,17 +838,9 @@ async def get_add_options(chapter_id: str):
         min_timestamp = min_timestamp_raw + 1
         max_timestamp = max_timestamp_raw - 1
 
-        detected_cues = []
-        if app_state.pipeline.detected_silences:
-            asr_buffer = app_state.pipeline.smart_detect_config.asr_buffer
-            for silence_start, silence_end in app_state.pipeline.detected_silences:
-                silence_end -= asr_buffer
-                if min_timestamp < silence_end < max_timestamp:
-                    detected_cues.append(DetectedCue(timestamp=silence_end, gap=silence_end - silence_start))
-        else:
-            logger.info("No preserved detection data available in pipeline")
-
+        detected_cues = [cue for cue in app_state.pipeline.detected_cues if min_timestamp < cue.timestamp < max_timestamp]
         existing_cues = {}
+        
         if app_state.pipeline.existing_cue_sources:
             for source in app_state.pipeline.existing_cue_sources:
                 source_cues = []
@@ -960,6 +961,14 @@ async def add_chapter(request: AddChapterRequest):
         await app_state.broadcast_chapter_update()
         await app_state.broadcast_history_update()
 
+        # Enqueue transcription if requested
+        if request.transcribe:
+            chapter_id = (
+                existing_deleted.id if existing_deleted
+                else operation.chapter.id
+            )
+            await app_state.enqueue_transcription([chapter_id], is_batch=False)
+
         return {"message": "Chapter added successfully"}
 
     except HTTPException:
@@ -1043,4 +1052,92 @@ async def save_custom_instructions(request: CustomInstructionsListRequest):
         raise
     except Exception as e:
         logger.error(f"Failed to save custom instructions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/chapters/{chapter_id}/transcribe")
+async def transcribe_chapter(chapter_id: str):
+    """Queue a single chapter for ASR transcription"""
+    try:
+        app_state = get_app_state()
+
+        if not app_state.pipeline:
+            raise HTTPException(status_code=404, detail="No active pipeline")
+
+        if app_state.pipeline.step != Step.CHAPTER_EDITING:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Can only transcribe chapters during editing. Current step: {app_state.pipeline.step.value}",
+            )
+
+        chapter = next(
+            (c for c in app_state.pipeline.chapters if c.id == chapter_id and not c.deleted),
+            None,
+        )
+        if not chapter:
+            raise HTTPException(status_code=404, detail="Chapter not found")
+
+        if chapter_id in app_state._transcription_statuses:
+            raise HTTPException(status_code=409, detail="Chapter is already being transcribed")
+
+        await app_state.enqueue_transcription([chapter_id], is_batch=False)
+
+        return {"message": "Transcription queued", "chapter_id": chapter_id}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to queue chapter transcription: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/chapters/transcribe-selected")
+async def transcribe_selected():
+    """Queue all selected chapters for ASR transcription"""
+    try:
+        app_state = get_app_state()
+
+        if not app_state.pipeline:
+            raise HTTPException(status_code=404, detail="No active pipeline")
+
+        if app_state.pipeline.step != Step.CHAPTER_EDITING:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Can only transcribe chapters during editing. Current step: {app_state.pipeline.step.value}",
+            )
+
+        chapter_ids = [
+            c.id for c in app_state.pipeline.chapters
+            if c.selected and not c.deleted and c.id not in app_state._transcription_statuses
+        ]
+
+        if not chapter_ids:
+            raise HTTPException(status_code=400, detail="No eligible chapters to transcribe")
+
+        await app_state.enqueue_transcription(chapter_ids, is_batch=True)
+
+        return {"message": f"Transcription queued for {len(chapter_ids)} chapters", "count": len(chapter_ids)}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to queue selected chapters for transcription: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/chapters/cancel-transcriptions")
+async def cancel_transcriptions():
+    """Cancel all pending and active chapter-level transcriptions"""
+    try:
+        app_state = get_app_state()
+
+        if not app_state.has_active_transcriptions:
+            return {"message": "No active transcriptions to cancel"}
+
+        await app_state.cancel_transcriptions()
+
+        return {"message": "Transcriptions cancelled"}
+
+    except Exception as e:
+        logger.error(f"Failed to cancel transcriptions: {e}")
         raise HTTPException(status_code=500, detail=str(e))

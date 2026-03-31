@@ -59,6 +59,11 @@ async def lifespan(achew_app: FastAPI):
     get_app_state()
     logger.info("App state initialized")
 
+    # Pre-discover ASR services to improve initial API responsiveness
+    from .services.asr_service_options import get_available_services
+    services = get_available_services()
+    logger.info(f"ASR services discovered: {len(services)}")
+
     # Initialize chapter search database
     from .services.chapter_search.database import init_db
     await init_db()
@@ -73,7 +78,7 @@ async def lifespan(achew_app: FastAPI):
     app_state = get_app_state()
 
     try:
-        app_state.delete_pipeline()
+        await app_state.delete_pipeline()
     except Exception as e:
         logger.error(f"Error cleaning up app state: {e}")
 
@@ -268,6 +273,14 @@ async def websocket_endpoint(websocket: WebSocket):
             )
 
         await websocket.send_text(welcome_message.model_dump_json())
+
+        # Send current transcription status
+        if app_state._transcription_statuses:
+            transcription_message = WSMessage(
+                type=WSMessageType.TRANSCRIBING_UPDATE,
+                data={"statuses": dict(app_state._transcription_statuses)},
+            )
+            await websocket.send_text(transcription_message.model_dump_json())
 
         # Keep connection alive and handle incoming messages
         try:

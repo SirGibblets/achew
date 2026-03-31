@@ -5,6 +5,7 @@
 
     // Pages
     import ABSSetup from "./components/ABSSetup.svelte";
+    import ASRSetup from "./components/ASRSetup.svelte";
     import AICleanup from "./components/AICleanup.svelte";
     import ChapterEditor from "./components/ChapterEditor.svelte";
     import ChapterReview from "./components/ChapterReview.svelte";
@@ -89,6 +90,8 @@
                 return ABSSetup;
             case "llm_setup":
                 return LLMSetup;
+            case "asr_setup":
+                return ASRSetup;
             case "validating":
             case "downloading":
             case "file_prep":
@@ -273,7 +276,7 @@
 
     // Check if restart button should be shown
     function shouldShowRestartButton(restartOptions) {
-        return !["abs_setup", "llm_setup", "idle"].includes($session.step);
+        return !["abs_setup", "llm_setup", "asr_setup", "idle"].includes($session.step);
     }
 
     // Check if restart button should be disabled
@@ -348,10 +351,27 @@
         }
     }
 
+    async function gotoASRSetup() {
+        closeSettingsMenu();
+        try {
+            const response = await fetch("/api/goto-asr-setup", {
+                method: "POST",
+            });
+
+            if (response.ok) {
+                await session.loadActiveSession();
+            } else {
+                console.error("Failed to navigate to ASR setup");
+            }
+        } catch (error) {
+            console.error("Error navigating to ASR setup:", error);
+        }
+    }
+
     // Check if settings button should be shown (hide during setup steps and while connecting)
     $: isConnectingView = currentComponent === Connecting;
     $: shouldShowSettings =
-        !["abs_setup", "llm_setup"].includes($session.step) && !isConnectingView;
+        !["abs_setup", "llm_setup", "asr_setup"].includes($session.step) && !isConnectingView;
 
     $: updateAvailable = isNewerVersion($session.version, latestVersion);
 </script>
@@ -457,6 +477,14 @@
                                     </button>
                                     <button
                                             class="settings-option"
+                                            on:click={gotoASRSetup}
+                                            disabled={$session.loading}
+                                    >
+                                        <Mic size="16"/>
+                                        Transcription Settings
+                                    </button>
+                                    <button
+                                            class="settings-option"
                                             on:click={gotoLLMSetup}
                                             disabled={$session.loading}
                                     >
@@ -497,6 +525,7 @@
                         this={currentComponent}
                         on:abs-configured={handleABSConfigured}
                         on:llm-setup-complete={handleLLMSetupComplete}
+                        on:asr-setup-complete={() => session.loadActiveSession()}
                 />
             {/if}
         {:else}

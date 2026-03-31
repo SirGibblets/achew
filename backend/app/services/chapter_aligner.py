@@ -1,3 +1,4 @@
+from app.api.routes.chapters import DetectedCue, ExistingCue
 import numpy as np
 from typing import List, Dict, Tuple, Any
 import logging
@@ -12,8 +13,8 @@ class ChapterAligner:
 
     def align(
         self, 
-        source_chapters: List[Dict[str, Any]], 
-        detected_cues: List[Dict[str, Any]], 
+        source_chapters: List[ExistingCue], 
+        detected_cues: List[DetectedCue], 
         total_duration_source: float, 
         total_duration_actual: float
     ) -> Tuple[List[Dict[str, Any]], Dict[str, float]]:
@@ -23,9 +24,9 @@ class ChapterAligner:
         if not detected_cues:
             return self._fallback_alignment(source_chapters, total_duration_source, total_duration_actual)
         
-        src_times = np.array([c["time"] for c in source_chapters])
-        cue_times = np.array([c["time"] for c in detected_cues])
-        cue_silences = np.array([c["silence_duration"] for c in detected_cues])
+        src_times = np.array([cue.timestamp for cue in source_chapters])
+        cue_times = np.array([c.timestamp for c in detected_cues])
+        cue_silences = np.array([c.gap for c in detected_cues])
         
         scale, offset = self._estimate_transform(
             src_times, cue_times, cue_silences,
@@ -201,8 +202,8 @@ class ChapterAligner:
     
     def _build_results(
         self,
-        source_chapters: List[Dict[str, Any]],
-        detected_cues: List[Dict[str, Any]],
+        source_chapters: List[ExistingCue],
+        detected_cues: List[DetectedCue],
         matches: List[int],
         expected_times: np.ndarray,
         scale: float,
@@ -220,14 +221,14 @@ class ChapterAligner:
 
             if match_idx >= 0:
                 cue = detected_cues[match_idx]
-                timestamp = cue["time"]
-                silence = cue["silence_duration"]
+                timestamp = cue.timestamp
+                silence = cue.gap
 
                 time_diff = abs(expected_times[i] - timestamp)
                 confidence = self._calculate_confidence(time_diff, silence)
 
                 results.append({
-                    "title": src_chapter["title"],
+                    "title": src_chapter.title,
                     "timestamp": timestamp,
                     "confidence": confidence,
                     "is_guess": False,
