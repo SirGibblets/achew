@@ -9,7 +9,7 @@ import sys
 import threading
 from typing import List, Tuple, Dict, Optional
 
-from app.core.constants import END_OF_BOOK_EXCLUSION_ZONE, MIN_SILENCE_DURATION
+from app.core.constants import MIN_SILENCE_DURATION
 from app.models.enums import Step
 from app.models.progress import ProgressCallback
 
@@ -537,8 +537,6 @@ class VadDetectionService:
 
             self._check_cancellation()
 
-            final_gaps = [g for g in final_gaps if g[1] < duration - END_OF_BOOK_EXCLUSION_ZONE]
-
             self._notify_progress(
                 Step.VAD_ANALYSIS, 100, f"Smart detect complete, found {len(final_gaps)} potential cues"
             )
@@ -696,8 +694,6 @@ class VadDetectionService:
 
             self._notify_progress(Step.VAD_ANALYSIS, 100, "Finalizing results...")
             final_gaps = self._merge_overlapping_gaps(all_gaps)
-            if duration:
-                final_gaps = [g for g in final_gaps if g[1] < duration - END_OF_BOOK_EXCLUSION_ZONE]
 
             logger.info(
                 f"VAD segment processing complete: found {len(final_gaps)} silence segments from {len(segments)} segments"

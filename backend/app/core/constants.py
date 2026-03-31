@@ -10,9 +10,6 @@ MIN_SILENCE_DURATION = 1.0
 # Minimum gap in seconds between adjacent audio segments extracted for ASR.
 MIN_SEGMENT_GAP = 0.5
 
-# Drop silences ending within this many seconds of the book's end.
-END_OF_BOOK_EXCLUSION_ZONE = 5.0
-
 # Maximum number of jittered retries when ASR returns empty.
 MAX_JITTER_RETRIES = 3
 

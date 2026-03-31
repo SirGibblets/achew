@@ -11,7 +11,6 @@ from typing import List, Tuple, Optional
 from app.core.config import get_app_config
 from app.core.constants import (
     CHAPTER_START_PADDING,
-    END_OF_BOOK_EXCLUSION_ZONE,
     MIN_SEGMENT_GAP,
     MIN_SILENCE_DURATION,
     MIN_TRIMMED_SEGMENT_LENGTH,
@@ -130,9 +129,6 @@ class AudioProcessingService:
             return None
 
         all_silences.extend(file_silences)
-
-        if duration:
-            all_silences = [s for s in all_silences if s[1] < duration - END_OF_BOOK_EXCLUSION_ZONE]
 
         if publish_progress:
             self._notify_progress(Step.AUDIO_ANALYSIS, 100, f"Found {len(all_silences)} potential chapter breaks")
@@ -619,7 +615,6 @@ class AudioProcessingService:
         self,
         input_file: str,
         silence_threshold: float = -30,
-        duration: Optional[float] = None,
     ) -> Optional[List[Tuple[float, float]]]:
         """Synchronous version of silence detection for use in threads"""
         # noinspection SpellCheckingInspection
@@ -669,8 +664,6 @@ class AudioProcessingService:
                 return None
 
             silences = list(zip(silence_starts, silence_ends))
-            if duration:
-                silences = [s for s in silences if s[1] < duration - END_OF_BOOK_EXCLUSION_ZONE]
             return silences
         finally:
             try:
