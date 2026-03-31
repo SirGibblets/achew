@@ -78,7 +78,7 @@ async def lifespan(achew_app: FastAPI):
     app_state = get_app_state()
 
     try:
-        app_state.delete_pipeline()
+        await app_state.delete_pipeline()
     except Exception as e:
         logger.error(f"Error cleaning up app state: {e}")
 

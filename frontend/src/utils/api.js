@@ -296,6 +296,12 @@ export const chapters = {
             method: 'POST',
         });
     },
+
+    async cancelTranscriptions() {
+        return apiRequest('/chapters/cancel-transcriptions', {
+            method: 'POST',
+        });
+    },
 };
 
 // Batch operations API

@@ -48,6 +48,7 @@ class AppState:
             self._transcription_statuses: dict = {}  # chapter_id -> "pending" | "transcribing" | "finished"
             self._transcription_queue: asyncio.Queue = asyncio.Queue()
             self._transcription_worker_task: Optional[asyncio.Task] = None
+            self._transcription_cancel_event: asyncio.Event = asyncio.Event()
 
             AppState._initialized = True
 
@@ -88,11 +89,14 @@ class AppState:
         logger.info(f"Created pipeline for item {item_id}")
         return self.pipeline
 
-    def delete_pipeline(self) -> bool:
+    async def delete_pipeline(self) -> bool:
         """Delete the current pipeline and cleanup resources"""
         try:
             if not self.pipeline:
                 return False
+
+            # Cancel any active chapter-level transcriptions first
+            await self.cancel_transcriptions()
 
             # Clean up pipeline
             try:
@@ -241,6 +245,8 @@ class AppState:
         if self.pipeline.step == Step.ASR_PROCESSING:
             raise RuntimeError("Cannot transcribe individual chapters during bulk ASR processing")
 
+        self._transcription_cancel_event.clear()
+
         for cid in chapter_ids:
             self._transcription_statuses[cid] = "pending"
         await self._broadcast_transcribing_state()
@@ -255,6 +261,47 @@ class AppState:
         if self._transcription_worker_task is None or self._transcription_worker_task.done():
             self._transcription_worker_task = asyncio.create_task(self._transcription_worker())
 
+    async def cancel_transcriptions(self):
+        """Cancel all pending and active chapter-level transcriptions"""
+        if not self.has_active_transcriptions and (
+            self._transcription_worker_task is None or self._transcription_worker_task.done()
+        ):
+            return
+
+        logger.info("Cancelling chapter-level transcriptions")
+
+        # Signal the worker to stop between chapters
+        self._transcription_cancel_event.set()
+
+        # Drain the queue so pending work items are discarded
+        while not self._transcription_queue.empty():
+            try:
+                self._transcription_queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+
+        # Clear statuses and broadcast immediately for responsive UI
+        self._transcription_statuses.clear()
+        await self._broadcast_transcribing_state()
+
+        # Wait for the worker to finish its current operation and exit
+        if self._transcription_worker_task and not self._transcription_worker_task.done():
+            try:
+                await asyncio.wait_for(self._transcription_worker_task, timeout=3.0)
+            except asyncio.TimeoutError:
+                logger.warning("Transcription worker did not stop in time, force-cancelling task")
+                self._transcription_worker_task.cancel()
+                try:
+                    await self._transcription_worker_task
+                except (asyncio.CancelledError, Exception):
+                    pass
+            except Exception as e:
+                logger.warning(f"Error waiting for transcription worker: {e}")
+
+        self._transcription_worker_task = None
+        self._transcription_cancel_event.clear()
+        logger.info("Chapter-level transcriptions cancelled")
+
     async def _transcription_worker(self):
         """Process transcription requests from the queue"""
         import tempfile
@@ -267,6 +314,9 @@ class AppState:
 
         try:
             while not self._transcription_queue.empty():
+                if self._transcription_cancel_event.is_set():
+                    break
+
                 work_item = await self._transcription_queue.get()
                 chapter_ids = work_item["chapter_ids"]
                 is_batch = work_item["is_batch"]
@@ -274,6 +324,9 @@ class AppState:
                 operations = []
 
                 for chapter_id in chapter_ids:
+                    if self._transcription_cancel_event.is_set():
+                        break
+
                     try:
                         if not self.pipeline:
                             break
@@ -338,6 +391,9 @@ class AppState:
                             output_path,
                         )
 
+                        if self._transcription_cancel_event.is_set():
+                            break
+
                         if not segment_path:
                             logger.warning(f"Failed to extract audio for chapter {chapter_id}")
                             continue
@@ -355,6 +411,9 @@ class AppState:
                                 segment_path = trimmed_path
                         # If trim produced nothing or trim disabled, use the raw segment
 
+                        if self._transcription_cancel_event.is_set():
+                            break
+
                         # Transcribe
                         asr_service = await self.get_or_create_asr_service(
                             progress_callback=lambda *args, **kwargs: None
@@ -362,6 +421,9 @@ class AppState:
                         transcription = await asyncio.get_event_loop().run_in_executor(
                             None, asr_service.transcribe_file, segment_path
                         )
+
+                        if self._transcription_cancel_event.is_set():
+                            break
 
                         # Create and apply operation
                         op = TranscribeOperation(

@@ -1123,3 +1123,21 @@ async def transcribe_selected():
     except Exception as e:
         logger.error(f"Failed to queue selected chapters for transcription: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/chapters/cancel-transcriptions")
+async def cancel_transcriptions():
+    """Cancel all pending and active chapter-level transcriptions"""
+    try:
+        app_state = get_app_state()
+
+        if not app_state.has_active_transcriptions:
+            return {"message": "No active transcriptions to cancel"}
+
+        await app_state.cancel_transcriptions()
+
+        return {"message": "Transcriptions cancelled"}
+
+    except Exception as e:
+        logger.error(f"Failed to cancel transcriptions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

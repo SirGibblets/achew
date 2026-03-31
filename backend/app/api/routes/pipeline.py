@@ -145,7 +145,7 @@ async def delete_pipeline():
     """Delete the current pipeline and cleanup resources"""
     try:
         app_state = get_app_state()
-        success = app_state.delete_pipeline()
+        success = await app_state.delete_pipeline()
 
         if not success:
             raise HTTPException(status_code=404, detail="Pipeline not found")
@@ -468,7 +468,7 @@ async def cancel_step():
         step = pipeline.step
 
         if step in [Step.VALIDATING, Step.DOWNLOADING]:
-            success = app_state.delete_pipeline()
+            success = await app_state.delete_pipeline()
             if not success:
                 raise HTTPException(status_code=404, detail="Pipeline not found")
             return {"message": "Pipeline cancelled and deleted", "action": "deleted"}

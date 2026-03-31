@@ -330,9 +330,10 @@ class ProcessingPipeline:
 
         # Cancel any running processes first and wait for them to complete
         await self.cancel_processing()
+        await get_app_state().cancel_transcriptions()
 
         if step == RestartStep.IDLE:
-            get_app_state().delete_pipeline()
+            await get_app_state().delete_pipeline()
             asyncio.create_task(get_app_state().broadcast_step_change(Step.IDLE, error_message=error_message))
             return
 

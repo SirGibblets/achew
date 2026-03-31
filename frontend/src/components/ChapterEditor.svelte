@@ -90,10 +90,57 @@
         document.addEventListener("click", handleOutsideClick);
     });
 
+    // Transcription progress/cancel bar; show after 1000ms
+    let showTranscriptionBar = $state(false);
+    let transcriptionBarTimer = null;
+    let cancellingTranscription = $state(false);
+
+    $effect(() => {
+        const hasStatuses = Object.keys($transcriptionStatuses).length > 0;
+        if (hasStatuses && !showTranscriptionBar) {
+            if (!transcriptionBarTimer) {
+                transcriptionBarTimer = setTimeout(() => {
+                    showTranscriptionBar = true;
+                    transcriptionBarTimer = null;
+                }, 1000);
+            }
+        } else if (!hasStatuses) {
+            if (transcriptionBarTimer) {
+                clearTimeout(transcriptionBarTimer);
+                transcriptionBarTimer = null;
+            }
+            showTranscriptionBar = false;
+        }
+    });
+
+    let transcriptionProgress = $derived((() => {
+        const entries = Object.values($transcriptionStatuses);
+        const total = entries.length;
+        if (total === 0) return { finished: 0, total: 0, percent: 0 };
+        const finished = entries.filter(s => s === 'finished').length;
+        const transcribing = entries.filter(s => s === 'transcribing').length;
+        const percent = Math.round(((finished + transcribing * 0.5) / total) * 100);
+        return { finished, total, percent };
+    })());
+
+    async function cancelTranscriptions() {
+        cancellingTranscription = true;
+        try {
+            await api.chapters.cancelTranscriptions();
+        } catch (err) {
+            error = handleApiError(err);
+        } finally {
+            cancellingTranscription = false;
+        }
+    }
+
     onDestroy(() => {
         audio.stop();
         window.removeEventListener("keydown", handleKeydown);
         document.removeEventListener("click", handleOutsideClick);
+        if (transcriptionBarTimer) {
+            clearTimeout(transcriptionBarTimer);
+        }
     });
 
     // Resize all text areas after updates (for programmatic value changes)
@@ -969,6 +1016,28 @@
         </div>
     {/if}
 
+    {#if showTranscriptionBar}
+        <div class="transcription-cancel-bar" transition:slide={{duration: 150, axis: 'y'}}>
+            <div class="transcription-cancel-content">
+                <div class="transcription-cancel-info">
+                    <div class="transcribing-spinner"></div>
+                    <span>Transcribing {transcriptionProgress.total} chapter{transcriptionProgress.total === 1 ? '' : 's'}...</span>
+                    <div class="transcription-progress-bar">
+                        <div class="transcription-progress-fill" style="width: {transcriptionProgress.percent}%"></div>
+                    </div>
+                </div>
+                <button
+                    class="btn transcription-cancel-btn"
+                    onclick={cancelTranscriptions}
+                    disabled={cancellingTranscription}
+                >
+                    <X size={14} />
+                    Cancel
+                </button>
+            </div>
+        </div>
+    {/if}
+
     <!-- Sticky Action Bar -->
     {#if $chapters.length > 0 || $canUndo}
         <div class="sticky-action-bar">
@@ -1159,6 +1228,81 @@
     .page-header p {
         margin: 0;
         color: var(--text-secondary);
+    }
+
+    .transcription-cancel-bar {
+        position: sticky;
+        bottom: 6rem;
+        background: var(--edit-bar-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 0.5rem;
+        box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.1),
+        0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+        padding: 0.625rem 1rem;
+        max-width: 500px;
+        margin: 0 auto 0.5rem auto;
+        z-index: 1000;
+    }
+
+    .transcription-cancel-content {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+    }
+
+    .transcription-cancel-info {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+        color: var(--primary-color);
+        font-size: 0.875rem;
+        font-weight: 500;
+        min-width: 0;
+    }
+
+    .transcription-progress-bar {
+        flex: 1;
+        min-width: 60px;
+        max-width: 120px;
+        height: 4px;
+        background: var(--border-color);
+        border-radius: 2px;
+        overflow: hidden;
+    }
+
+    .transcription-progress-fill {
+        height: 100%;
+        background: var(--primary-color);
+        border-radius: 2px;
+        transition: width 0.4s ease;
+        min-width: 8px;
+    }
+
+    .transcription-cancel-btn {
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0.25rem 0.625rem;
+        font-size: 0.8rem;
+        line-height: 1.5;
+        background: transparent;
+        border: 1px solid var(--danger, #dc3545);
+        color: var(--danger, #dc3545);
+        border-radius: 0.25rem;
+        cursor: pointer;
+        transition: background 0.15s ease, color 0.15s ease;
+    }
+
+    .transcription-cancel-btn:hover:not(:disabled) {
+        background: var(--danger, #dc3545);
+        color: white;
+    }
+
+    .transcription-cancel-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
     }
 
     .sticky-action-bar {
