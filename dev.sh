@@ -186,8 +186,19 @@ else
     export DEBUG="false"
 fi
 
-uv run python -m uvicorn app.main:app $UVICORN_ARGS &
-BACKEND_PID=$!
+DEBUGPY_HOST="0.0.0.0"        # or "127.0.0.1"
+DEBUGPY_PORT=5678             # default debug port
+
+if [ "$DEBUG" = "true" ]; then
+    log_info "Starting backend with debugpy for VS Code debugging..."
+    uv run python -m debugpy --listen $DEBUGPY_HOST:$DEBUGPY_PORT --wait-for-client -m uvicorn app.main:app $UVICORN_ARGS & 
+    BACKEND_PID=$!
+else
+    log_info "Starting backend without debugger..."
+    uv run python -m uvicorn app.main:app $UVICORN_ARGS & 
+    BACKEND_PID=$!
+fi
+
 cd ..
 
 # Give backend server time to start
