@@ -1,6 +1,5 @@
 <script>
     import {onMount} from "svelte";
-    import {slide} from "svelte/transition";
     import {session} from "../stores/session.js";
     import {api} from "../utils/api.js";
     import AudiobookCard from "./AudiobookCard.svelte";
@@ -9,6 +8,7 @@
     // Icons
     import CircleQuestionMark from "@lucide/svelte/icons/circle-question-mark";
     import ExternalLink from "@lucide/svelte/icons/external-link";
+    import TriangleAlert from "@lucide/svelte/icons/triangle-alert";
 
     let loading = false;
     let selectedExistingSource = "";
@@ -232,21 +232,19 @@
             >
                 Regenerate Titles
             </button>
-            {#if existingCueSources.length > 0}
-                <button
-                        class="mode-btn {activeTab === 'quick_edit' ? 'active' : ''}"
-                        on:click={() => activeTab = 'quick_edit'}
-                        type="button"
-                >
-                    Quick Edit
-                </button>
-            {/if}
+            <button
+                    class="mode-btn {activeTab === 'quick_edit' ? 'active' : ''}"
+                    on:click={() => activeTab = 'quick_edit'}
+                    type="button"
+            >
+                Quick Edit
+            </button>
         </div>
 
         <div class="options-grid">
             {#if activeTab === 'smart_detect'}
                 <p class="tab-description">
-                    The <b>Smart Detect</b> workflow uses audio analysis to locate potential chapter cues within the audiobook. You will choose which set of cues to use in the next step.
+                    The <b>Smart Detect</b> workflow uses audio analysis to locate potential chapter cues within the audiobook. In the following step you will choose which cues will become your initial chapters.
                     {#if existingCueSources.length > 0}
                         {@const availableSourceNames = existingCueSources.map(source => source.name)}
                         {@const sourcesList = availableSourceNames.length === 1 ? availableSourceNames[0] : availableSourceNames.length === 2 ? availableSourceNames.join(" and ") : availableSourceNames.slice(0, -1).join(", ") + ", and " + availableSourceNames[availableSourceNames.length - 1]}
@@ -289,7 +287,7 @@
 
             {:else if activeTab === 'realign'}
                 <p class="tab-description">
-                    The <b>Realign Chapters</b> workflow uses chapters from an existing source and attempts to realign the timestamps to better match the book's audio. This is useful for cases where a source like Audnexus has correct titles, but the timestamps are off by a few seconds.
+                    The <b>Realign Chapters</b> workflow attempts to realign the timestamps of an existing chapter source to better match the book's audio, preserving the chapter titles. This is useful for cases where a source has correct titles, but the timestamps are off by a few seconds.
                 </p>
 
                 {#if existingCueSources.length > 0}
@@ -364,13 +362,13 @@
                 {:else}
                     <div class="no-sources-card">
                         <TriangleAlert size="16" />
-                        <p>No chapter sources found</p>
+                        <p>No existing chapters to realign</p>
                     </div>
                 {/if}
 
             {:else if activeTab === 'regenerate_titles'}
                 <p class="tab-description">
-                    The <b>Regenerate Titles</b> workflow uses chapters from an existing source and regenerates titles at the given timestamps. This is useful for cases where a source has correct timestamps, but the titles are missing or incorrect.
+                    The <b>Regenerate Titles</b> workflow transcribes new titles at the timestamps of an existing chapter source. This is useful for cases where a source has correct timestamps, but the titles are missing or incorrect.
                 </p>
 
                 {#if existingCueSources.length > 0}
@@ -444,7 +442,7 @@
                 {:else}
                     <div class="no-sources-card">
                         <TriangleAlert size="16" />
-                        <p>No chapter sources found</p>
+                        <p>No existing chapters to regenerate</p>
                     </div>
                 {/if}
 
@@ -502,6 +500,11 @@
                                 Select a Chapter Source
                             {/if}
                         </button>
+                    </div>
+                {:else}
+                    <div class="no-sources-card">
+                        <TriangleAlert size="16" />
+                        <p>No existing chapters to edit</p>
                     </div>
                 {/if}
             {/if}
