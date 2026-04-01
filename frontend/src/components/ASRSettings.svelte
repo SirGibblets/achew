@@ -226,7 +226,7 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
         {#if asrLoading}
             <div class="asr-loading">
                 <div class="mini-spinner"></div>
-                Loading services...
+                Loading services…
             </div>
         {:else if asrServices.length > 0}
             <div class="asr-settings">
@@ -248,7 +248,7 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
                                         {/if}
                                     </span>
                                 {:else}
-                                    Select service...
+                                    Select service…
                                 {/if}
                                 <span class="chevron" class:open={serviceDropdownOpen}>
                                     <ChevronDown size="12"/>
@@ -398,7 +398,7 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
                                 on:input={handleBiasWordsChange}
                                 disabled={asrOptionsLoading}
                                 class="bias-words-input"
-                                placeholder="Enter bias words..."
+                                placeholder="Enter bias words…"
                                 rows="4"
                         ></textarea>
                         <button

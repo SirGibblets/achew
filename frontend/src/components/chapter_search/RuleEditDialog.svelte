@@ -22,7 +22,7 @@
     // Contextual help text
     const SUBJECT_HELP = {
         every_middle_chapter: 'Every chapter except the first and last.',
-        any_middle_chapter: 'Any chapter (excluding the first land last).',
+        any_middle_chapter: 'Any chapter (excluding the first and last).',
         most_every_chapter: 'At least two-thirds of chapters.',
     };
 

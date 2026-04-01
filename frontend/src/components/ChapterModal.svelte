@@ -86,7 +86,7 @@
             {#if loading}
                 <div class="loading-state">
                     <div class="spinner"></div>
-                    <p>Loading chapter data...</p>
+                    <p>Loading chapter data…</p>
                 </div>
             {:else if chapters.length === 0}
                 <div class="empty-state">

@@ -208,7 +208,7 @@ class ASRServiceRegistry:
         if self._initialized:
             return
 
-        logger.debug("Discovering ASR service plugins...")
+        logger.debug("Discovering ASR service plugins…")
 
         # Import the providers module to trigger auto-registration
         try:

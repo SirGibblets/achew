@@ -135,7 +135,7 @@
     </div>
     
     {#if loading}
-        <div class="loading">Loading instructions...</div>
+        <div class="loading">Loading instructions…</div>
     {:else}
         <div
             class="instructions-list"
@@ -169,7 +169,7 @@
                                 oninput={(e) => updateText(instruction.id, e.target.value)}
                                 onkeydown={(e) => handleKeydown(e, instruction.id)}
                                 data-id={instruction.id}
-                                placeholder="Enter instruction..."
+                                placeholder="Enter instruction…"
                             />
                         </div>
                         

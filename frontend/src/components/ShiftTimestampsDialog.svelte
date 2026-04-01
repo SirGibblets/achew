@@ -454,7 +454,7 @@
                         onclick={handleApply}
                         disabled={!canApply || loading}
                     >
-                        {loading ? 'Applying...' : 'Apply'}
+                        {loading ? 'Applying…' : 'Apply'}
                     </button>
                 </div>
             </div>

@@ -201,13 +201,13 @@
     {/if}
 
     <div class="header">
-        <h2>Select A Workflow</h2>
+        <h2>Select a Workflow</h2>
     </div>
 
     {#if loading}
         <div class="text-center p-4">
             <div class="spinner"></div>
-            <p class="mt-2">Loading cue sources...</p>
+            <p class="mt-2">Loading cue sources…</p>
         </div>
     {:else}
         <div class="mode-selector">
@@ -278,7 +278,7 @@
                     >
                         {#if loading}
                             <span class="btn-spinner"></span>
-                            Processing...
+                            Processing…
                         {:else}
                             Start Smart Detect
                         {/if}
@@ -349,7 +349,7 @@
                         >
                             {#if loading}
                                 <span class="btn-spinner"></span>
-                                Processing...
+                                Processing…
                             {:else}
                                 {#if selectedRealignSource}
                                     Realign {getOptionInfo(selectedRealignSource).title}
@@ -431,7 +431,7 @@
                         >
                             {#if loading}
                                 <span class="btn-spinner"></span>
-                                Processing...
+                                Processing…
                             {:else if selectedExistingSource}
                                 Continue with {getOptionInfo(selectedExistingSource).title}
                             {:else}
@@ -493,7 +493,7 @@
                         >
                             {#if loading}
                                 <span class="btn-spinner"></span>
-                                Loading...
+                                Loading…
                             {:else if selectedQuickEditSource}
                                 Open in Editor
                             {:else}

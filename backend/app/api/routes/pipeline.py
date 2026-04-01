@@ -331,7 +331,7 @@ async def select_initial_chapters(request: dict, background_tasks: BackgroundTas
         background_tasks.add_task(do_select_initial_chapters)
 
         return {
-            "message": "Initial chapters selected, extracting segments...",
+            "message": "Initial chapters selected, extracting segments…",
             "include_unaligned": include_unaligned,
         }
 

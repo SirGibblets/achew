@@ -261,7 +261,7 @@
 
     function getSelectedModelName() {
         if (!aiOptions.model_id) {
-            return "Select a model...";
+            return "Select a model…";
         }
         
         const selectedModel = availableModels.find(m => m.id === aiOptions.model_id);
@@ -444,14 +444,14 @@
                                                     <input
                                                         type="text"
                                                         class="model-search-input"
-                                                        placeholder="Search models..."
+                                                        placeholder="Search models…"
                                                         bind:value={modelSearchQuery}
                                                     />
                                                 </div>
                                                 
                                                 <div class="model-options-container">
                                                     {#if loadingModels}
-                                                        <div class="model-option loading">Loading models...</div>
+                                                        <div class="model-option loading">Loading models…</div>
                                                     {:else if filteredModels.length === 0}
                                                         <div class="model-option no-results">
                                                             {modelSearchQuery.trim() ? 'No models found' : 'No models available'}
@@ -481,7 +481,7 @@
                                             disabled={loadingModels || availableModels.length === 0}
                                     >
                                         {#if loadingModels}
-                                            <option>Loading models...</option>
+                                            <option>Loading models…</option>
                                         {:else if availableModels.length === 0}
                                             <option>No models available</option>
                                         {:else}
@@ -620,7 +620,7 @@
                             <textarea
                                     id="additional-instructions"
                                     bind:value={aiOptions.additionalInstructions}
-                                    placeholder="Enter custom instructions for this audiobook..."
+                                    placeholder="Enter custom instructions for this audiobook…"
                                     rows="3"
                             ></textarea>
                         </div>

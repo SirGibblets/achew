@@ -296,7 +296,7 @@ class OpenAIService(AIService):
 
         additional_instructions = additional_instructions or []
 
-        self._notify_progress(0, f"Sending request to OpenAI...")
+        self._notify_progress(0, f"Sending request to OpenAI…")
 
         # Build system prompt dynamically based on options
         system_prompt = self._build_system_prompt(
@@ -333,7 +333,7 @@ class OpenAIService(AIService):
             ) as stream:
                 async for event in stream:
                     if event.type == "response.created":
-                        self._notify_progress(0, "Awaiting response...")
+                        self._notify_progress(0, "Awaiting response…")
                     elif event.type == "response.output_text.delta":
                         result = parser.feed(event.delta)
                         if result["new_chapters"]:
@@ -346,7 +346,7 @@ class OpenAIService(AIService):
                 final_response: ParsedResponse[ChapterList] = await stream.get_final_response()
                 processed_chapters = final_response.output_parsed.chapters
 
-            self._notify_progress(100, "Processing AI response...")
+            self._notify_progress(100, "Processing AI response…")
 
             # Parse the response
             chapters = [None if chapter.title == "null" else chapter.title for chapter in processed_chapters]

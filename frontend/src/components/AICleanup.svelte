@@ -31,7 +31,7 @@
         if (parsedCount > 0 && expectedCount > 0) {
             return `Cleaning up chapters: ${parsedCount}/${expectedCount}`;
         }
-        return "Initializing AI cleanup...";
+        return "Initializing AI cleanup…";
     })();
 
     async function handleCancel() {
@@ -59,7 +59,7 @@
                 </div>
 
                 <h2>AI Cleanup in Progress</h2>
-                <p>Analyzing and improving the selected chapter titles...</p>
+                <p>Analyzing and improving the selected chapter titles…</p>
 
                 <div class="progress-bar-container">
                     <div class="progress-bar">

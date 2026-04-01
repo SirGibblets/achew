@@ -770,7 +770,7 @@
     {#if loading}
         <div class="text-center p-4">
             <div class="spinner"></div>
-            <p>Loading chapters...</p>
+            <p>Loading chapters…</p>
         </div>
     {:else if $chapters.length === 0}
         <div class="empty-state">
@@ -837,9 +837,9 @@
                                     {:else}
                                         <div class="transcribing-spinner"></div>
                                         {#if $transcriptionStatuses[chapter.id] === "transcribing"}
-                                            Transcribing...
+                                            Transcribing…
                                         {:else}
-                                            Pending...
+                                            Pending…
                                         {/if}
                                     {/if}
                                 </div>
@@ -1021,7 +1021,7 @@
             <div class="transcription-cancel-content">
                 <div class="transcription-cancel-info">
                     <div class="transcribing-spinner"></div>
-                    <span>Transcribing {transcriptionProgress.total} chapter{transcriptionProgress.total === 1 ? '' : 's'}...</span>
+                    <span>Transcribing {transcriptionProgress.total} chapter{transcriptionProgress.total === 1 ? '' : 's'}…</span>
                     <div class="transcription-progress-bar">
                         <div class="transcription-progress-fill" style="width: {transcriptionProgress.percent}%"></div>
                     </div>

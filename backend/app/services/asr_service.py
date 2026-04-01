@@ -137,7 +137,7 @@ class ASRService(ABC):
                 self._notify_progress(
                     Step.ASR_PROCESSING,
                     progress,
-                    f"Transcribed chapter {i + 1} of {total_files}...",
+                    f"Transcribed chapter {i + 1} of {total_files}…",
                     {
                         "completed_segments": i + 1,
                         "total_segments": total_files,

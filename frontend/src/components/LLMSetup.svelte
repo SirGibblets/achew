@@ -140,7 +140,7 @@
 
         // Update provider state to validating
         provider.validation_status = "validating";
-        provider.validation_message = "Validating...";
+        provider.validation_message = "Validating…";
         providers = [...providers];
 
         try {
@@ -392,7 +392,7 @@
 
     function getProviderStatusText(provider) {
         if (!provider.is_enabled) return "Disabled";
-        if (validating[provider.id]) return "Checking...";
+        if (validating[provider.id]) return "Checking…";
 
         // Handle different validation states properly
         switch (provider.validation_status) {
@@ -401,7 +401,7 @@
             case "error":
                 return provider.validation_message || "Configuration Error";
             case "validating":
-                return "Validating...";
+                return "Validating…";
             case "not_validated":
                 return provider.validation_message || "Not Validated";
             case "disabled":
@@ -557,7 +557,7 @@
                             >
                                 {#if validating[provider.id]}
                                     <span class="btn-spinner"></span>
-                                    Validating...
+                                    Validating…
                                 {:else}
                                     Validate
                                 {/if}
@@ -584,7 +584,7 @@
             <button class="btn btn-verify" disabled={loading} on:click={handleDone}>
                 {#if loading}
                     <span class="btn-spinner"></span>
-                    Completing...
+                    Completing…
                 {:else}
                     Done
                 {/if}

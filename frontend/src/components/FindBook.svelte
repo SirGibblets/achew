@@ -459,7 +459,7 @@
                                     >
                                         {#if isValidating || $session.loading}
                                             <span class="btn-spinner"></span>
-                                            Processing...
+                                            Processing…
                                         {:else}
                                             Start
                                             <ArrowRight size="14"/>
@@ -482,7 +482,7 @@
                                 disabled={isLoadingLibraries || $session.loading}
                         >
                             {#if isLoadingLibraries}
-                                <option>Loading libraries...</option>
+                                <option>Loading libraries…</option>
                             {:else if libraries.length === 0}
                                 <option>No libraries found</option>
                             {:else}
@@ -500,7 +500,7 @@
                 : ''}"
                                 bind:value={searchQuery}
                                 bind:this={searchInput}
-                                placeholder="Search for audiobooks..."
+                                placeholder="Search for audiobooks…"
                                 disabled={!selectedLibrary || $session.loading}
                                 autocomplete="off"
                                 spellcheck="false"
@@ -534,7 +534,7 @@
                                         >
                                             {#if isValidating || $session.loading}
                                                 <span class="btn-spinner"></span>
-                                                Processing...
+                                                Processing…
                                             {:else}
                                                 Start
                                                 <ArrowRight size="14"/>

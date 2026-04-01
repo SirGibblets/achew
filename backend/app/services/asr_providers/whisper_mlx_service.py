@@ -42,7 +42,7 @@ class WhisperMLXASRService(ASRService):
             self.mlx_whisper = mlx_whisper
 
             logger.info(f"Initializing Whisper MLX ASR with model '{self.model_path}'")
-            self._notify_progress(Step.ASR_PROCESSING, 0, "Loading Whisper MLX model. This may take a while...")
+            self._notify_progress(Step.ASR_PROCESSING, 0, "Loading Whisper MLX model. This may take a while…")
 
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(None, mlx_whisper.load_models.load_model, self.model_path)

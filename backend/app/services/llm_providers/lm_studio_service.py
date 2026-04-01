@@ -298,7 +298,7 @@ class LMStudioService(AIService):
 
         additional_instructions = additional_instructions or []
 
-        self._notify_progress(0, f"Loading LM Studio model ({model_id}), please wait...")
+        self._notify_progress(0, f"Loading LM Studio model ({model_id}), please wait…")
 
         # Build system prompt dynamically based on options
         system_prompt = self._build_system_prompt(
@@ -364,7 +364,7 @@ class LMStudioService(AIService):
                     if hasattr(chunk, "reasoning_type") and chunk.reasoning_type != "none":
                         current_time = time.time()
                         if current_time - last_thinking_update >= 1.0:  # Limit to once per second
-                            self._notify_progress(0, "Thinking...")
+                            self._notify_progress(0, "Thinking…")
                             last_thinking_update = current_time
                         continue
 
@@ -384,7 +384,7 @@ class LMStudioService(AIService):
                 if not content_received:
                     logger.error("LM Studio No content received from streaming!")
 
-                self._notify_progress(100, "Processing AI response...")
+                self._notify_progress(100, "Processing AI response…")
 
                 # Parse the response
                 try:

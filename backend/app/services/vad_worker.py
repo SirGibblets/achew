@@ -63,7 +63,7 @@ def process_multiple_chunks(chunk_files_with_indices, segment_duration, min_sile
 
     # Load VAD model once for all chunks
     if enable_progress:
-        print(f"PROGRESS:{json.dumps({'type': 'worker_init', 'message': 'Loading VAD model...'})}", flush=True)
+        print(f"PROGRESS:{json.dumps({'type': 'worker_init', 'message': 'Loading VAD model…'})}", flush=True)
 
     try:
         from silero_vad import load_silero_vad
@@ -72,7 +72,7 @@ def process_multiple_chunks(chunk_files_with_indices, segment_duration, min_sile
 
         if enable_progress:
             print(
-                f"PROGRESS:{json.dumps({'type': 'worker_ready', 'message': 'VAD model loaded, processing chunks...'})}",
+                f"PROGRESS:{json.dumps({'type': 'worker_ready', 'message': 'VAD model loaded, processing chunks…'})}",
                 flush=True,
             )
 

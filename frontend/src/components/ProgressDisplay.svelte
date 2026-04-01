@@ -19,62 +19,62 @@
     const stepConfig = {
         validating: {
             title: "Validating Item",
-            description: "Checking if the item exists and is accessible...",
+            description: "Checking if the item exists and is accessible…",
             icon: CircleCheckBig,
         },
         downloading: {
             title: "Downloading Audio",
-            description: "Downloading the audiobook file(s)...",
+            description: "Downloading the audiobook file(s)…",
             icon: Download,
         },
         file_prep: {
             title: "Preparing files",
-            description: "Getting files ready for processing...",
+            description: "Getting files ready for processing…",
             icon: ClipboardList,
         },
         audio_analysis: {
             title: "Scanning for Chapter Cues",
-            description: "Analyzing audio to detect chapter cues...",
+            description: "Analyzing audio to detect chapter cues…",
             icon: ScanSearch,
         },
         vad_prep: {
             title: "Preparing files",
-            description: "Getting files ready for Smart Detection...",
+            description: "Getting files ready for Smart Detection…",
             icon: ClipboardList,
         },
         vad_analysis: {
             title: "Scanning for Chapter Cues",
-            description: "Analyzing voice activity to detect chapter cues...",
+            description: "Analyzing voice activity to detect chapter cues…",
             icon: AudioLines,
         },
         partial_scan_prep: {
             title: "Preparing Partial Scan",
-            description: "Extracting audio for analysis...",
+            description: "Extracting audio for analysis…",
             icon: ScissorsLineDashed,
         },
         partial_audio_analysis: {
             title: "Scanning for Chapter Cues",
-            description: "Analyzing audio in selected region...",
+            description: "Analyzing audio in selected region…",
             icon: ScanSearch,
         },
         partial_vad_analysis: {
             title: "Scanning for Chapter Cues",
-            description: "Analyzing voice activity in selected region...",
+            description: "Analyzing voice activity in selected region…",
             icon: AudioLines,
         },
         audio_extraction: {
             title: "Extracting",
-            description: "Extracting short segments of chapter audio...",
+            description: "Extracting short segments of chapter audio…",
             icon: ScissorsLineDashed,
         },
         trimming: {
             title: "Trimming",
-            description: "Removing excess audio from chapter segments...",
+            description: "Removing excess audio from chapter segments…",
             icon: Scissors,
         },
         asr_processing: {
             title: "Transcribing",
-            description: "Generating chapter titles using speech recognition...",
+            description: "Generating chapter titles using speech recognition…",
             icon: Mic,
         },
     };
@@ -82,7 +82,7 @@
     // Get current step configuration
     $: currentStepConfig = stepConfig[$session.step] || {
         title: "Processing",
-        description: "Working...",
+        description: "Working…",
         icon: Settings,
     };
 
@@ -193,7 +193,7 @@
         <div class="progress-section">
             <div class="progress-header">
         <span class="progress-label"
-        >{$progress.message || "Processing..."}</span
+        >{$progress.message || "Processing…"}</span
         >
                 <span class="progress-percent">{Math.round($progress.percent)}%</span>
             </div>
@@ -224,7 +224,7 @@
 
         {#if showConnectionWarning}
             <div class="alert alert-warning mb-3">
-                <strong>Connection Lost:</strong> Reconnecting to server...
+                <strong>Connection Lost:</strong> Reconnecting to server…
                 <br/><small
             >Progress updates may be delayed but processing continues.</small
             >
