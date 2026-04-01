@@ -624,6 +624,9 @@
     }
 
     function cancelTimestampEdit() {
+        if ($currentSegmentId && $currentSegmentId.startsWith('timestamp-edit-')) {
+            audio.stop();
+        }
         editingTimestampId = null;
         timestampInputValue = "";
         timestampValidationError = null;
