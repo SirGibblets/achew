@@ -358,10 +358,10 @@ async def configure_asr(request: ConfigureASRRequest, background_tasks: Backgrou
             )
 
         # Validate action
-        if request.action not in ["transcribe", "skip"]:
+        if request.action not in ["transcribe", "skip", "existing"]:
             raise HTTPException(
                 status_code=400,
-                detail="Action must be 'transcribe' or 'skip'",
+                detail="Action must be 'transcribe', 'skip' or 'existing'",
             )
 
         async def process_asr_action():
@@ -370,6 +370,8 @@ async def configure_asr(request: ConfigureASRRequest, background_tasks: Backgrou
                     await app_state.pipeline.proceed_with_transcription()
                 elif request.action == "skip":
                     await app_state.pipeline.skip_transcription()
+                elif request.action == "existing":
+                    await app_state.pipeline.use_existing_titles()
             except Exception as e:
                 logger.error(f"Failed to process ASR action: {e}")
 

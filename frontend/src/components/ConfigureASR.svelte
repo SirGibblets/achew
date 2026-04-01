@@ -47,6 +47,22 @@
         }
     }
 
+
+    async function useExistingTitles() {
+        if (loading) return;
+
+        loading = true;
+        try {
+            await api.session.configureASR("existing");
+        } catch (error) {
+            console.error("Failed to use existing titles:", error);
+            session.setError("Failed to use existing titles: " + error.message);
+        } finally {
+            loading = false;
+        }
+    }
+
+
     onMount(async () => {
         await loadSegmentCount();
     });
@@ -77,6 +93,19 @@
                 Processing…
             {:else}
                 Skip Transcription
+            {/if}
+        </button>
+
+        <button
+                class="btn btn-cancel"
+                on:click={useExistingTitles}
+                disabled={loading}
+        >
+            {#if loading}
+                <span class="btn-spinner"></span>
+                Processing…
+            {:else}
+                Use Existing Chapter Titles
             {/if}
         </button>
 

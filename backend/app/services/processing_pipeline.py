@@ -1285,6 +1285,46 @@ class ProcessingPipeline:
             await self.restart_at_step(RestartStep.CONFIGURE_ASR, f"Transcription failed: {str(e)}")
             raise
 
+    async def use_existing_titles(self) -> Dict[str, Any]:
+        """Use chapter titles from existing source but keep self.cues timestamps"""
+        try:
+
+            for i, timestamp in enumerate(self.cues):                
+                title = self.book.media.chapters[i].title if i < len(self.book.media.chapters) else ""
+                chapter = ChapterData(
+                    timestamp=timestamp,
+                    asr_title="",
+                    current_title=title,
+                    selected=True,
+                    audio_segment_path=self.segment_files[i] if i < len(self.segment_files) else "",
+                )
+                self.transcribed_chapters.append(chapter)
+
+            # Also populate the main chapters list for the UI
+            self.chapters = self.transcribed_chapters.copy()
+
+            # Set empty transcriptions to match chapter count
+            self.transcriptions = [""] * len(self.cues)
+
+            # self.step = Step.CHAPTER_EDITING
+            self._notify_progress(Step.CHAPTER_EDITING, 0)
+
+            logger.info(f"Used exsiting titles, created {len(self.transcribed_chapters)} chapters")
+
+            return {
+                "success": True,
+                "book": self.book,
+                "chapters": self.transcribed_chapters,
+                "segment_files": [],
+                "step": Step.CHAPTER_EDITING,
+                "message": "Chapters created with existing titles",
+            }
+
+        except Exception as e:
+            logger.error(f"Failed use existing titles: {e}", exc_info=True)
+            await self.restart_at_step(RestartStep.CONFIGURE_ASR, f"Failed to create chapters: {str(e)}")
+            raise
+
     async def skip_transcription(self) -> Dict[str, Any]:
         """Skip transcription and create empty chapters with timestamps only"""
         try:
