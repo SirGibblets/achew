@@ -78,9 +78,14 @@ class ProgressDispatcher:
     ):
         """Enqueue a progress notification. Safe to call from any thread.
 
-        If epoch is provided, the notification is dropped when drained
-        if the dispatcher's epoch has moved past it.
+        If epoch is provided and it doesn't match the current epoch, the
+        notification is dropped immediately to prevent stale worker threads
+        from corrupting step-change tracking.
         """
+        effective_epoch = epoch if epoch is not None else self._epoch
+        if effective_epoch != self._epoch:
+            return
+
         is_step_change = step != self._current_step
         self._current_step = step
 
@@ -89,7 +94,7 @@ class ProgressDispatcher:
             percent=percent,
             message=message or "",
             details=details or {},
-            epoch=epoch if epoch is not None else self._epoch,
+            epoch=effective_epoch,
             is_step_change=is_step_change,
         )
 

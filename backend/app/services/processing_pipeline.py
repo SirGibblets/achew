@@ -4,6 +4,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import threading
 import uuid
 from typing import Optional, List, Dict, Any, Tuple
 
@@ -79,6 +80,7 @@ class ProcessingPipeline:
         self.progress_callback: ProgressCallback = progress_callback
         self.item_id = item_id
         self._running_processes = []
+        self._process_lock = threading.Lock()
         self._transcription_task = None
         self._extraction_task = None
         self._trimming_task = None
@@ -300,26 +302,32 @@ class ProcessingPipeline:
             self._partial_scan_task = None
         self.cleanup_partial_scan_files()
 
-        # Cancel any running ffmpeg processes
-        if self._running_processes:
-            logger.info(f"Cancelling {len(self._running_processes)} running ffmpeg processes...")
-        for process in self._running_processes:
-            try:
-                if process.poll() is None:  # Process is still running
-                    logger.info(f"Terminating ffmpeg process {process.pid}")
-                    process.terminate()
-                    # Give it a moment to terminate gracefully
-                    try:
-                        process.wait(timeout=2)
-                    except subprocess.TimeoutExpired:
-                        logger.warning(f"Force killing ffmpeg process {process.pid}")
-                        process.kill()
-                else:
-                    logger.info(f"ffmpeg process {process.pid} already completed")
-            except Exception as e:
-                logger.warning(f"Error cancelling process {process.pid}: {e}")
+        # Cancel any running ffmpeg processes. Snapshot under lock so workers
+        # can't add a process between our iteration and the clear().
+        with self._process_lock:
+            processes_to_kill = list(self._running_processes)
+            self._running_processes.clear()
 
-        self._running_processes.clear()
+        if processes_to_kill:
+            logger.info(f"Cancelling {len(processes_to_kill)} running ffmpeg processes...")
+
+            async def _terminate_and_wait(proc):
+                try:
+                    if proc.poll() is None:
+                        logger.info(f"Terminating ffmpeg process {proc.pid}")
+                        proc.terminate()
+                        try:
+                            loop = asyncio.get_event_loop()
+                            await asyncio.wait_for(loop.run_in_executor(None, proc.wait), timeout=2.0)
+                        except asyncio.TimeoutError:
+                            logger.warning(f"Force killing ffmpeg process {proc.pid}")
+                            proc.kill()
+                    else:
+                        logger.info(f"ffmpeg process {proc.pid} already completed")
+                except Exception as e:
+                    logger.warning(f"Error cancelling process: {e}")
+
+            await asyncio.gather(*[_terminate_and_wait(p) for p in processes_to_kill])
 
     async def restart_at_step(self, step: RestartStep, error_message: str = None):
         """Restart the pipeline at a specific step"""
@@ -730,7 +738,7 @@ class ProcessingPipeline:
 
                     total_duration = sum(file_durations) if file_durations else None
 
-                    audio_service = AudioProcessingService(self._notify_progress, self._running_processes)
+                    audio_service = AudioProcessingService(self._notify_progress, self._running_processes, process_lock=self._process_lock)
                     concatenated_file = await audio_service.concat_files(audio_file_paths, total_duration)
 
                     if not concatenated_file or not os.path.exists(concatenated_file):
@@ -957,7 +965,7 @@ class ProcessingPipeline:
         """Detect chapter breaks and generate cues for user selection"""
 
         # Initialize services
-        audio_service = AudioProcessingService(self._notify_progress, self._running_processes)
+        audio_service = AudioProcessingService(self._scoped_progress_callback(), self._running_processes, process_lock=self._process_lock)
 
         self._notify_progress(Step.AUDIO_ANALYSIS, 0, "Analyzing audio...")
 
@@ -1021,7 +1029,7 @@ class ProcessingPipeline:
     async def _detect_realignment_cues(self, segments: List[Tuple[float, str]]):
         """Detect chapter cues for realignment"""
 
-        audio_service = AudioProcessingService(self._notify_progress, self._running_processes)
+        audio_service = AudioProcessingService(self._scoped_progress_callback(), self._running_processes, process_lock=self._process_lock)
 
         self._notify_progress(Step.AUDIO_ANALYSIS, 0, "Analyzing audio...")
 
@@ -1094,7 +1102,7 @@ class ProcessingPipeline:
         # Filter chapter breaks to remove any that occur after the audiobook ends
         self.cues = self._filter_cues_by_duration(self.cues)
 
-        audio_service = AudioProcessingService(self._scoped_progress_callback(), self._running_processes, asr_buffer=get_asr_buffer())
+        audio_service = AudioProcessingService(self._scoped_progress_callback(), self._running_processes, asr_buffer=get_asr_buffer(), process_lock=self._process_lock)
 
         self.segment_files = await audio_service.extract_segments(self.audio_file_path, self.cues, self.temp_dir)
 
@@ -1113,7 +1121,7 @@ class ProcessingPipeline:
 
         self._notify_progress(Step.AUDIO_EXTRACTION, 0, "Performing targeted audio extraction...")
 
-        audio_service = AudioProcessingService(self._scoped_progress_callback(), self._running_processes)
+        audio_service = AudioProcessingService(self._scoped_progress_callback(), self._running_processes, process_lock=self._process_lock)
 
         self.segment_files = await audio_service.extract_segments(
             audio_file=self.audio_file_path,
@@ -1135,7 +1143,7 @@ class ProcessingPipeline:
             app_config = get_app_config()
             copy_only = not app_config.asr_options.trim
 
-            audio_service = AudioProcessingService(self._scoped_progress_callback(), self._running_processes, asr_buffer=get_asr_buffer())
+            audio_service = AudioProcessingService(self._scoped_progress_callback(), self._running_processes, asr_buffer=get_asr_buffer(), process_lock=self._process_lock)
 
             # Create trimmed segments from original segments
             self._trimming_task = asyncio.create_task(audio_service.trim_segments(self.segment_files, copy_only))
@@ -1785,15 +1793,17 @@ class ProcessingPipeline:
         # use PIPE without reading it the OS pipe buffer fills, ffmpeg blocks on
         # write, process.wait() blocks on exit → deadlock on longer files.
         process = subprocess.Popen(cmd, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
-        self._running_processes.append(process)
+        with self._process_lock:
+            self._running_processes.append(process)
         try:
             process.wait()
             return process.returncode == 0
         finally:
-            try:
-                self._running_processes.remove(process)
-            except ValueError:
-                pass
+            with self._process_lock:
+                try:
+                    self._running_processes.remove(process)
+                except ValueError:
+                    pass
 
     def _run_split_extraction(
         self,
@@ -1825,15 +1835,17 @@ class ProcessingPipeline:
             output_pattern,
         ]
         process = subprocess.Popen(cmd, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
-        self._running_processes.append(process)
+        with self._process_lock:
+            self._running_processes.append(process)
         try:
             process.wait()
             return process.returncode == 0
         finally:
-            try:
-                self._running_processes.remove(process)
-            except ValueError:
-                pass
+            with self._process_lock:
+                try:
+                    self._running_processes.remove(process)
+                except ValueError:
+                    pass
 
     def _extract_segment_audio(
         self,
@@ -2042,6 +2054,7 @@ class ProcessingPipeline:
                         audio_service = AudioProcessingService(
                             make_audio_callback(base_progress, len(scan_files)),
                             self._running_processes,
+                            process_lock=self._process_lock,
                         )
                         file_silences = await audio_service.get_silence_boundaries(
                             file_path,

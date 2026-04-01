@@ -375,6 +375,7 @@ class AppState:
                             lambda *args, **kwargs: None,
                             running_processes=self.pipeline._running_processes,
                             asr_buffer=get_asr_buffer(),
+                            process_lock=self.pipeline._process_lock,
                         )
 
                         # Introduce time jitter to avoid overly deterministic results when re-transcribing

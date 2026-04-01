@@ -1,10 +1,13 @@
 import asyncio
 import logging
+import multiprocessing
 import os
 import re
 import shutil
 import subprocess
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import List, Tuple, Optional
 
@@ -27,6 +30,61 @@ def _format_time(seconds: float) -> str:
     minutes = int((seconds % 3600) // 60)
     seconds = int(seconds % 60)
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+
+# Seconds of overlap between adjacent segments during parallel silence detection
+PARALLEL_SILENCE_OVERLAP = 20
+
+
+# Minimum duration (in seconds) to warrant parallel detection
+MIN_DURATION_FOR_PARALLEL = 30 * 60 # 30 minutes
+
+
+def _get_worker_count() -> int:
+    """Use 2/3 of cores"""
+    total_cores = multiprocessing.cpu_count()
+    return max(1, total_cores * 2 // 3)
+
+
+def _compute_virtual_segments(
+    total_duration: float,
+    num_workers: int,
+    overlap: float = PARALLEL_SILENCE_OVERLAP,
+) -> List[Tuple[float, float]]:
+    """
+    Divide audio into overlapping virtual segments for parallel processing.
+
+    Returns list of (seek_position, segment_duration) tuples suitable for
+    FFmpeg -ss and -t flags.
+    """
+    segment_length = total_duration / num_workers
+    segments = []
+    for i in range(num_workers):
+        seg_start = max(0.0, i * segment_length - overlap / 2)
+        seg_end = min(total_duration, (i + 1) * segment_length + overlap / 2)
+        segments.append((seg_start, seg_end - seg_start))
+    return segments
+
+
+def _merge_overlapping_silences(
+    silences: List[Tuple[float, float]],
+    tolerance: float = 0.05,
+) -> List[Tuple[float, float]]:
+    """
+    Sort silences by start time and merge intervals that overlap or are
+    within tolerance seconds of each other.
+    """
+    if not silences:
+        return []
+    sorted_silences = sorted(silences, key=lambda s: s[0])
+    merged = [sorted_silences[0]]
+    for start, end in sorted_silences[1:]:
+        prev_start, prev_end = merged[-1]
+        if start <= prev_end + tolerance:
+            merged[-1] = (prev_start, max(prev_end, end))
+        else:
+            merged.append((start, end))
+    return merged
 
 
 def crop_start_to_tempfile(audio_file: str, crop_seconds: float) -> str | None:
@@ -54,9 +112,10 @@ def crop_start_to_tempfile(audio_file: str, crop_seconds: float) -> str | None:
 class AudioProcessingService:
     """Service for audio processing operations using ffmpeg"""
 
-    def __init__(self, progress_callback: ProgressCallback, running_processes=None, asr_buffer: float = 0.1):
+    def __init__(self, progress_callback: ProgressCallback, running_processes=None, asr_buffer: float = 0.1, process_lock: threading.Lock = None):
         self.progress_callback: ProgressCallback = progress_callback
         self._running_processes = running_processes if running_processes is not None else []
+        self._process_lock = process_lock or threading.Lock()
         self.asr_buffer = asr_buffer
 
     def _notify_progress(self, step: Step, percent: float, message: str = "", details: dict = None):
@@ -83,43 +142,56 @@ class AudioProcessingService:
 
     async def get_silence_boundaries(
         self,
-        input_file: List[str],
+        input_file: str,
         silence_threshold: float = -30,
         duration: Optional[float] = None,
         publish_progress: bool = True,
     ) -> Optional[List[Tuple[float, float]]]:
         """
-        Detect silence boundaries in audio files using ffmpeg.
-        Can handle single file (for backward compatibility) or multiple files.
+        Detect silence boundaries in an audio file using ffmpeg.
         Returns a list of tuples containing (silence_start, silence_end) timestamps.
-        For multiple files, timestamps are adjusted to a continuous timeline.
+
+        When duration is known and long enough, runs parallel detection across
+        virtual segments for faster results on multi-core machines.
         """
         if publish_progress:
             self._notify_progress(Step.AUDIO_ANALYSIS, 0, "Starting audio analysis...")
 
-        all_silences = []
+        num_workers = _get_worker_count()
+        use_parallel = (
+            duration is not None
+            and duration >= MIN_DURATION_FOR_PARALLEL
+            and num_workers > 1
+        )
 
-        # noinspection SpellCheckingInspection
-        cmd = [
-            "ffmpeg",
-            "-i",
-            input_file,
-            "-af",
-            f"silencedetect=n={silence_threshold}dB:d={MIN_SILENCE_DURATION}",
-            "-f",
-            "null",
-            "-",
-        ]
-
-        # Run in executor to avoid blocking the event loop
         loop = asyncio.get_event_loop()
 
-        executor_task = loop.run_in_executor(
-            None,
-            self._run_silence_detection,
-            cmd,
-            duration,
-        )
+        if use_parallel:
+            executor_task = loop.run_in_executor(
+                None,
+                self._run_parallel_silence_detection,
+                input_file,
+                silence_threshold,
+                duration,
+            )
+        else:
+            # noinspection SpellCheckingInspection
+            cmd = [
+                "ffmpeg",
+                "-i",
+                input_file,
+                "-af",
+                f"silencedetect=n={silence_threshold}dB:d={MIN_SILENCE_DURATION}",
+                "-f",
+                "null",
+                "-",
+            ]
+            executor_task = loop.run_in_executor(
+                None,
+                self._run_silence_detection,
+                cmd,
+                duration,
+            )
 
         file_silences = await executor_task
 
@@ -128,12 +200,10 @@ class AudioProcessingService:
             logger.info("Silence detection was cancelled, returning None")
             return None
 
-        all_silences.extend(file_silences)
-
         if publish_progress:
-            self._notify_progress(Step.AUDIO_ANALYSIS, 100, f"Found {len(all_silences)} potential chapter breaks")
+            self._notify_progress(Step.AUDIO_ANALYSIS, 100, f"Found {len(file_silences)} potential chapter breaks")
 
-        return all_silences
+        return file_silences
 
     def _run_silence_detection(
         self,
@@ -144,7 +214,8 @@ class AudioProcessingService:
         """Run silence detection in a separate thread"""
         process = subprocess.Popen(cmd, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
 
-        self._running_processes.append(process)
+        with self._process_lock:
+            self._running_processes.append(process)
 
         try:
             silence_starts = []
@@ -202,10 +273,160 @@ class AudioProcessingService:
 
             return list(zip(silence_starts, silence_ends))
         finally:
-            try:
-                self._running_processes.remove(process)
-            except ValueError:
-                pass
+            with self._process_lock:
+                try:
+                    self._running_processes.remove(process)
+                except ValueError:
+                    pass
+
+    def _run_silence_detection_worker(
+        self,
+        input_file: str,
+        seek: float,
+        segment_duration: float,
+        silence_threshold: float,
+        duration: float,
+        cancelled: threading.Event,
+        worker_progress: list,
+        worker_index: int,
+        cue_counter: list,
+        last_feed_time: list,
+    ) -> Optional[List[Tuple[float, float]]]:
+        """Detect silences in a virtual segment of the audio file."""
+        if cancelled.is_set():
+            return None
+
+        # noinspection SpellCheckingInspection
+        cmd = [
+            "ffmpeg",
+            "-ss", str(seek),
+            "-i", input_file,
+            "-t", str(segment_duration),
+            "-af", f"silencedetect=n={silence_threshold}dB:d={MIN_SILENCE_DURATION}",
+            "-f", "null",
+            "-",
+        ]
+
+        process = subprocess.Popen(cmd, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
+
+        with self._process_lock:
+            self._running_processes.append(process)
+
+        try:
+            silence_starts = []
+            silence_ends = []
+
+            pattern_start = re.compile(r"silence_start:\s*([\d\.]+)")
+            pattern_end = re.compile(r"silence_end:\s*([\d\.]+)")
+
+            for line in process.stderr:
+                if cancelled.is_set():
+                    process.terminate()
+                    process.wait()
+                    return None
+
+                if "silence_start" in line:
+                    match = pattern_start.search(line)
+                    if match:
+                        local_ts = float(match.group(1))
+                        silence_starts.append(local_ts + seek)
+                elif "silence_end" in line:
+                    match = pattern_end.search(line)
+                    if match:
+                        local_ts = float(match.group(1))
+                        silence_ends.append(local_ts + seek)
+
+                        if segment_duration > 0:
+                            worker_progress[worker_index] = min((local_ts / segment_duration) * 100, 100)
+
+                        # Report aggregate progress from this worker
+                        avg_progress = sum(worker_progress) / len(worker_progress)
+                        virtual_ts = (avg_progress / 100) * duration
+                        message = f"Analyzing audio... ({_format_time(virtual_ts)} / {_format_time(duration)})"
+
+                        with self._process_lock:
+                            cue_counter[0] += 1
+                            cue_count = cue_counter[0]
+
+                        now = time.monotonic()
+                        details = None
+                        if now - last_feed_time[0] >= 0.5:
+                            details = {
+                                "feed_text": f"Found {cue_count} potential chapter cue{'s' if cue_count != 1 else ''}"
+                            }
+                            last_feed_time[0] = now
+
+                        self._notify_progress(Step.AUDIO_ANALYSIS, avg_progress, message, details)
+
+            process.wait()
+
+            if process.returncode in [-15, 254, 255]:
+                cancelled.set()
+                return None
+            if process.returncode != 0:
+                logger.error(
+                    f"ffmpeg silence detection worker {worker_index} failed with return code {process.returncode}"
+                )
+                return []
+
+            worker_progress[worker_index] = 100.0
+            return list(zip(silence_starts, silence_ends))
+        finally:
+            with self._process_lock:
+                try:
+                    self._running_processes.remove(process)
+                except ValueError:
+                    pass
+
+    def _run_parallel_silence_detection(
+        self,
+        input_file: str,
+        silence_threshold: float,
+        duration: float,
+    ) -> Optional[List[Tuple[float, float]]]:
+        """Run silence detection across virtual segments in parallel."""
+        num_workers = _get_worker_count()
+        segments = _compute_virtual_segments(duration, num_workers)
+        cancelled = threading.Event()
+        worker_progress = [0.0] * len(segments)
+        cue_counter = [0]
+        last_feed_time = [0.0]
+
+        logger.info(
+            f"Running parallel silence detection: {len(segments)} segments "
+            f"across {duration:.0f}s audio with {PARALLEL_SILENCE_OVERLAP}s overlap"
+        )
+
+        all_silences: List[Tuple[float, float]] = []
+
+        with ThreadPoolExecutor(max_workers=num_workers) as executor:
+            futures = {
+                executor.submit(
+                    self._run_silence_detection_worker,
+                    input_file, seek, seg_dur, silence_threshold,
+                    duration, cancelled, worker_progress, i,
+                    cue_counter, last_feed_time,
+                ): i
+                for i, (seek, seg_dur) in enumerate(segments)
+            }
+
+            for future in as_completed(futures):
+                result = future.result()
+
+                if cancelled.is_set():
+                    for f in futures:
+                        f.cancel()
+                    return None
+
+                if result:
+                    all_silences.extend(result)
+
+        merged = _merge_overlapping_silences(all_silences)
+        logger.info(
+            f"Parallel silence detection complete: {len(all_silences)} raw silences "
+            f"merged to {len(merged)}"
+        )
+        return merged
 
     async def extract_segments(
         self,
@@ -276,7 +497,8 @@ class AudioProcessingService:
         command.append(output_path)
 
         process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
-        self._running_processes.append(process)
+        with self._process_lock:
+            self._running_processes.append(process)
 
         try:
             _, stderr_output = process.communicate()
@@ -285,8 +507,11 @@ class AudioProcessingService:
                 return None
             return output_path
         finally:
-            if process in self._running_processes:
-                self._running_processes.remove(process)
+            with self._process_lock:
+                try:
+                    self._running_processes.remove(process)
+                except ValueError:
+                    pass
 
     def _trim_segment(self, segment_path: str, extension: str):
         """Trim a segment at its longest silence"""
@@ -428,7 +653,8 @@ class AudioProcessingService:
 
         process = subprocess.Popen(command, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
 
-        self._running_processes.append(process)
+        with self._process_lock:
+            self._running_processes.append(process)
 
         try:
             segment_pattern = re.compile(r"Opening '.*segment.*' for writing")
@@ -461,10 +687,11 @@ class AudioProcessingService:
                 else:
                     raise subprocess.CalledProcessError(process.returncode, command)
         finally:
-            try:
-                self._running_processes.remove(process)
-            except ValueError:
-                pass
+            with self._process_lock:
+                try:
+                    self._running_processes.remove(process)
+                except ValueError:
+                    pass
 
         # Delete all odd-numbered segments (extended segments) and rename even-numbered ones with timestamps
         paths = []
@@ -523,100 +750,161 @@ class AudioProcessingService:
         paths: List[str],
         copy_only: bool = False,
     ) -> List[str]:
-        """Run segment extraction in a separate thread"""
-        trimmed_paths = []
-        for i, path in enumerate(paths):
-            try:
-                # Check if any processes were terminated (indicates cancellation)
-                if any(
-                    proc.poll() is not None and proc.returncode in [-15, 254, 255] for proc in self._running_processes
-                ):
-                    output_dir = os.path.dirname(path)
+        """Trim segments in parallel using a thread pool."""
+        if not paths:
+            return []
+
+        max_workers = min(_get_worker_count(), len(paths))
+        cancelled = threading.Event()
+        completed_count = [0]
+        total = len(paths)
+
+        logger.info(f"Trimming {total} segments with {max_workers} parallel workers")
+
+        results: List[Optional[str]] = [None] * total
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(
+                    self._trim_single_segment, i, path, copy_only, cancelled, completed_count, total
+                ): i
+                for i, path in enumerate(paths)
+            }
+
+            for future in as_completed(futures):
+                index, trimmed_path = future.result()
+                results[index] = trimmed_path
+
+                if cancelled.is_set():
+                    for f in futures:
+                        f.cancel()
+                    output_dir = os.path.dirname(paths[0])
                     logger.info(f"Segment trimming was cancelled. Cleaning up trimmed files in {output_dir}...")
                     self.clean_up_orphaned_trimmed_files(output_dir)
                     return []
 
-                trimmed_path = path.replace("segment_", "trimmed_")
-                trimmed_paths.append(trimmed_path)
+        return [r for r in results if r is not None]
 
-                if copy_only:
-                    shutil.copy2(path, trimmed_path)
-                    continue
+    def _trim_single_segment(
+        self,
+        index: int,
+        path: str,
+        copy_only: bool,
+        cancelled: threading.Event,
+        completed_count: list,
+        total: int,
+    ) -> Tuple[int, Optional[str]]:
+        """Trim a single segment. Runs in a worker thread."""
+        trimmed_path = path.replace("segment_", "trimmed_")
 
-                # Use synchronous version for trimming (called from thread)
-                silences = self._sync_get_silence_boundaries(path)
+        def _finish_with_copy(src: str, dst: str) -> Tuple[int, Optional[str]]:
+            """Copy the file and report progress."""
+            shutil.copy2(src, dst)
+            with self._process_lock:
+                completed_count[0] += 1
+                count = completed_count[0]
+            self._notify_progress(
+                Step.TRIMMING, (count / total) * 100,
+                f"Trimmed chapter {count} of {total}...",
+                {"trimmed_segments": count, "total_segments": total},
+            )
+            return (index, dst)
 
-                # Filter out silences that are too close to the beginning
-                if silences:
-                    silences = [
-                        s for s in silences if s[1] >= self.asr_buffer + MIN_TRIMMED_SEGMENT_LENGTH
-                    ]
+        try:
+            if cancelled.is_set():
+                return (index, None)
 
-                if silences:
-                    # Sort by duration and get the longest silence
-                    longest = sorted(silences, key=lambda x: (x[1] - x[0]), reverse=True)[0]
-                    trim_point = max(MIN_TRIMMED_SEGMENT_LENGTH, longest[0] + self.asr_buffer)
+            if copy_only:
+                return _finish_with_copy(path, trimmed_path)
 
-                    trim_cmd = [
-                        "ffmpeg",
-                        "-y",
-                        "-i",
-                        path,
-                        "-t",
-                        str(trim_point),
-                        "-c",
-                        "copy",
-                        trimmed_path,
-                    ]
+            if cancelled.is_set():
+                return (index, None)
 
-                    try:
-                        process = subprocess.Popen(trim_cmd)
+            silences = self._sync_get_silence_boundaries(path, cancelled=cancelled)
 
+            if cancelled.is_set():
+                return (index, None)
+
+            # Filter out silences that are too close to the beginning
+            if silences:
+                silences = [
+                    s for s in silences if s[1] >= self.asr_buffer + MIN_TRIMMED_SEGMENT_LENGTH
+                ]
+
+            if silences:
+                # Sort by duration and get the longest silence
+                longest = sorted(silences, key=lambda x: (x[1] - x[0]), reverse=True)[0]
+                trim_point = max(MIN_TRIMMED_SEGMENT_LENGTH, longest[0] + self.asr_buffer)
+
+                trim_cmd = [
+                    "ffmpeg",
+                    "-y",
+                    "-i",
+                    path,
+                    "-t",
+                    str(trim_point),
+                    "-c",
+                    "copy",
+                    trimmed_path,
+                ]
+
+                process = None
+                try:
+                    process = subprocess.Popen(trim_cmd)
+
+                    with self._process_lock:
                         self._running_processes.append(process)
 
-                        process.wait()
+                    process.wait()
 
-                        if process.returncode in [-15, 254, 255]:
-                            output_dir = os.path.dirname(path)
-                            logger.info(f"Segment trimming was cancelled. Cleaning up trimmed files in {output_dir}...")
-                            self.clean_up_orphaned_trimmed_files(output_dir)
-                            return []
-                        elif process.returncode != 0:
-                            logger.error(
-                                f"Failed to trim segment {path}, will use untrimmed copy:\nExit code {process.returncode}\n{process.stderr.read()}"
-                            )
-                            shutil.copy2(path, trimmed_path)
-                            continue
-                    finally:
-                        try:
-                            self._running_processes.remove(process)
-                        except ValueError:
-                            pass
+                    if process.returncode in [-15, 254, 255]:
+                        cancelled.set()
+                        return (index, None)
+                    elif process.returncode != 0:
+                        logger.error(
+                            f"Failed to trim segment {path}, will use untrimmed copy:\nExit code {process.returncode}"
+                        )
+                        shutil.copy2(path, trimmed_path)
+                finally:
+                    if process is not None:
+                        with self._process_lock:
+                            try:
+                                self._running_processes.remove(process)
+                            except ValueError:
+                                pass
 
-                # If no silences were found, just copy the file without trimming
-                if not silences:
-                    shutil.copy2(path, trimmed_path)
+            # If no silences were found, just copy the file without trimming
+            if not silences:
+                shutil.copy2(path, trimmed_path)
 
-                # Update trimming progress
-                if len(paths) > 0:
-                    trim_progress = ((i + 1) / len(paths)) * 100
-                    message = f"Trimmed chapter {i + 1} of {len(paths)}..."
-                    details = {"trimmed_segments": i + 1, "total_segments": len(paths)}
+            with self._process_lock:
+                completed_count[0] += 1
+                count = completed_count[0]
+            self._notify_progress(
+                Step.TRIMMING, (count / total) * 100,
+                f"Trimmed chapter {count} of {total}...",
+                {"trimmed_segments": count, "total_segments": total},
+            )
 
-                    self._notify_progress(Step.TRIMMING, trim_progress, message, details)
+            return (index, trimmed_path)
 
-            except Exception as e:
-                logger.warning(f"Failed to trim segment {path}: {e}")
-                continue
-
-        return trimmed_paths
+        except Exception as e:
+            logger.warning(f"Failed to trim segment {path}: {e}")
+            try:
+                return _finish_with_copy(path, trimmed_path)
+            except Exception:
+                return (index, None)
 
     def _sync_get_silence_boundaries(
         self,
         input_file: str,
         silence_threshold: float = -30,
+        cancelled: Optional[threading.Event] = None,
     ) -> Optional[List[Tuple[float, float]]]:
-        """Synchronous version of silence detection for use in threads"""
+        """Synchronous version of silence detection for use in threads."""
+        if cancelled and cancelled.is_set():
+            return None
+
         # noinspection SpellCheckingInspection
         cmd = [
             "ffmpeg",
@@ -631,7 +919,8 @@ class AudioProcessingService:
 
         process = subprocess.Popen(cmd, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
 
-        self._running_processes.append(process)
+        with self._process_lock:
+            self._running_processes.append(process)
 
         try:
             silence_starts = []
@@ -656,6 +945,8 @@ class AudioProcessingService:
 
             if process.returncode in [-15, 254, 255]:
                 logger.info(f"Silence detection was cancelled. Cleaning up...")
+                if cancelled:
+                    cancelled.set()
                 return None
             if process.returncode != 0:
                 logger.error(
@@ -666,10 +957,11 @@ class AudioProcessingService:
             silences = list(zip(silence_starts, silence_ends))
             return silences
         finally:
-            try:
-                self._running_processes.remove(process)
-            except ValueError:
-                pass
+            with self._process_lock:
+                try:
+                    self._running_processes.remove(process)
+                except ValueError:
+                    pass
 
     async def concat_files(
         self,
@@ -748,7 +1040,8 @@ class AudioProcessingService:
             process = subprocess.Popen(
                 cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE, text=True, encoding="utf-8", errors="replace"
             )
-            self._running_processes.append(process)
+            with self._process_lock:
+                self._running_processes.append(process)
 
             stderr_output = []
 
@@ -823,10 +1116,11 @@ class AudioProcessingService:
             logger.error(f"Exception during file concatenation: {e}")
             return None
         finally:
-            try:
-                self._running_processes.remove(process)
-            except ValueError:
-                pass
+            with self._process_lock:
+                try:
+                    self._running_processes.remove(process)
+                except ValueError:
+                    pass
             if os.path.exists(filelist_path):
                 try:
                     os.remove(filelist_path)
