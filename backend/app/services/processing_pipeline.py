@@ -1288,9 +1288,22 @@ class ProcessingPipeline:
     async def use_existing_titles(self) -> Dict[str, Any]:
         """Use chapter titles from existing source but keep self.cues timestamps"""
         try:
-
+            chapter_data = []
+            # Use previously queried cues from external source
+            for cue_source in self.existing_cue_sources: 
+                if cue_source.id != 'abs':
+                    for cue in cue_source.cues:
+                        chapter_data.append(cue.title)
+                    break     
+            if len(chapter_data)<1:
+                audnexus_chapter_data = None
+                if book.media.metadata.asin:
+                    audnexus_chapter_data = await abs_service.get_audnexus_chapters(book.media.metadata.asin)
+                if audnexus_chapter_data:
+                    for chapter in audnexus_chapter_data.chapters:
+                        chapter_data.append(title)
             for i, timestamp in enumerate(self.cues):                
-                title = self.book.media.chapters[i].title if i < len(self.book.media.chapters) else ""
+                title = chapter_data[i] if i < len(chapter_data) else ""
                 chapter = ChapterData(
                     timestamp=timestamp,
                     asr_title="",
