@@ -5,7 +5,7 @@
     export let message = null;
 
     $: statusText =
-        message ?? ($ws.reconnecting ? "Reconnecting…" : "Connecting...");
+        message ?? ($ws.reconnecting ? "Reconnecting…" : "Connecting…");
 </script>
 
 <div class="connecting">

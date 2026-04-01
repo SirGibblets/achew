@@ -37,7 +37,7 @@ settings = get_settings()
 async def lifespan(achew_app: FastAPI):
     """Application lifespan context manager"""
     # Startup
-    logger.info("Starting achew")
+    logger.info("Starting Achew")
     logger.info(f"CORS origins: {settings.cors_origins_list}")
 
     # Check API configuration
@@ -72,7 +72,7 @@ async def lifespan(achew_app: FastAPI):
     yield
 
     # Shutdown
-    logger.info("Shutting down achew")
+    logger.info("Shutting down Achew")
 
     # Cleanup app state
     app_state = get_app_state()
@@ -98,7 +98,7 @@ def get_static_directory() -> Path | None:
 
 # Create FastAPI app
 app = FastAPI(
-    title="achew",
+    title="Achew",
     description="Audiobook Chapter Extraction Wizard for Audiobookshelf",
     version="1.0.0",
     docs_url="/docs",
@@ -156,7 +156,7 @@ async def serve_index():
 
     # Fallback API response if no frontend built
     return {
-        "message": "achew API",
+        "message": "Achew API",
         "version": "1.0.0",
         "status": "running",
         "note": "Frontend not built. Run 'npm run build' in frontend directory or use './run.sh' from project root.",
@@ -167,7 +167,7 @@ async def serve_index():
 async def api_root():
     """API root endpoint"""
     return {
-        "message": "achew API",
+        "message": "Achew API",
         "version": "1.0.0",
         "status": "running",
         "endpoints": {

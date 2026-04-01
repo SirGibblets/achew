@@ -155,7 +155,7 @@ class AudioProcessingService:
         virtual segments for faster results on multi-core machines.
         """
         if publish_progress:
-            self._notify_progress(Step.AUDIO_ANALYSIS, 0, "Starting audio analysis...")
+            self._notify_progress(Step.AUDIO_ANALYSIS, 0, "Starting audio analysis…")
 
         num_workers = _get_worker_count()
         use_parallel = (
@@ -242,7 +242,7 @@ class AudioProcessingService:
                         # Update progress based on silence end timestamp
                         if publish_progress and duration and timestamp > last_progress:
                             file_progress = min((timestamp / duration) * 100, 100)
-                            message = f"Analyzing audio... ({_format_time(timestamp)} / {_format_time(duration)})"
+                            message = f"Analyzing audio… ({_format_time(timestamp)} / {_format_time(duration)})"
 
                             # Throttle feed_text to max 2 updates/sec
                             cue_count = len(silence_ends)
@@ -342,7 +342,7 @@ class AudioProcessingService:
                         # Report aggregate progress from this worker
                         avg_progress = sum(worker_progress) / len(worker_progress)
                         virtual_ts = (avg_progress / 100) * duration
-                        message = f"Analyzing audio... ({_format_time(virtual_ts)} / {_format_time(duration)})"
+                        message = f"Analyzing audio… ({_format_time(virtual_ts)} / {_format_time(duration)})"
 
                         with self._process_lock:
                             cue_counter[0] += 1
@@ -438,7 +438,7 @@ class AudioProcessingService:
     ) -> Optional[List[str]]:
         """Extract audio segments based on timestamps from single or multiple files"""
 
-        self._notify_progress(Step.AUDIO_EXTRACTION, 0, "Starting chapter audio extraction...")
+        self._notify_progress(Step.AUDIO_EXTRACTION, 0, "Starting chapter audio extraction…")
 
         # Run in executor to avoid blocking the event loop
         loop = asyncio.get_event_loop()
@@ -668,7 +668,7 @@ class AudioProcessingService:
                     # Update progress for segment creation
                     if total_segments > 0:
                         progress_percent = (corrected_segments / total_segments) * 100
-                        message = f"Extracted chapter {corrected_segments} of {total_segments}..."
+                        message = f"Extracted chapter {corrected_segments} of {total_segments}…"
                         details = {"segments_created": corrected_segments, "total_segments": total_segments}
 
                         self._notify_progress(Step.AUDIO_EXTRACTION, progress_percent, message, details)
@@ -679,10 +679,10 @@ class AudioProcessingService:
                 self.clean_up_orphaned_segment_files(output_dir)
                 if process.returncode in [254, 255]:
                     # ffmpeg returns 254/255 when cancelled or input file missing
-                    logger.info(f"Segment extraction was cancelled. Cleaning up...")
+                    logger.info(f"Segment extraction was cancelled. Cleaning up…")
                     return []
                 elif allow_retry and not use_wav:
-                    logger.warning("Error extracting segments. Cleaning up and retrying with WAV output...")
+                    logger.warning("Error extracting segments. Cleaning up and retrying with WAV output…")
                     return self._run_segment_extraction(audio_file, timestamps, output_dir, True, False)
                 else:
                     raise subprocess.CalledProcessError(process.returncode, command)
@@ -722,7 +722,7 @@ class AudioProcessingService:
     ) -> List[str]:
         """Extract audio segments based on timestamps from single or multiple files"""
 
-        self._notify_progress(Step.TRIMMING, 0, "Starting segment trimming...")
+        self._notify_progress(Step.TRIMMING, 0, "Starting segment trimming…")
 
         # Run in executor to avoid blocking the event loop
         loop = asyncio.get_event_loop()
@@ -779,7 +779,7 @@ class AudioProcessingService:
                     for f in futures:
                         f.cancel()
                     output_dir = os.path.dirname(paths[0])
-                    logger.info(f"Segment trimming was cancelled. Cleaning up trimmed files in {output_dir}...")
+                    logger.info(f"Segment trimming was cancelled. Cleaning up trimmed files in {output_dir}…")
                     self.clean_up_orphaned_trimmed_files(output_dir)
                     return []
 
@@ -805,7 +805,7 @@ class AudioProcessingService:
                 count = completed_count[0]
             self._notify_progress(
                 Step.TRIMMING, (count / total) * 100,
-                f"Trimmed chapter {count} of {total}...",
+                f"Trimmed chapter {count} of {total}…",
                 {"trimmed_segments": count, "total_segments": total},
             )
             return (index, dst)
@@ -882,7 +882,7 @@ class AudioProcessingService:
                 count = completed_count[0]
             self._notify_progress(
                 Step.TRIMMING, (count / total) * 100,
-                f"Trimmed chapter {count} of {total}...",
+                f"Trimmed chapter {count} of {total}…",
                 {"trimmed_segments": count, "total_segments": total},
             )
 
@@ -944,7 +944,7 @@ class AudioProcessingService:
             process.wait()
 
             if process.returncode in [-15, 254, 255]:
-                logger.info(f"Silence detection was cancelled. Cleaning up...")
+                logger.info(f"Silence detection was cancelled. Cleaning up…")
                 if cancelled:
                     cancelled.set()
                 return None
@@ -970,7 +970,7 @@ class AudioProcessingService:
     ) -> Optional[str]:
         """Concatenate multiple audio files into one"""
 
-        self._notify_progress(Step.FILE_PREP, 0, "Preparing files...")
+        self._notify_progress(Step.FILE_PREP, 0, "Preparing files…")
 
         # Run in executor to avoid blocking the event loop
         loop = asyncio.get_event_loop()
@@ -984,7 +984,7 @@ class AudioProcessingService:
             logger.info("File concatenation was cancelled or failed")
             return None
 
-        self._notify_progress(Step.FILE_PREP, 100, "File prep completed...")
+        self._notify_progress(Step.FILE_PREP, 100, "File prep completed…")
         return output_file
 
     def _run_concat_files(
@@ -1007,7 +1007,7 @@ class AudioProcessingService:
         output_file = os.path.join(os.path.dirname(input_files[0]), "concatenated." + ext)
 
         if not total_duration:
-            self._notify_progress(Step.FILE_PREP, 0, "Preparing files, please wait...")
+            self._notify_progress(Step.FILE_PREP, 0, "Preparing files, please wait…")
 
         # Create a temporary file list for ffmpeg concat demuxer
         filelist_path = os.path.join(os.path.dirname(input_files[0]), "concat_filelist.txt")
@@ -1067,7 +1067,7 @@ class AudioProcessingService:
                             current_time_str = _format_time(current_time)
                             total_time_str = _format_time(total_duration)
 
-                            message = f"Preparing files... ({current_time_str} / {total_time_str})"
+                            message = f"Preparing files… ({current_time_str} / {total_time_str})"
                             details = {
                                 "current_time": current_time,
                                 "total_duration": total_duration,

@@ -60,7 +60,7 @@ class VadDetectionService:
 
     def _split_audio_into_chunks(self, audio_file: str, duration: float, temp_dir: str) -> List[str]:
         """Split audio file into 10-minute chunks using efficient ffmpeg segmentation with progress monitoring"""
-        logger.info(f"Splitting audio into chunks using ffmpeg segment...")
+        logger.info(f"Splitting audio into chunks using ffmpeg segment…")
 
         # Check for cancellation before starting
         if self._is_cancelled:
@@ -119,7 +119,7 @@ class VadDetectionService:
                     self._notify_progress(
                         Step.VAD_PREP,
                         segments_created / expected_segments * 100,
-                        "Preparing...",
+                        "Preparing…",
                         {"chunks_created": segments_created},
                     )
 
@@ -346,7 +346,7 @@ class VadDetectionService:
             self._notify_progress(
                 Step.VAD_ANALYSIS,
                 100,
-                f"Analyzing audio... ({_format_time(completed_duration)} / {_format_time(total_duration)})",
+                f"Analyzing audio… ({_format_time(completed_duration)} / {_format_time(total_duration)})",
                 {"chunk": total_chunks, "total_chunks": total_chunks},
             )
 
@@ -402,12 +402,12 @@ class VadDetectionService:
                             details["feed_text"] = f"Found {gaps_found} potential chapter cue{'s' if gaps_found != 1 else ''}"
 
                         if avg_progress < 0.01:
-                            self._notify_progress(Step.VAD_ANALYSIS, 0, "Starting analysis, please wait...", details)
+                            self._notify_progress(Step.VAD_ANALYSIS, 0, "Starting analysis, please wait…", details)
                         else:
                             self._notify_progress(
                                 Step.VAD_ANALYSIS,
                                 avg_progress,
-                                f"Analyzing audio... ({_format_time(current_duration)} / {_format_time(total_duration)})",
+                                f"Analyzing audio… ({_format_time(current_duration)} / {_format_time(total_duration)})",
                                 details,
                             )
 
@@ -422,7 +422,7 @@ class VadDetectionService:
         """Cancel all running VAD subprocesses"""
         self._is_cancelled = True
         if self._vad_processes:
-            logger.info(f"Cancelling {len(self._vad_processes)} VAD processes...")
+            logger.info(f"Cancelling {len(self._vad_processes)} VAD processes…")
             for process in self._vad_processes:
                 try:
                     if process.poll() is None:  # Process still running
@@ -516,7 +516,7 @@ class VadDetectionService:
         temp_dir = None
         try:
             self._check_cancellation()
-            self._notify_progress(Step.VAD_PREP, 0, "Preparing...")
+            self._notify_progress(Step.VAD_PREP, 0, "Preparing…")
 
             # Create temporary directory for chunks under the pipeline's base temp dir
             temp_dir = tempfile.mkdtemp(prefix="vad_chunks_", dir=self.tmp_dir)
@@ -571,7 +571,7 @@ class VadDetectionService:
             self._check_cancellation()
 
             # Step 1: Split audio into chunks using efficient ffmpeg segmentation
-            self._notify_progress(Step.VAD_PREP, 0, "Preparing...")
+            self._notify_progress(Step.VAD_PREP, 0, "Preparing…")
             chunk_files = await self._split_audio_into_chunks_async(audio_file, duration, temp_dir)
 
             self._check_cancellation()
@@ -580,7 +580,7 @@ class VadDetectionService:
                 logger.error("No chunks created, aborting VAD processing")
                 return []
 
-            self._notify_progress(Step.VAD_ANALYSIS, 0, f"File prep complete, starting smart detection...")
+            self._notify_progress(Step.VAD_ANALYSIS, 0, f"File prep complete, starting smart detection…")
 
             self._check_cancellation()
 
@@ -590,7 +590,7 @@ class VadDetectionService:
             self._check_cancellation()
 
             # Step 3: Merge overlapping gaps and filter by duration
-            self._notify_progress(Step.VAD_ANALYSIS, 100, "Gathering results...")
+            self._notify_progress(Step.VAD_ANALYSIS, 100, "Gathering results…")
 
             final_gaps = self._merge_overlapping_gaps(all_gaps)
 
@@ -638,7 +638,7 @@ class VadDetectionService:
         """
         try:
             self._check_cancellation()
-            self._notify_progress(Step.VAD_PREP, 0, "Preparing segments...")
+            self._notify_progress(Step.VAD_PREP, 0, "Preparing segments…")
 
             vad_worker_path = self._get_vad_worker_path()
             total_segments = len(segments)
@@ -663,7 +663,7 @@ class VadDetectionService:
                 self._monitor_segment_progress(progress_tracker, total_segments)
             )
 
-            self._notify_progress(Step.VAD_ANALYSIS, 0, "Starting analysis...")
+            self._notify_progress(Step.VAD_ANALYSIS, 0, "Starting analysis…")
 
             worker_tasks = []
             for batch in worker_batches:
@@ -692,7 +692,7 @@ class VadDetectionService:
                     adjusted_gaps = [(start + start_offset, end + start_offset) for start, end in gaps]
                     all_gaps.extend(adjusted_gaps)
 
-            self._notify_progress(Step.VAD_ANALYSIS, 100, "Finalizing results...")
+            self._notify_progress(Step.VAD_ANALYSIS, 100, "Finalizing results…")
             final_gaps = self._merge_overlapping_gaps(all_gaps)
 
             logger.info(
@@ -731,7 +731,7 @@ class VadDetectionService:
                         self._notify_progress(
                             Step.VAD_ANALYSIS,
                             progress,
-                            f"Performing focused audio analysis...",
+                            f"Performing focused audio analysis…",
                             {"completed": completed_count, "total": total_segments},
                         )
 

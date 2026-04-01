@@ -152,6 +152,11 @@
         } else if (event.key === "ArrowDown") {
             event.preventDefault();
             adjustTimestamp(-1);
+        } else if (event.key === " ") {
+            event.preventDefault();
+            if (selectedTimestamp !== null) {
+                previewAudio(selectedTimestamp);
+            }
         }
     }
 
@@ -346,7 +351,7 @@
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h3>Add Chapter from...</h3>
+                    <h3>Add Chapter from…</h3>
                     <button class="close-button" onclick={handleCancel} aria-label="Close">
                         <X size="20"/>
                     </button>
@@ -362,7 +367,7 @@
                     {#if loading}
                         <div class="loading-state">
                             <div class="spinner"></div>
-                            <p>Loading add options...</p>
+                            <p>Loading add options…</p>
                         </div>
                     {:else if addOptions}
                         <!-- Tab Navigation -->

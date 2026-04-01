@@ -19,62 +19,62 @@
     const stepConfig = {
         validating: {
             title: "Validating Item",
-            description: "Checking if the item exists and is accessible...",
+            description: "Checking if the item exists and is accessible…",
             icon: CircleCheckBig,
         },
         downloading: {
             title: "Downloading Audio",
-            description: "Downloading the audiobook file(s)...",
+            description: "Downloading the audiobook file(s)…",
             icon: Download,
         },
         file_prep: {
             title: "Preparing files",
-            description: "Getting files ready for processing...",
+            description: "Getting files ready for processing…",
             icon: ClipboardList,
         },
         audio_analysis: {
             title: "Scanning for Chapter Cues",
-            description: "Analyzing audio to detect chapter cues...",
+            description: "Analyzing audio to detect chapter cues…",
             icon: ScanSearch,
         },
         vad_prep: {
             title: "Preparing files",
-            description: "Getting files ready for Smart Detection...",
+            description: "Getting files ready for Smart Detection…",
             icon: ClipboardList,
         },
         vad_analysis: {
             title: "Scanning for Chapter Cues",
-            description: "Analyzing voice activity to detect chapter cues...",
+            description: "Analyzing voice activity to detect chapter cues…",
             icon: AudioLines,
         },
         partial_scan_prep: {
             title: "Preparing Partial Scan",
-            description: "Extracting audio for analysis...",
+            description: "Extracting audio for analysis…",
             icon: ScissorsLineDashed,
         },
         partial_audio_analysis: {
             title: "Scanning for Chapter Cues",
-            description: "Analyzing audio in selected region...",
+            description: "Analyzing audio in selected region…",
             icon: ScanSearch,
         },
         partial_vad_analysis: {
             title: "Scanning for Chapter Cues",
-            description: "Analyzing voice activity in selected region...",
+            description: "Analyzing voice activity in selected region…",
             icon: AudioLines,
         },
         audio_extraction: {
             title: "Extracting",
-            description: "Extracting short segments of chapter audio...",
+            description: "Extracting short segments of chapter audio…",
             icon: ScissorsLineDashed,
         },
         trimming: {
             title: "Trimming",
-            description: "Removing excess audio from chapter segments...",
+            description: "Removing excess audio from chapter segments…",
             icon: Scissors,
         },
         asr_processing: {
             title: "Transcribing",
-            description: "Generating chapter titles using speech recognition...",
+            description: "Generating chapter titles using speech recognition…",
             icon: Mic,
         },
     };
@@ -82,7 +82,7 @@
     // Get current step configuration
     $: currentStepConfig = stepConfig[$session.step] || {
         title: "Processing",
-        description: "Working...",
+        description: "Working…",
         icon: Settings,
     };
 
@@ -156,29 +156,16 @@
     // Connection warning
     $: showConnectionWarning = !$isConnected && $session.step !== "idle";
 
-    // Feed entries
-    let feedEntries = [];
-    let lastFeedText = null;
-    let feedIdCounter = 0;
-
-    $: {
-        const feedText = $progress.details?.feed_text;
-        if (feedText && feedText !== lastFeedText) {
-            lastFeedText = feedText;
-            feedEntries = [{ id: feedIdCounter++, text: feedText }, ...feedEntries].slice(0, 50);
-        }
-    }
-
-    // Clear feed when step changes
+    let feedText = null;
     let lastStep = $session.step;
-    $: if ($session.step !== lastStep) {
-        lastStep = $session.step;
-        feedEntries = [];
-        lastFeedText = null;
+    $: {
+        if ($session.step !== lastStep) {
+            lastStep = $session.step;
+            feedText = null;
+        }
+        const latest = $progress.details?.feed_text;
+        if (latest) feedText = latest;
     }
-
-    // Cap visible entries
-    $: visibleFeedEntries = feedEntries.slice(0, 6);
 
     async function handleCancel() {
         try {
@@ -206,7 +193,7 @@
         <div class="progress-section">
             <div class="progress-header">
         <span class="progress-label"
-        >{$progress.message || "Processing..."}</span
+        >{$progress.message || "Processing…"}</span
         >
                 <span class="progress-percent">{Math.round($progress.percent)}%</span>
             </div>
@@ -223,6 +210,8 @@
             </div>
         </div>
 
+        <p class="feed-text">{feedText ?? "\u00A0"}</p>
+
         <div class="action-section">
             <button
                     class="btn btn-cancel"
@@ -233,19 +222,9 @@
             </button>
         </div>
 
-        {#if feedEntries.length > 0}
-            <div class="feed-container">
-                {#each visibleFeedEntries as entry, i (entry.id)}
-                    <div class="feed-entry" style="opacity: {1 - i / 6}">
-                        {entry.text}
-                    </div>
-                {/each}
-            </div>
-        {/if}
-
         {#if showConnectionWarning}
             <div class="alert alert-warning mb-3">
-                <strong>Connection Lost:</strong> Reconnecting to server...
+                <strong>Connection Lost:</strong> Reconnecting to server…
                 <br/><small
             >Progress updates may be delayed but processing continues.</small
             >
@@ -327,15 +306,8 @@
         margin-bottom: 2rem;
     }
 
-    .feed-container {
-        max-height: 200px;
-        overflow: hidden;
-        margin-top: 1rem;
-        text-align: center;
-    }
-
-    .feed-entry {
-        padding: 0.25rem 0.5rem;
+    .feed-text {
+        margin: 0.5rem 0rem;
         font-size: 0.85rem;
         color: var(--text-secondary);
         font-style: italic;

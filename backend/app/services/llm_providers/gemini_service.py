@@ -284,7 +284,7 @@ class GeminiService(AIService):
 
         additional_instructions = additional_instructions or []
 
-        self._notify_progress(0, f"Sending request to Gemini...")
+        self._notify_progress(0, f"Sending request to Gemini…")
 
         # Build system prompt dynamically based on options
         system_prompt = self._build_system_prompt(
@@ -304,7 +304,7 @@ class GeminiService(AIService):
         for attempt in range(max_retries + 1):
             try:
                 if attempt > 0:
-                    self._notify_progress(0, "Retrying...")
+                    self._notify_progress(0, "Retrying…")
 
                 # Get API key and create client
                 api_key = self._get_api_key()
@@ -350,7 +350,7 @@ class GeminiService(AIService):
                             continue
 
                         if part.thought:
-                            self._notify_progress(0, "Thinking...")
+                            self._notify_progress(0, "Thinking…")
                         else:
                             content = part.text
                             content_received += content
@@ -367,7 +367,7 @@ class GeminiService(AIService):
                 if not content_received:
                     logger.error("Gemini No content received from streaming!")
 
-                self._notify_progress(100, "Processing AI response...")
+                self._notify_progress(100, "Processing AI response…")
 
                 # Parse the response
                 try:
@@ -379,7 +379,7 @@ class GeminiService(AIService):
                     logger.error(f"Gemini Raw response: {content_received}")
 
                     if attempt < max_retries:
-                        logger.warning(f"Gemini JSON decode error on attempt {attempt + 1}, retrying...")
+                        logger.warning(f"Gemini JSON decode error on attempt {attempt + 1}, retrying…")
                         continue
                     else:
                         raise

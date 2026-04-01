@@ -247,6 +247,7 @@ function createSessionStore() {
 
         async deleteSession() {
             update(state => ({...state, loading: true, error: null}));
+            savedChapterEditorScroll.set(null);
 
             try {
                 await api.session.delete();
@@ -283,6 +284,7 @@ function createSessionStore() {
 
         // Reset session state without making API call (for when backend already deleted session)
         resetToIdle() {
+            savedChapterEditorScroll.set(null);
             // Reset to initial state, preserving app-level version info
             update(state => ({
                 step: 'idle',
@@ -305,6 +307,9 @@ function createSessionStore() {
 
         async restartSession(restartAtStep) {
             update(state => ({...state, loading: true, error: null}));
+            if (restartAtStep !== 'chapter_editing') {
+                savedChapterEditorScroll.set(null);
+            }
 
             try {
                 await api.session.restart(restartAtStep);
@@ -494,6 +499,12 @@ export const session = createSessionStore();
 // Store for re-opening the add-chapter dialog after a partial scan completes
 // Set to { chapter_id, open_tab } when a partial scan returns to chapter_editing
 export const pendingAddChapterDialog = writable(null);
+
+/*
+ * Saved scroll position for ChapterEditor, preserved across step transitions.
+ * Set to window.scrollY when leaving chapter_editing; null means no saved position.
+ */
+export const savedChapterEditorScroll = writable(null);
 
 // Derived stores for convenience
 export const step = derived(session, $session => $session.step);

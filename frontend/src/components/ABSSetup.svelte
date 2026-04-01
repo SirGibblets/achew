@@ -41,7 +41,7 @@
                 } else {
                     // No API key configured
                     absApiKey = "";
-                    validationStatus = {valid: false, message: "Not configured"};
+                    validationStatus = {valid: false, message: "Not Configured"};
                 }
 
                 // Force reactivity update
@@ -132,12 +132,12 @@
         ? "subtle"
         : validationStatus.valid
             ? "success"
-            : validationStatus.message === "Not configured"
+            : validationStatus.message === "Not Configured"
                 ? "subtle"
                 : "error";
 
     $: statusText = !validationStatus
-        ? "Not configured"
+        ? "Not Configured"
         : validationStatus.message || "Not Configured";
 
     // Show cancel button only if not initial setup and config is loaded
@@ -249,7 +249,7 @@
             >
                 {#if loading}
                     <span class="btn-spinner"></span>
-                    Verifying...
+                    Verifying…
                 {:else}
                     {isInitialSetup ? "Continue" : "Done"}
                 {/if}

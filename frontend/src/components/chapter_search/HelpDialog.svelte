@@ -41,7 +41,7 @@
             <ol>
                 <li>Choose a library and configure your search rules.</li>
                 <li>
-                    Click <strong>Search</strong>. achew will sync the chapter
+                    Click <strong>Search</strong>. Achew will sync the chapter
                     data from Audiobookshelf and evaluate every book against
                     your rules.
                 </li>
@@ -81,16 +81,16 @@
             <h3>Syncing chapter data</h3>
             <p>
                 For the sake of speed and efficiency, a library's chapter data
-                is fully synced to achew the first time that library is
+                is fully synced to Achew the first time that library is
                 searched. While this can take several minutes for large
                 libraries, it allows subsequent searches to be much faster.
             </p>
             <p>
                 This synced data will always be updated with any changes you
-                make to your books through achew. However, be aware that there
+                make to your books through Achew. However, be aware that there
                 is currently no way to effectively track external chapter
                 changes. If you edit a book's chapters through another tool or
-                directly in Audiobookshelf, achew's synced data will be out of
+                directly in Audiobookshelf, Achew's synced data will be out of
                 date and search results might be inaccurate. As a workaround, you
                 have two options:
             </p>

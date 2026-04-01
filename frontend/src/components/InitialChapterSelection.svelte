@@ -395,7 +395,7 @@
                     <ul class="hints-list">
                         <li>
                             <strong>Chapter Selection Slider:</strong> The bar chart behind the slider shows
-                            the distribution of the 'gaps' of silence preceding the detected cues. Cues on
+                            the distribution of the silence gaps preceding the detected cues. Cues on
                             the left have the longest gaps and are more likely to represent real chapters,
                             whereas cues on the right have shorter gaps and are more likely to be false
                             positives.
@@ -434,7 +434,7 @@
     {#if loading && allCues.length === 0}
         <div class="text-center p-4">
             <div class="spinner"></div>
-            <p class="mt-2">Loading detected cues...</p>
+            <p class="mt-2">Loading detected cues…</p>
         </div>
     {:else if allCues.length === 0}
         <div class="empty-state">
@@ -766,7 +766,7 @@
             >
                 {#if loading}
                     <span class="btn-spinner"></span>
-                    Processing...
+                    Processing…
                 {:else if hasAdditionalTimestamps}
                     Create {totalChapterCount} Chapters
                 {:else}

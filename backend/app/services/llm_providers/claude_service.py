@@ -267,7 +267,7 @@ class ClaudeService(AIService):
 
         additional_instructions = additional_instructions or []
 
-        self._notify_progress(0, f"Sending request to Claude...")
+        self._notify_progress(0, f"Sending request to Claude…")
 
         # Build system prompt dynamically based on options
         system_prompt = self._build_system_prompt(
@@ -340,7 +340,7 @@ class ClaudeService(AIService):
             if not content_received:
                 logger.error("Claude No content received from streaming!")
 
-            self._notify_progress(100, "Processing AI response...")
+            self._notify_progress(100, "Processing AI response…")
 
             # Parse the response
             try:

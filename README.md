@@ -2,17 +2,17 @@
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/c2df8623-21e7-4c06-9918-5adb55e48bbe">
     <source media="(prefers-color-scheme: light)" srcset="https://github.com/user-attachments/assets/04864a8e-9dfa-4d6d-b669-6cb23ec5ffe6">
-    <img width="600" alt="achew" src="https://github.com/user-attachments/assets/c2df8623-21e7-4c06-9918-5adb55e48bbe">
+    <img width="600" alt="Achew" src="https://github.com/user-attachments/assets/c2df8623-21e7-4c06-9918-5adb55e48bbe">
   </picture>
 </div>
 
 ## About
 
-#### **achew** is an Audiobook Chapter Extraction Wizard.
-Designed to work with [Audiobookshelf](https://www.audiobookshelf.org/), **achew** helps you analyze your audiobook files to find chapters and generate titles.
+#### **Achew** is an Audiobook Chapter Extraction Wizard.
+Designed to work with [Audiobookshelf](https://www.audiobookshelf.org/), **Achew** helps you analyze your audiobook files to find chapters and generate titles.
 
 > [!IMPORTANT]
-> **Do not expose achew directly to the internet.** achew does not include authentication or other security hardening, and should only be used within a trusted LAN. If you need remote access, I recommend using a VPN like Tailscale, or placing achew behind a reverse proxy that has its own authentication layer.
+> **Do not expose Achew directly to the internet.** Achew does not include authentication or other security hardening, and should only be used within a trusted LAN. If you need remote access, I recommend using a VPN like Tailscale, or placing Achew behind a reverse proxy that has its own authentication layer.
 
 ### Features
 
@@ -26,7 +26,7 @@ Designed to work with [Audiobookshelf](https://www.audiobookshelf.org/), **achew
 - **Supports Multiple Formats**: Works with both single-file and multi-file audiobooks (mp3, m4b, etc).
 - **Multilingual Support**: Title Transcription and AI Cleanup support dozens of languages, while Smart Detection works for *all* languages.
 - **Cross-Platform**: Builds and runs on Windows, Linux, and macOS. There's also a Docker image!
-- **It's Fast!** On modern hardware, **achew** can generate chapters for most audiobooks in only a few minutes. 
+- **It's Fast!** On modern hardware, **Achew** can generate chapters for most audiobooks in only a few minutes. 
 
 ### Demo Video
 
@@ -161,17 +161,17 @@ Access the running application in a browser at http://localhost:8000. It may tak
 <summary>Can I use the AI Cleanup feature without a paid OpenAI/Anthropic/Gemini account?</summary>
 
 Yes! You have two options:
-1. If you have a Google account, the easiest way is to use Gemini's free tier. Just go [here](https://aistudio.google.com/apikey), create a free API Key, and then copy/paste it into the Gemini section in achew's LLM Configuration page. Be aware that the free tier has usage limits, but it should be good enough for the occasional chapter cleanup.
+1. If you have a Google account, the easiest way is to use Gemini's free tier. Just go [here](https://aistudio.google.com/apikey), create a free API Key, and then copy/paste it into the Gemini section in Achew's LLM Configuration page. Be aware that the free tier has usage limits, but it should be good enough for the occasional chapter cleanup.
 2. If you have powerful hardware, you can install Ollama or LM Studio and run any LLM of your choice. This option is free, unlimited, and respects your privacy. Just be aware that small and even medium-size models may produce unusable results.
 
 </details>
 
 <details>
 
-<summary>Can I use achew behind a reverse proxy?</summary>
+<summary>Can I use Achew behind a reverse proxy?</summary>
 
-As achew does not include built-in authentication, it is *not* recommended to expose it directly to the internet.  
-With that being said, yes, achew should work behind a reverse proxy so long as you enable websocket support. If you choose to go this route, it is *highly* recommended to add some form of authentication at the proxy level.
+As Achew does not include built-in authentication, it is *not* recommended to expose it directly to the internet.  
+With that being said, yes, Achew should work behind a reverse proxy so long as you enable websocket support. If you choose to go this route, it is *highly* recommended to add some form of authentication at the proxy level.
 
 </details>
 

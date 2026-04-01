@@ -265,7 +265,7 @@ class OpenRouterService(AIService):
 
         additional_instructions = additional_instructions or []
 
-        self._notify_progress(0, f"Sending request to OpenRouter...")
+        self._notify_progress(0, f"Sending request to OpenRouter…")
 
         system_prompt = self._build_system_prompt(
             deselect_non_chapters=deselect_non_chapters,
@@ -345,7 +345,7 @@ class OpenRouterService(AIService):
                             if "delta" in choice and choice["delta"].get("reasoning"):
                                 current_time = time.time()
                                 if current_time - last_thinking_update >= 1.0:
-                                    self._notify_progress(0, "Thinking...")
+                                    self._notify_progress(0, "Thinking…")
                                     last_thinking_update = current_time
                                 continue
                                 
@@ -362,7 +362,7 @@ class OpenRouterService(AIService):
                                             f"Processed {result['total_parsed']}/{total_chapters} chapters",
                                         )
 
-            self._notify_progress(100, "Processing AI response...")
+            self._notify_progress(100, "Processing AI response…")
 
             try:
                 response_data = json.loads(content_received)

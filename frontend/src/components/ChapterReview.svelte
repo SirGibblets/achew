@@ -313,7 +313,7 @@
         >
             {#if loading}
                 <span class="btn-spinner"></span>
-                Submitting...
+                Submitting…
             {:else}
                 <Upload size="16"/>
                 Submit to Audiobookshelf
@@ -369,7 +369,7 @@
                     {#if exportLoading}
                         <div class="export-loading">
                             <span class="btn-spinner"></span>
-                            Exporting...
+                            Exporting…
                         </div>
                     {/if}
                 </div>

@@ -389,8 +389,8 @@
                                 on:click={handleRestartClick}
                                 disabled={$session.loading ||
                 shouldDisableRestartButton($session.restartOptions)}
-                                title="Go back to..."
-                                aria-label="Go back to..."
+                                title="Go back to…"
+                                aria-label="Go back to…"
                         >
                             <ChevronLeft size="20"/>
                         </button>
@@ -531,7 +531,7 @@
         {:else}
             <div class="text-center p-4">
                 <div class="spinner"></div>
-                <p class="mt-2">Loading...</p>
+                <p class="mt-2">Loading…</p>
             </div>
         {/if}
     </div>

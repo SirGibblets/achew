@@ -85,7 +85,7 @@
         >
             {#if loading}
                 <span class="btn-spinner"></span>
-                Saving...
+                Saving…
             {:else}
                 Save
             {/if}

@@ -31,7 +31,7 @@ ENV BUILD_META="${BUILD_META}"
 
 # Container image metadata
 LABEL org.opencontainers.image.authors="Sir Gibblets <gibbletssir@gmail.com>" \
-    org.opencontainers.image.title="achew" \
+    org.opencontainers.image.title="Achew" \
     org.opencontainers.image.description="Audiobook Chapter Extraction Wizard for Audiobookshelf" \
     org.opencontainers.image.version="${VERSION}" \
     org.opencontainers.image.revision="${REVISION}" \

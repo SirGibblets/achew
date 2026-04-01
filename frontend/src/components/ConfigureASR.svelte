@@ -74,7 +74,7 @@
         >
             {#if loading}
                 <span class="btn-spinner"></span>
-                Processing...
+                Processing…
             {:else}
                 Skip Transcription
             {/if}
@@ -87,7 +87,7 @@
         >
             {#if loading}
                 <span class="btn-spinner"></span>
-                Starting...
+                Starting…
             {:else}
                 Transcribe
             {/if}

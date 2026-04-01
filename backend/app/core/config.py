@@ -257,7 +257,7 @@ def save_custom_instructions(custom_instructions: CustomInstructionsConfig) -> b
 def get_default_custom_instructions() -> List[CustomInstruction]:
     """Get default example custom instructions"""
     examples = [
-        "Fix any misspellings of...",
+        "Fix any misspellings of…",
         "Use this format: Chapter [number] - [title]",
         "Use Roman Numerals for chapter numbers",
         "Return the results in Spanish",
