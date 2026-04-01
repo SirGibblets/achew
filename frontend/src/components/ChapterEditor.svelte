@@ -1,5 +1,6 @@
 <script>
-    import {onDestroy, onMount} from "svelte";
+    import {onDestroy, onMount, tick} from "svelte";
+    import {get} from "svelte/store";
     import { slide } from "svelte/transition";
     import {audio, currentSegmentId, isPlaying} from "../stores/audio.js";
     import {
@@ -7,6 +8,7 @@
         canUndo,
         chapters,
         progress,
+        savedChapterEditorScroll,
         selectionStats,
         session,
         pendingAddChapterDialog,
@@ -39,6 +41,7 @@
     import Mic from "@lucide/svelte/icons/mic";
 
     let mounted = false;
+    let lastScrollY = 0;
     let loading = $state(false);
     let error = $state(null);
     let aiCleanupError = $state(null);
@@ -84,8 +87,19 @@
     // Load chapters and AI options when component mounts
     onMount(async () => {
         mounted = true;
+
         await loadEditorSettings();
         await loadChapters();
+        await tick();
+
+        // Restore scroll if it hasn't been consumed by the pendingAddChapterDialog effect
+        const scrollToRestore = get(savedChapterEditorScroll);
+        if (scrollToRestore !== null && scrollToRestore > 0) {
+            savedChapterEditorScroll.set(null);
+            window.scrollTo({ top: scrollToRestore, behavior: 'instant' });
+        }
+
+        window.addEventListener("scroll", handleScroll, { passive: true });
         window.addEventListener("keydown", handleKeydown);
         document.addEventListener("click", handleOutsideClick);
     });
@@ -135,7 +149,11 @@
     }
 
     onDestroy(() => {
+        if (get(savedChapterEditorScroll) === null) {
+            savedChapterEditorScroll.set(lastScrollY);
+        }
         audio.stop();
+        window.removeEventListener("scroll", handleScroll);
         window.removeEventListener("keydown", handleKeydown);
         document.removeEventListener("click", handleOutsideClick);
         if (transcriptionBarTimer) {
@@ -230,6 +248,10 @@
     async function handleTimeFormatChange(event) {
         const enabled = event.target.checked;
         await saveEditorSettings({ show_formatted_time: enabled });
+    }
+
+    function handleScroll() {
+        lastScrollY = window.scrollY;
     }
 
     // Keyboard shortcuts
@@ -570,12 +592,21 @@
         if ($pendingAddChapterDialog) {
             const { chapter_id, open_tab } = $pendingAddChapterDialog;
             pendingAddChapterDialog.set(null);
+
+            // Restore scroll before the dialog opens (so its freeze captures the right position)
+            const scrollToRestore = get(savedChapterEditorScroll);
+            if (scrollToRestore !== null && scrollToRestore > 0) {
+                savedChapterEditorScroll.set(null);
+                window.scrollTo({ top: scrollToRestore, behavior: 'instant' });
+            }
+
             openAddChapterDialog(chapter_id, open_tab);
         }
     });
 
     // Go to review page
     function goToReview() {
+        savedChapterEditorScroll.set(window.scrollY);
         window.scrollTo({top: 0, behavior: "instant"});
         api.session
             .gotoReview()
