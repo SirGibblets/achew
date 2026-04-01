@@ -156,29 +156,16 @@
     // Connection warning
     $: showConnectionWarning = !$isConnected && $session.step !== "idle";
 
-    // Feed entries
-    let feedEntries = [];
-    let lastFeedText = null;
-    let feedIdCounter = 0;
-
-    $: {
-        const feedText = $progress.details?.feed_text;
-        if (feedText && feedText !== lastFeedText) {
-            lastFeedText = feedText;
-            feedEntries = [{ id: feedIdCounter++, text: feedText }, ...feedEntries].slice(0, 50);
-        }
-    }
-
-    // Clear feed when step changes
+    let feedText = null;
     let lastStep = $session.step;
-    $: if ($session.step !== lastStep) {
-        lastStep = $session.step;
-        feedEntries = [];
-        lastFeedText = null;
+    $: {
+        if ($session.step !== lastStep) {
+            lastStep = $session.step;
+            feedText = null;
+        }
+        const latest = $progress.details?.feed_text;
+        if (latest) feedText = latest;
     }
-
-    // Cap visible entries
-    $: visibleFeedEntries = feedEntries.slice(0, 6);
 
     async function handleCancel() {
         try {
@@ -223,6 +210,8 @@
             </div>
         </div>
 
+        <p class="feed-text">{feedText ?? "\u00A0"}</p>
+
         <div class="action-section">
             <button
                     class="btn btn-cancel"
@@ -232,16 +221,6 @@
                 Cancel
             </button>
         </div>
-
-        {#if feedEntries.length > 0}
-            <div class="feed-container">
-                {#each visibleFeedEntries as entry, i (entry.id)}
-                    <div class="feed-entry" style="opacity: {1 - i / 6}">
-                        {entry.text}
-                    </div>
-                {/each}
-            </div>
-        {/if}
 
         {#if showConnectionWarning}
             <div class="alert alert-warning mb-3">
@@ -327,15 +306,8 @@
         margin-bottom: 2rem;
     }
 
-    .feed-container {
-        max-height: 200px;
-        overflow: hidden;
-        margin-top: 1rem;
-        text-align: center;
-    }
-
-    .feed-entry {
-        padding: 0.25rem 0.5rem;
+    .feed-text {
+        margin: 0.5rem 0rem;
         font-size: 0.85rem;
         color: var(--text-secondary);
         font-style: italic;
