@@ -152,6 +152,11 @@
         } else if (event.key === "ArrowDown") {
             event.preventDefault();
             adjustTimestamp(-1);
+        } else if (event.key === " ") {
+            event.preventDefault();
+            if (selectedTimestamp !== null) {
+                previewAudio(selectedTimestamp);
+            }
         }
     }
 
