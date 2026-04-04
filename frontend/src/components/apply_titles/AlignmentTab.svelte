@@ -127,12 +127,11 @@
 </script>
 
 <p class="tab-explanation">
-    Chapters whose timestamps align (within {TOLERANCE}s) with a chapter in the selected source
-    are shown with a checkbox. Checked chapters will have their titles replaced.
     {#if alignedCount === 0}
-        <strong>No aligned chapters found for this source.</strong>
+        No chapters with matching timestamps were found in the selected source.
     {:else}
-        <strong>{alignedCount}</strong> of {allChapters.length} chapters aligned.
+        {alignedCount} of {allChapters.length} chapters have a matching (timestamp-aligned) chapter in the
+        selected source.<br/>Uncheck any titles don't want to apply.
     {/if}
 </p>
 

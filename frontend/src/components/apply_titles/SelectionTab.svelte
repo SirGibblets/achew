@@ -280,8 +280,8 @@
 </script>
 
 <p class="tab-explanation">
-    Select which chapters to include on each side. The Nth selected chapter on the left
-    will receive the title of the Nth selected chapter on the right.
+    Titles are applied in order — each checked chapter on the left receives the title of the
+    corresponding checked chapter on the right. Uncheck items on either side to adjust the pairing.
 </p>
 
 <div class="selection-layout">
