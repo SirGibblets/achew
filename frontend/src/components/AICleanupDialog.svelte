@@ -260,10 +260,13 @@
     }
 
     function getSelectedModelName() {
+        if (loadingModels) {
+            return "Loading models, please wait…";
+        }
         if (!aiOptions.model_id) {
             return "Select a model…";
         }
-        
+
         const selectedModel = availableModels.find(m => m.id === aiOptions.model_id);
         return selectedModel ? selectedModel.name : aiOptions.model_id;
     }
@@ -424,14 +427,18 @@
                             </div>
 
                             <div class="model-selection">
-                                {#if availableModels.length > 16}
+                                {#if loadingModels}
+                                    <select class="model-select" disabled>
+                                        <option>Loading models, please wait…</option>
+                                    </select>
+                                {:else if availableModels.length > 16}
                                     <!-- Searchable dropdown for providers with a large number of models -->
                                     <div class="model-dropdown-container">
                                         <button
                                             type="button"
                                             class="model-dropdown-trigger"
                                             onclick={() => showModelDropdown = !showModelDropdown}
-                                            disabled={loadingModels || availableModels.length === 0}
+                                            disabled={availableModels.length === 0}
                                         >
                                             <span class="selected-model-name">{getSelectedModelName()}</span>
                                             <ChevronDown size="16" />
@@ -478,11 +485,9 @@
                                             id="model-select"
                                             class="model-select"
                                             bind:value={aiOptions.model_id}
-                                            disabled={loadingModels || availableModels.length === 0}
+                                            disabled={availableModels.length === 0}
                                     >
-                                        {#if loadingModels}
-                                            <option>Loading models…</option>
-                                        {:else if availableModels.length === 0}
+                                        {#if availableModels.length === 0}
                                             <option>No models available</option>
                                         {:else}
                                             {#each availableModels as model}
@@ -636,7 +641,7 @@
                     <button
                             class="btn ai-confirm-btn"
                             onclick={confirmAICleanup}
-                            disabled={availableProviders.filter(
+                            disabled={loadingModels || availableProviders.filter(
                 (p) => p.is_enabled && p.is_configured,
               ).length === 0}
                     >

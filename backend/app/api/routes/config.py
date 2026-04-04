@@ -522,6 +522,10 @@ async def get_llm_provider_models(provider_id: str):
             if not config.llm.gemini.api_key:
                 raise HTTPException(status_code=400, detail="Gemini provider not configured")
             provider_config = {"api_key": config.llm.gemini.api_key}
+        elif provider_id == "copilot":
+            if not config.llm.copilot.api_key:
+                raise HTTPException(status_code=400, detail="GitHub Copilot provider not configured")
+            provider_config = {"api_key": config.llm.copilot.api_key}
         elif provider_id == "openrouter":
             if not config.llm.openrouter.api_key:
                 raise HTTPException(status_code=400, detail="OpenRouter provider not configured")
@@ -634,6 +638,9 @@ async def cancel_llm_provider_changes(provider_id: str):
         elif provider_id == "gemini":
             config.llm.gemini.config_changed = False
             save_llm_provider_config("gemini", config.llm.gemini)
+        elif provider_id == "copilot":
+            config.llm.copilot.config_changed = False
+            save_llm_provider_config("copilot", config.llm.copilot)
         elif provider_id == "openrouter":
             config.llm.openrouter.config_changed = False
             save_llm_provider_config("openrouter", config.llm.openrouter)

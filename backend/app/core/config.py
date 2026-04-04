@@ -42,6 +42,7 @@ class LLMConfig(BaseModel):
     openai: LLMProviderConfig = LLMProviderConfig()
     claude: LLMProviderConfig = LLMProviderConfig()
     gemini: LLMProviderConfig = LLMProviderConfig()
+    copilot: LLMProviderConfig = LLMProviderConfig()
     openrouter: LLMProviderConfig = LLMProviderConfig()
     ollama: LLMProviderConfig = LLMProviderConfig()
     lm_studio: LLMProviderConfig = LLMProviderConfig()

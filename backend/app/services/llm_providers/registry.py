@@ -4,6 +4,7 @@ from .base import AIService, ProviderInfo, ModelInfo
 from .openai_service import OpenAIService
 from .ollama_service import OllamaService
 from .gemini_service import GeminiService
+from .copilot_service import CopilotService
 from .claude_service import ClaudeService
 from .lm_studio_service import LMStudioService
 from .openrouter_service import OpenRouterService
@@ -23,6 +24,7 @@ class ProviderRegistry:
         self.register_provider(OpenAIService)
         self.register_provider(ClaudeService)
         self.register_provider(GeminiService)
+        self.register_provider(CopilotService)
         self.register_provider(OpenRouterService)
         self.register_provider(OllamaService)
         self.register_provider(LMStudioService)
