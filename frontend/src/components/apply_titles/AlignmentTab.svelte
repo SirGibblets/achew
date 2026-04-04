@@ -131,7 +131,7 @@
         No chapters with matching timestamps were found in the selected source.
     {:else}
         {alignedCount} of {allChapters.length} chapters have a matching (timestamp-aligned) chapter in the
-        selected source.<br/>Uncheck any titles don't want to apply.
+        selected source.<br/>Uncheck any titles you don't want to apply.
     {/if}
 </p>
 
