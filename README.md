@@ -162,7 +162,7 @@ Access the running application in a browser at http://localhost:8000. It may tak
 
 Yes! You have three options:
 1. If you have a Google account, the easiest way is to use Gemini's free tier. Just go [here](https://aistudio.google.com/apikey), create a free API Key, and then copy/paste it into the Gemini section in Achew's LLM Setup page. Be aware that the free tier has usage limits, but it should be good enough for the occasional chapter cleanup.
-2. If you have a Github account, you can use the free version of Copilot. First, go [here](https://github.com/settings/copilot/features) and enable Copilot access if not already enabled. Then, go [here](https://github.com/settings/personal-access-tokens/new) and create a new personal access token with the *Models* and *Copilot Requests* permissions. Finally, copy the token and paste it into the Github Copilot section of Achew's LLM Setup page. 
+2. If you have a Github account, you can use the free version of Copilot. First, go [here](https://github.com/settings/copilot/features) and enable Copilot access if not already enabled. Then, go [here](https://github.com/settings/personal-access-tokens/new) and create a new personal access token with the *Copilot Requests* permission. Finally, copy the token and paste it into the Github Copilot section of Achew's LLM Setup page.
 3. If you have the means, you can locally install Ollama or LM Studio and run any LLM of your choice. This option is free, unlimited, and respects your privacy. Just be aware that small and even medium-size models may produce unusable results.
 
 </details>

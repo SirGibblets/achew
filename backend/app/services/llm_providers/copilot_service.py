@@ -150,7 +150,7 @@ class CopilotService(AIService):
             id="copilot",
             name="GitHub Copilot",
             description="Requires a GitHub account with Copilot access (free or paid).",
-            instructions="Create and use a <em>fine-grained</em> personal access token with the <b>Models</b> and <b>Copilot Requests</b> permissions.",
+            instructions="Create and use a <em>fine-grained</em> personal access token with the <b>Copilot Requests</b> permission.",
             setup_fields=[
                 {
                     "name": "api_key",
