@@ -2,10 +2,13 @@
     import {session, progress} from "../stores/session.js";
     import {isConnected} from "../stores/websocket.js";
     import {api} from "../utils/api.js";
-    import Icon from "./Icon.svelte";
+    import {onMount, onDestroy} from "svelte";
+    import {slide} from "svelte/transition";
 
     // Icons
     import AudioLines from "@lucide/svelte/icons/audio-lines";
+    import BellOff from "@lucide/svelte/icons/bell-off";
+    import BellRing from "@lucide/svelte/icons/bell-ring";
     import CircleCheckBig from "@lucide/svelte/icons/circle-check-big";
     import ClipboardList from "@lucide/svelte/icons/clipboard-list";
     import Download from "@lucide/svelte/icons/download";
@@ -181,6 +184,56 @@
             session.setError("Failed to cancel processing. Please try again.");
         }
     }
+
+    // Chime functionality
+    let chimeEnabled = false;
+    let selectedChime = "chime1";
+    let wiggle = false;
+    let wiggleTimeout;
+    let mountTime;
+
+    onMount(() => {
+        mountTime = Date.now();
+        const storedEnabled = localStorage.getItem("achew_chime_enabled");
+        if (storedEnabled !== null) {
+            chimeEnabled = storedEnabled === "true";
+        }
+        
+        const storedChime = localStorage.getItem("achew_selected_chime");
+        if (storedChime) {
+            selectedChime = storedChime;
+        }
+    });
+
+    onDestroy(() => {
+        if (wiggleTimeout) clearTimeout(wiggleTimeout);
+        if (chimeEnabled && mountTime && (Date.now() - mountTime) >= 15000) {
+            const audio = new Audio(`/sounds/${selectedChime}.mp3`);
+            audio.play().catch(e => console.error("Could not play chime:", e));
+        }
+    });
+
+    function playChime(chime) {
+        selectedChime = chime;
+        localStorage.setItem("achew_selected_chime", chime);
+        const audio = new Audio(`/sounds/${chime}.mp3`);
+        audio.play().catch(e => console.error("Could not play chime:", e));
+        
+        if (wiggleTimeout) clearTimeout(wiggleTimeout);
+        wiggle = false;
+        setTimeout(() => {
+            wiggle = true;
+            wiggleTimeout = setTimeout(() => wiggle = false, 400);
+        }, 10);
+    }
+
+    function toggleChime() {
+        chimeEnabled = !chimeEnabled;
+        localStorage.setItem("achew_chime_enabled", chimeEnabled.toString());
+        if (chimeEnabled) {
+            playChime(selectedChime);
+        }
+    }
 </script>
 
 <div class="progress-display">
@@ -236,6 +289,52 @@
             >
             </div>
         {/if}
+    </div>
+
+    <div class="chime-container">
+        <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+        <div 
+            class="chime-content" 
+            class:disabled-clickable={!chimeEnabled}
+            role={!chimeEnabled ? "button" : "region"}
+            tabindex={!chimeEnabled ? "0" : undefined}
+            on:click={!chimeEnabled ? toggleChime : undefined}
+            on:keydown={!chimeEnabled ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleChime(); } } : undefined}
+            aria-label={!chimeEnabled ? "Enable Chime" : "Chime settings"}
+            title={!chimeEnabled ? "Click to enable chime" : undefined}
+        >
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <svelte:element 
+                this={chimeEnabled ? "button" : "div"}
+                class="chime-icon-btn {wiggle ? 'wiggle' : ''}" 
+                class:disabled={!chimeEnabled}
+                on:click={chimeEnabled ? ((e) => { e.stopPropagation(); toggleChime(); }) : undefined} 
+                aria-label={chimeEnabled ? "Disable Chime" : undefined}
+            >
+                {#if chimeEnabled}
+                    <BellRing size={48} color="var(--primary)" />
+                {:else}
+                    <BellOff size={48} color="var(--text-muted)" />
+                {/if}
+            </svelte:element>
+
+            {#if chimeEnabled}
+                <div transition:slide={{ duration: 300 }}>
+                    <div class="chime-details">
+                        <p class="chime-title">Chime will play when processing has finished</p>
+                        <div class="chime-dots">
+                            {#each Array(12) as _, i}
+                                <button 
+                                    class="chime-dot {selectedChime === `chime${i + 1}` ? 'active' : ''}"
+                                    on:click={() => playChime(`chime${i + 1}`)}
+                                    aria-label={`Select Chime ${i + 1}`}
+                                ></button>
+                            {/each}
+                        </div>
+                    </div>
+                </div>
+            {/if}
+        </div>
     </div>
 </div>
 
@@ -334,6 +433,112 @@
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+    }
+
+    /* Chime styles */
+    .chime-container {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        padding-bottom: 2rem;
+    }
+
+    .chime-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 0.75rem 1.25rem;
+        border-radius: 0.75rem;
+        transition: all 0.3s ease;
+        max-width: 100%;
+    }
+
+    .chime-content.disabled-clickable {
+        cursor: pointer;
+    }
+
+    .chime-content.disabled-clickable:hover .chime-icon-btn {
+        background-color: var(--bg-tertiary);
+    }
+
+    .chime-icon-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.5rem;
+        border-radius: 50%;
+        color: var(--text-primary);
+        transition: background-color 0.2s, opacity 0.2s;
+    }
+
+    .chime-icon-btn.disabled {
+        opacity: 0.5;
+    }
+
+    .chime-icon-btn:hover {
+        background-color: var(--bg-tertiary);
+    }
+
+    .chime-details {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        width: max-content;
+        margin-top: 0.75rem;
+    }
+
+    .chime-title {
+        margin: 0;
+        font-size: 0.65rem;
+        font-weight: 500;
+        color: var(--text-muted);
+    }
+
+    .chime-dots {
+        display: grid;
+        grid-template-columns: repeat(12, auto);
+        gap: 0.75rem;
+        margin: 0.5rem 0;
+    }
+
+    .chime-dot {
+        width: 0.75rem;
+        height: 0.75rem;
+        border-radius: 50%;
+        background-color: var(--text-primary);
+        border: none;
+        cursor: pointer;
+        padding: 0;
+        opacity: 0.2;
+        transition: all 0.2s, transform 0.1s;
+    }
+
+    .chime-dot:hover {
+        background-color: var(--text-secondary);
+        opacity: 0.8;
+        transform: scale(1.1);
+    }
+
+    .chime-dot.active {
+        opacity: 0.7;
+        transform: scale(1.2);
+    }
+
+    @keyframes wiggle {
+        0% { transform: rotate(-10deg); }
+        33% { transform: rotate(10deg); }
+        66% { transform: rotate(-10deg); }
+        100% { transform: rotate(0deg); }
+    }
+
+    .wiggle {
+        animation: wiggle 0.3s ease-in-out;
     }
 
     /* Responsive design */
