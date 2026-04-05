@@ -40,7 +40,7 @@ class ParakeetMLXASRService(ASRService):
 
             self.parakeet_mlx = parakeet_mlx
             self._notify_progress(
-                Step.ASR_PROCESSING, 0, f"Loading Parakeet MLX model {self.model_path}. This may take a while…"
+                Step.ASR_PROCESSING, -1, f"Loading Parakeet MLX model {self.model_path}. This may take a while…"
             )
             loop = asyncio.get_event_loop()
             self.model = await loop.run_in_executor(None, parakeet_mlx.from_pretrained, self.model_path)

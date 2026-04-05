@@ -1,5 +1,7 @@
 import asyncio
 import logging
+import queue
+import threading
 import time
 from dataclasses import dataclass
 from typing import Optional, Dict, Any, Callable, Awaitable
@@ -23,7 +25,10 @@ class ProgressDispatcher:
     """Thread-safe, non-blocking progress notification dispatcher.
 
     Producers call notify() from any context (async or executor thread).
-    A background drain loop on the event loop sends WebSocket messages.
+    A dedicated background thread drains the input queue, applies
+    throttling, and forwards items to a lightweight sender task on
+    the main event loop. This architecture ensures that GIL contention
+    from executor threads cannot stall progress delivery.
     """
 
     def __init__(
@@ -31,13 +36,20 @@ class ProgressDispatcher:
         broadcast_progress: Callable[..., Awaitable],
         broadcast_step_change: Callable[..., Awaitable],
     ):
-        self._queue: asyncio.Queue[ProgressItem] = asyncio.Queue()
+        self._input_queue: queue.Queue[Optional[ProgressItem]] = queue.Queue()
+        self._send_queue: Optional[asyncio.Queue] = None
+
         self._broadcast_progress = broadcast_progress
         self._broadcast_step_change = broadcast_step_change
+
         self._loop: Optional[asyncio.AbstractEventLoop] = None
-        self._drain_task: Optional[asyncio.Task] = None
+        self._thread: Optional[threading.Thread] = None
+        self._sender_task: Optional[asyncio.Task] = None
+        self._stop = threading.Event()
+
         self._epoch: int = 0
         self._current_step: Optional[Step] = None
+
         # Throttle: minimum seconds between progress broadcasts (step changes bypass this)
         self._min_interval: float = 1 / 15
         self._last_send_time: float = 0.0
@@ -52,21 +64,35 @@ class ProgressDispatcher:
         self._current_step = None
 
     def start(self):
-        """Start the drain loop. Must be called from the event loop thread."""
-        if self._drain_task and not self._drain_task.done():
+        """Start the dispatcher. Must be called from the event loop thread."""
+        if self._thread and self._thread.is_alive():
             return
         self._loop = asyncio.get_running_loop()
-        self._drain_task = asyncio.create_task(self._drain_loop())
+        self._send_queue = asyncio.Queue()
+        self._sender_task = asyncio.ensure_future(self._sender_loop())
+        self._stop.clear()
+        self._thread = threading.Thread(
+            target=self._drain_loop, daemon=True, name="progress-dispatcher",
+        )
+        self._thread.start()
 
     async def stop(self):
-        """Stop the drain loop."""
-        if self._drain_task:
-            self._drain_task.cancel()
+        """Stop the dispatcher."""
+        self._stop.set()
+        # Wake the drain thread so it can exit
+        self._input_queue.put(None)
+        if self._thread:
+            self._thread.join(timeout=2.0)
+            self._thread = None
+        # Stop the sender task
+        if self._sender_task:
+            if self._send_queue:
+                self._send_queue.put_nowait(None)
             try:
-                await self._drain_task
+                await self._sender_task
             except asyncio.CancelledError:
                 pass
-            self._drain_task = None
+            self._sender_task = None
 
     def notify(
         self,
@@ -98,10 +124,10 @@ class ProgressDispatcher:
             is_step_change=is_step_change,
         )
 
-        if self._loop and self._loop.is_running():
-            self._loop.call_soon_threadsafe(self._queue.put_nowait, item)
-        else:
-            logger.warning("ProgressDispatcher: event loop not running, dropping notification")
+        try:
+            self._input_queue.put_nowait(item)
+        except queue.Full:
+            pass  # Unbounded queue; should never happen
 
     def scoped_callback(self) -> Callable:
         """Return a plain callback bound to the current epoch.
@@ -121,26 +147,32 @@ class ProgressDispatcher:
 
         return callback
 
-    async def _drain_loop(self):
-        """Background task that drains the queue and sends WS messages.
+    # ------------------------------------------------------------------
+    # Drain thread -- runs independently of the main event loop / GIL
+    # ------------------------------------------------------------------
+
+    def _drain_loop(self):
+        """Background thread that drains the input queue and feeds the send queue.
 
         Progress-only updates are throttled to self._min_interval seconds
         between sends. Step changes and feed entries always send immediately.
         """
-        while True:
+        while not self._stop.is_set():
             try:
-                item = await self._queue.get()
+                try:
+                    item = self._input_queue.get(timeout=1.0)
+                except queue.Empty:
+                    continue
+
+                if item is None:
+                    break  # Shutdown signal
 
                 if item.epoch != self._epoch:
                     continue
 
                 # Step changes and feed entries bypass throttling
                 if item.is_step_change or item.details.get("feed_text"):
-                    if item.is_step_change:
-                        await self._broadcast_step_change(item.step)
-                    await self._broadcast_progress(
-                        item.step, item.percent, item.message, item.details
-                    )
+                    self._schedule_send(item)
                     self._last_send_time = time.monotonic()
                     continue
 
@@ -152,31 +184,61 @@ class ProgressDispatcher:
                     latest = item
                     try:
                         while True:
-                            latest = self._queue.get_nowait()
+                            latest = self._input_queue.get_nowait()
+                            if latest is None:
+                                return  # Shutdown
                             if latest.is_step_change or latest.epoch != self._epoch:
                                 break
                             # Don't skip feed entries during drain
                             if latest.details.get("feed_text"):
-                                await self._broadcast_progress(
-                                    latest.step, latest.percent, latest.message, latest.details
-                                )
-                    except asyncio.QueueEmpty:
+                                self._schedule_send(latest)
+                    except queue.Empty:
                         pass
 
                     # If we pulled a step change or stale item, handle it next iteration
                     if latest.is_step_change or latest.epoch != self._epoch:
-                        await self._queue.put(latest)
+                        self._input_queue.put(latest)
                         continue
 
-                    await asyncio.sleep(self._min_interval - elapsed)
+                    remaining = self._min_interval - elapsed
+                    if remaining > 0:
+                        time.sleep(remaining)
                     item = latest
+
+                self._schedule_send(item)
+                self._last_send_time = time.monotonic()
+
+            except Exception:
+                logger.exception("Error in progress drain loop")
+
+    def _schedule_send(self, item: ProgressItem):
+        """Push a processed item to the main-loop send queue."""
+        if self._loop and self._loop.is_running():
+            self._loop.call_soon_threadsafe(self._send_queue.put_nowait, item)
+
+    # ------------------------------------------------------------------
+    # Sender task -- minimal work on the main event loop, FIFO ordering
+    # ------------------------------------------------------------------
+
+    async def _sender_loop(self):
+        """Runs on the main event loop. Sends items in strict FIFO order."""
+        while True:
+            try:
+                item = await self._send_queue.get()
+
+                if item is None:
+                    break  # Shutdown signal
+
+                if item.epoch != self._epoch:
+                    continue
+
+                if item.is_step_change:
+                    await self._broadcast_step_change(item.step)
 
                 await self._broadcast_progress(
                     item.step, item.percent, item.message, item.details
                 )
-                self._last_send_time = time.monotonic()
-
             except asyncio.CancelledError:
                 raise
             except Exception:
-                logger.exception("Error in progress drain loop")
+                logger.exception("Error in progress sender loop")

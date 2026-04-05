@@ -7,7 +7,7 @@ import shutil
 import subprocess
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, wait
 from pathlib import Path
 from typing import List, Tuple, Optional
 
@@ -291,6 +291,8 @@ class AudioProcessingService:
         worker_index: int,
         cue_counter: list,
         last_feed_time: list,
+        last_progress_time: list,
+        finishing: threading.Event,
     ) -> Optional[List[Tuple[float, float]]]:
         """Detect silences in a virtual segment of the audio file."""
         if cancelled.is_set():
@@ -304,6 +306,7 @@ class AudioProcessingService:
             "-t", str(segment_duration),
             "-af", f"silencedetect=n={silence_threshold}dB:d={MIN_SILENCE_DURATION}",
             "-f", "null",
+            "-progress", "pipe:2",
             "-",
         ]
 
@@ -318,6 +321,7 @@ class AudioProcessingService:
 
             pattern_start = re.compile(r"silence_start:\s*([\d\.]+)")
             pattern_end = re.compile(r"silence_end:\s*([\d\.]+)")
+            pattern_progress = re.compile(r"out_time=(\d+):(\d+):([\d.]+)")
 
             for line in process.stderr:
                 if cancelled.is_set():
@@ -325,38 +329,52 @@ class AudioProcessingService:
                     process.wait()
                     return None
 
+                local_ts = None
+                is_silence_end = False
+
                 if "silence_start" in line:
                     match = pattern_start.search(line)
                     if match:
-                        local_ts = float(match.group(1))
-                        silence_starts.append(local_ts + seek)
+                        silence_starts.append(float(match.group(1)) + seek)
+                    continue
                 elif "silence_end" in line:
                     match = pattern_end.search(line)
                     if match:
                         local_ts = float(match.group(1))
                         silence_ends.append(local_ts + seek)
+                        is_silence_end = True
+                elif "out_time=" in line:
+                    match = pattern_progress.search(line)
+                    if match:
+                        h, m, s = int(match.group(1)), int(match.group(2)), float(match.group(3))
+                        local_ts = h * 3600 + m * 60 + s
 
-                        if segment_duration > 0:
-                            worker_progress[worker_index] = min((local_ts / segment_duration) * 100, 100)
+                if local_ts is None:
+                    continue
 
-                        # Report aggregate progress from this worker
-                        avg_progress = sum(worker_progress) / len(worker_progress)
-                        virtual_ts = (avg_progress / 100) * duration
-                        message = f"Analyzing audio… ({_format_time(virtual_ts)} / {_format_time(duration)})"
+                if segment_duration > 0:
+                    worker_progress[worker_index] = min((local_ts / segment_duration) * 100, 100)
 
-                        with self._process_lock:
-                            cue_counter[0] += 1
-                            cue_count = cue_counter[0]
+                avg_progress = sum(worker_progress) / len(worker_progress)
+                virtual_ts = (avg_progress / 100) * duration
+                message = f"Analyzing audio… ({_format_time(virtual_ts)} / {_format_time(duration)})"
 
-                        now = time.monotonic()
-                        details = None
-                        if now - last_feed_time[0] >= 0.5:
-                            details = {
-                                "feed_text": f"Found {cue_count} potential chapter cue{'s' if cue_count != 1 else ''}"
-                            }
-                            last_feed_time[0] = now
+                details = None
+                if is_silence_end:
+                    with self._process_lock:
+                        cue_counter[0] += 1
+                        cue_count = cue_counter[0]
 
-                        self._notify_progress(Step.AUDIO_ANALYSIS, avg_progress, message, details)
+                    now = time.monotonic()
+                    if now - last_feed_time[0] >= 0.5:
+                        details = {
+                            "feed_text": f"Found {cue_count} potential chapter cue{'s' if cue_count != 1 else ''}"
+                        }
+                        last_feed_time[0] = now
+
+                last_progress_time[0] = time.monotonic()
+                if not finishing.is_set():
+                    self._notify_progress(Step.AUDIO_ANALYSIS, avg_progress, message, details)
 
             process.wait()
 
@@ -391,6 +409,8 @@ class AudioProcessingService:
         worker_progress = [0.0] * len(segments)
         cue_counter = [0]
         last_feed_time = [0.0]
+        last_progress_time = [time.monotonic()]
+        finishing = threading.Event()
 
         logger.info(
             f"Running parallel silence detection: {len(segments)} segments "
@@ -405,21 +425,35 @@ class AudioProcessingService:
                     self._run_silence_detection_worker,
                     input_file, seek, seg_dur, silence_threshold,
                     duration, cancelled, worker_progress, i,
-                    cue_counter, last_feed_time,
+                    cue_counter, last_feed_time, last_progress_time, finishing
                 ): i
                 for i, (seek, seg_dur) in enumerate(segments)
             }
 
-            for future in as_completed(futures):
-                result = future.result()
+            pending = set(futures.keys())
+
+            while pending:
+                done, pending = wait(pending, timeout=0.5)
 
                 if cancelled.is_set():
-                    for f in futures:
+                    for f in futures.keys():
                         f.cancel()
                     return None
 
-                if result:
-                    all_silences.extend(result)
+                for future in done:
+                    result = future.result()
+
+                    if result:
+                        all_silences.extend(result)
+
+                if not finishing.is_set() and pending:
+                    avg_progress = sum(worker_progress) / len(worker_progress)
+                    if avg_progress > 95.0 and (time.monotonic() - last_progress_time[0]) > 0.5:
+                        self._notify_progress(Step.AUDIO_ANALYSIS, -1, "Processing results…")
+                        finishing.set()
+
+        if not finishing.is_set():
+            self._notify_progress(Step.AUDIO_ANALYSIS, -1, "Processing results…")
 
         merged = _merge_overlapping_silences(all_silences)
         logger.info(
@@ -1007,7 +1041,7 @@ class AudioProcessingService:
         output_file = os.path.join(os.path.dirname(input_files[0]), "concatenated." + ext)
 
         if not total_duration:
-            self._notify_progress(Step.FILE_PREP, 0, "Preparing files, please wait…")
+            self._notify_progress(Step.FILE_PREP, -1, "Preparing files, please wait…")
 
         # Create a temporary file list for ffmpeg concat demuxer
         filelist_path = os.path.join(os.path.dirname(input_files[0]), "concat_filelist.txt")

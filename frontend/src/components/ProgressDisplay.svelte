@@ -153,6 +153,9 @@
         }
     })();
 
+    // Indeterminate mode when progress percent is negative
+    $: indeterminate = $progress.percent < 0;
+
     // Connection warning
     $: showConnectionWarning = !$isConnected && $session.step !== "idle";
 
@@ -195,15 +198,18 @@
         <span class="progress-label"
         >{$progress.message || "Processing…"}</span
         >
-                <span class="progress-percent">{Math.round($progress.percent)}%</span>
+                {#if !indeterminate}
+                    <span class="progress-percent">{Math.round($progress.percent)}%</span>
+                {/if}
             </div>
 
             <div class="progress">
                 <div
                         class="progress-bar"
-                        style="width: {$progress.percent}%"
+                        class:indeterminate
+                        style={indeterminate ? undefined : `width: ${$progress.percent}%`}
                         role="progressbar"
-                        aria-valuenow={$progress.percent}
+                        aria-valuenow={indeterminate ? undefined : $progress.percent}
                         aria-valuemin="0"
                         aria-valuemax="100"
                 ></div>
@@ -297,6 +303,20 @@
         background-color: var(--primary);
         transition: width 0.1s ease;
         border-radius: 0.75rem;
+    }
+
+    .progress-bar.indeterminate {
+        width: 40%;
+        animation: indeterminate 1.5s ease-in-out infinite;
+    }
+
+    @keyframes indeterminate {
+        0% {
+            transform: translateX(-100%);
+        }
+        100% {
+            transform: translateX(250%);
+        }
     }
 
     .action-section {
