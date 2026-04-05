@@ -737,3 +737,23 @@ async def update_editor_settings(request: EditorSettingsRequest):
     except Exception as e:
         logger.error(f"Failed to update editor settings: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/config/migration/reset")
+async def reset_migration():
+    """Reset settings after migration failure — deletes unreadable legacy files and starts fresh"""
+    from ...core.migration import reset_after_migration_failure
+    from ...core.config import set_migration_failed, refresh_app_config
+
+    try:
+        reset_after_migration_failure()
+        set_migration_failed(False)
+        refresh_app_config()
+
+        app_state = get_app_state()
+        await app_state.broadcast_step_change(Step.ABS_SETUP)
+
+        return {"success": True, "message": "Settings reset successfully"}
+    except Exception as e:
+        logger.error(f"Failed to reset migration: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

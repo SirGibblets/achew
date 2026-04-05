@@ -1,5 +1,6 @@
-import shelve
+import json
 import logging
+import os
 import uuid
 from pathlib import Path
 from typing import Optional, List, Dict, Any
@@ -130,69 +131,65 @@ class Settings(BaseSettings):
 
 
 def get_config_db_path() -> Path:
-    """Get the path to the configuration database"""
+    """Get the path to the legacy shelve configuration database (used by migration only)"""
     return Path(__file__).parent.parent / "config" / "app_config"
+
+
+def get_config_json_path() -> Path:
+    """Get the path to the JSON configuration file"""
+    return Path(__file__).parent.parent / "config" / "app_config.json"
 
 
 def _ensure_config_dir():
     """Ensure the config directory exists"""
-    config_path = get_config_db_path()
+    config_path = get_config_json_path()
     config_path.parent.mkdir(parents=True, exist_ok=True)
 
 
 def load_config() -> AppConfig:
-    """Load complete application configuration from shelve database"""
+    """Load complete application configuration from JSON file"""
     _ensure_config_dir()
-    config_db_path = str(get_config_db_path())
+    config_path = get_config_json_path()
 
     try:
-        with shelve.open(config_db_path, "c") as db:
-            # Load each section, with defaults if not present
-            abs_data = db.get("abs", {})
-            llm_data = db.get("llm", {})
-            user_prefs_data = db.get("user_preferences", {})
-            asr_options_data = db.get("asr_options", {})
-            custom_instructions_data = db.get("custom_instructions", {})
-
-            # Create config objects with validation
-            abs_config = ABSConfig(**abs_data) if abs_data else ABSConfig()
-            llm_config = LLMConfig(**llm_data) if llm_data else LLMConfig()
-            user_prefs = UserPreferences(**user_prefs_data) if user_prefs_data else UserPreferences()
-            asr_options = ASROptions(**asr_options_data) if asr_options_data else ASROptions()
-            custom_instructions = (
-                CustomInstructionsConfig(**custom_instructions_data)
-                if custom_instructions_data
-                else CustomInstructionsConfig()
-            )
+        if config_path.exists():
+            with open(config_path, "r") as f:
+                data = json.load(f)
 
             return AppConfig(
-                abs=abs_config,
-                llm=llm_config,
-                user_preferences=user_prefs,
-                asr_options=asr_options,
-                custom_instructions=custom_instructions,
+                abs=ABSConfig(**data["abs"]) if data.get("abs") else ABSConfig(),
+                llm=LLMConfig(**data["llm"]) if data.get("llm") else LLMConfig(),
+                user_preferences=UserPreferences(**data["user_preferences"]) if data.get("user_preferences") else UserPreferences(),
+                asr_options=ASROptions(**data["asr_options"]) if data.get("asr_options") else ASROptions(),
+                custom_instructions=CustomInstructionsConfig(**data["custom_instructions"]) if data.get("custom_instructions") else CustomInstructionsConfig(),
             )
+        return AppConfig()
     except Exception as e:
-        logger.warning(f"Failed to load configuration from {config_db_path}: {e}")
+        logger.warning(f"Failed to load configuration from {config_path}: {e}")
         return AppConfig()
 
 
 def save_config(config: AppConfig) -> bool:
-    """Save complete application configuration to shelve database"""
+    """Save complete application configuration to JSON file"""
     _ensure_config_dir()
-    config_db_path = str(get_config_db_path())
+    config_path = get_config_json_path()
 
     try:
-        with shelve.open(config_db_path, "c") as db:
-            db["abs"] = config.abs.model_dump()
-            db["llm"] = config.llm.model_dump()
-            db["user_preferences"] = config.user_preferences.model_dump()
-            db["asr_options"] = config.asr_options.model_dump()
-            db["custom_instructions"] = config.custom_instructions.model_dump()
-            db.sync()  # Ensure data is written to disk
+        data = {
+            "abs": config.abs.model_dump(mode="json"),
+            "llm": config.llm.model_dump(mode="json"),
+            "user_preferences": config.user_preferences.model_dump(mode="json"),
+            "asr_options": config.asr_options.model_dump(mode="json"),
+            "custom_instructions": config.custom_instructions.model_dump(mode="json"),
+        }
+
+        tmp_path = config_path.with_suffix(".tmp")
+        with open(tmp_path, "w") as f:
+            json.dump(data, f, indent=2)
+        os.replace(str(tmp_path), str(config_path))
         return True
     except Exception as e:
-        logger.error(f"Failed to save configuration to {config_db_path}: {e}")
+        logger.error(f"Failed to save configuration to {config_path}: {e}")
         return False
 
 
@@ -277,6 +274,16 @@ def get_default_custom_instructions() -> List[CustomInstruction]:
 # Global configuration cache
 _settings: Optional[Settings] = None
 _app_config: Optional[AppConfig] = None
+_migration_failed: bool = False
+
+
+def is_migration_failed() -> bool:
+    return _migration_failed
+
+
+def set_migration_failed(failed: bool):
+    global _migration_failed
+    _migration_failed = failed
 
 
 def get_settings() -> Settings:
@@ -350,4 +357,5 @@ def get_configuration_status() -> Dict[str, Any]:
         "abs_validated": config.abs.validated,
         "needs_abs_setup": not is_abs_configured(),
         "needs_llm_setup": False,  # LLM setup is always optional
+        "migration_failed": is_migration_failed(),
     }
