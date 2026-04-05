@@ -590,7 +590,7 @@ class VadDetectionService:
             self._check_cancellation()
 
             # Step 3: Merge overlapping gaps and filter by duration
-            self._notify_progress(Step.VAD_ANALYSIS, 100, "Gathering results…")
+            self._notify_progress(Step.VAD_ANALYSIS, -1, "Gathering results…")
 
             final_gaps = self._merge_overlapping_gaps(all_gaps)
 

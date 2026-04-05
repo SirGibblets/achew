@@ -40,7 +40,7 @@ class ParakeetASRService(ASRService):
         try:
             import onnx_asr
 
-            self._notify_progress(Step.ASR_PROCESSING, 0, "Loading Parakeet ASR model…")
+            self._notify_progress(Step.ASR_PROCESSING, -1, "Loading Parakeet ASR model…")
 
             loop = asyncio.get_event_loop()
             self.model = await loop.run_in_executor(None, onnx_asr.load_model, self.model_path)
