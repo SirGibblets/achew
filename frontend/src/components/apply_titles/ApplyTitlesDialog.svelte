@@ -6,6 +6,8 @@
     import SelectionTab from "./SelectionTab.svelte";
 
     import X from "@lucide/svelte/icons/x";
+    import Eye from "@lucide/svelte/icons/eye";
+    import ChapterModal from "../ChapterModal.svelte";
 
     let {
         isOpen = $bindable(false),
@@ -18,6 +20,11 @@
 
     let alignmentMappings = $state([]);
     let selectionMappings = $state([]);
+
+    let showChapterTitlesModal = $state(false);
+    let chapterTitlesModalTitle = $state("");
+    let chapterTitlesModalData = $state([]);
+    let chapterTitlesModalLoading = false;
 
     let cueSources = $derived($session.cueSources || []);
     let selectedSource = $derived(
@@ -110,6 +117,23 @@
         }
     }
 
+    function viewChapterTitles() {
+        if (!selectedSource) return;
+
+        chapterTitlesModalTitle = selectedSource.name;
+        chapterTitlesModalData = selectedSource.cues.map((cue, index) => ({
+            timestamp: cue.timestamp,
+            title: cue.title || `Chapter ${index + 1}`,
+        }));
+        showChapterTitlesModal = true;
+    }
+
+    function closeChapterTitlesModal() {
+        showChapterTitlesModal = false;
+        chapterTitlesModalData = [];
+        chapterTitlesModalTitle = "";
+    }
+
     function handleBackdropKeydown(event) {
         if (event.key === 'Escape') {
             handleCancel();
@@ -141,12 +165,23 @@
                     {/if}
 
                     <div class="source-row">
-                        <span class="source-label">Apply titles from</span>
-                        <select class="source-select" bind:value={selectedSourceId}>
-                            {#each cueSources as src (src.id)}
-                                <option value={src.id}>{src.name}</option>
-                            {/each}
-                        </select>
+                        <span class="source-label">Apply titles from:</span>
+                        <div class="source-select-group">
+                            <select class="source-select" bind:value={selectedSourceId}>
+                                {#each cueSources as src (src.id)}
+                                    <option value={src.id}>{src.name} ({src.cues.length} chapters)</option>
+                                {/each}
+                            </select>
+                        </div>
+                        <button
+                                type="button"
+                                class="view-titles-btn"
+                                onclick={viewChapterTitles}
+                                disabled={!selectedSourceId}
+                                title="View chapter titles from selected source"
+                        >
+                            <Eye size="20"/>
+                        </button>
                     </div>
 
                     <div class="mode-selector">
@@ -195,6 +230,14 @@
         </div>
     </div>
 {/if}
+
+<ChapterModal
+        bind:isOpen={showChapterTitlesModal}
+        title={chapterTitlesModalTitle}
+        chapters={chapterTitlesModalData}
+        loading={chapterTitlesModalLoading}
+        on:close={closeChapterTitlesModal}
+/>
 
 <style>
     .modal-backdrop {
@@ -249,28 +292,67 @@
         justify-content: center;
         gap: 0.5rem;
         margin-bottom: 0.75rem;
-        font-size: 0.875rem;
-        color: var(--text-secondary);
     }
 
     .source-label {
         white-space: nowrap;
+        font-size: 0.875rem;
+        color: var(--text-secondary);
+    }
+
+    .source-select-group {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        max-width: 360px;
     }
 
     .source-select {
-        background: transparent;
-        border: none;
-        border-bottom: 1px solid var(--border-color);
-        font-size: 0.875rem;
-        font-weight: 600;
+        width: 100%;
+        padding: 0.5rem 0.75rem;
+        border: 1px solid var(--border-color);
+        border-radius: 0.375rem;
+        background: var(--bg-primary);
         color: var(--text-primary);
-        padding: 0.1rem 0.25rem;
-        cursor: pointer;
-        outline: none;
+        font-size: 0.875rem;
+        transition: border-color 0.2s ease;
     }
 
     .source-select:focus {
-        border-bottom-color: var(--primary-color);
+        outline: none;
+        border-color: var(--primary-color);
+    }
+
+    .source-select:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+
+    .view-titles-btn {
+        flex-shrink: 0;
+        width: 36px;
+        height: 36px;
+        border: 1px solid var(--border-color);
+        border-radius: 0.375rem;
+        background: var(--bg-primary);
+        color: var(--text-secondary);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .view-titles-btn:hover:not(:disabled) {
+        background: var(--primary-color);
+        color: white;
+        border-color: var(--primary-color);
+        transform: translateY(-1px);
+    }
+
+    .view-titles-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
     }
 
     .close-button {
