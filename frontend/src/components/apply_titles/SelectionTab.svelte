@@ -299,7 +299,7 @@
             >
                 <input type="checkbox" checked={leftChecked[chapter.id]} />
                 <span class="ts">{formatTimestamp(chapter.timestamp)}</span>
-                <button class="play-btn" onclick={(e) => { e.stopPropagation(); playChapter(chapter.id); }} title="Play">
+                <button type="button" class="play-btn" onclick={(e) => { e.preventDefault(); e.stopPropagation(); playChapter(chapter.id); }} title="Play">
                     {#if $currentSegmentId === chapter.id && $isPlaying}
                         <Pause size="14"/>
                     {:else}

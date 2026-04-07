@@ -145,7 +145,7 @@
                    onclick={(e) => { e.preventDefault(); handleCheck(chapter.id, e); }}>
                 <input type="checkbox" checked={checked[chapter.id]} />
                 <span class="chapter-ts">{formatTimestamp(chapter.timestamp)}</span>
-                <button class="play-btn" onclick={(e) => { e.stopPropagation(); playChapter(chapter.id); }} title="Play">
+                <button type="button" class="play-btn" onclick={(e) => { e.preventDefault(); e.stopPropagation(); playChapter(chapter.id); }} title="Play">
                     {#if $currentSegmentId === chapter.id && $isPlaying}
                         <Pause size="14"/>
                     {:else}
@@ -164,7 +164,7 @@
         {:else}
             <div class="row unaligned">
                 <span class="chapter-ts">{formatTimestamp(chapter.timestamp)}</span>
-                <button class="play-btn" onclick={() => playChapter(chapter.id)} title="Play">
+                <button type="button" class="play-btn" onclick={(e) => { e.preventDefault(); e.stopPropagation(); playChapter(chapter.id); }} title="Play">
                     {#if $currentSegmentId === chapter.id && $isPlaying}
                         <Pause size="14"/>
                     {:else}
