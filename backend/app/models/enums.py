@@ -2,6 +2,7 @@ from enum import Enum
 
 
 class Step(str, Enum):
+    MIGRATION_FAILED = "migration_failed"  # Interactive - blocks app until resolved
     ABS_SETUP = "abs_setup"  # Interactive
     LLM_SETUP = "llm_setup"  # Interactive
     ASR_SETUP = "asr_setup"  # Interactive

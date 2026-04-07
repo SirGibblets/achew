@@ -40,6 +40,17 @@ async def lifespan(achew_app: FastAPI):
     logger.info("Starting Achew")
     logger.info(f"CORS origins: {settings.cors_origins_list}")
 
+    # Migrate legacy shelve config to JSON before any config access
+    from .core.migration import migrate_shelve_to_json
+    from .core.config import set_migration_failed
+
+    migration_result = migrate_shelve_to_json()
+    if migration_result == "ok":
+        logger.info("Successfully migrated configuration from shelve to JSON")
+    elif migration_result == "failed":
+        logger.warning("Configuration migration failed — app will enter migration_failed state")
+        set_migration_failed(True)
+
     # Check API configuration
     from .core.config import is_abs_configured
 
