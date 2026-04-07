@@ -285,6 +285,13 @@ export const chapters = {
         });
     },
 
+    async applyTitles(mappings) {
+        return apiRequest('/chapters/apply-titles', {
+            method: 'POST',
+            body: { mappings },
+        });
+    },
+
     async transcribe(chapterId) {
         return apiRequest(`/chapters/${chapterId}/transcribe`, {
             method: 'POST',

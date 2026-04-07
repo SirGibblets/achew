@@ -17,6 +17,7 @@
     import {api, handleApiError} from "../utils/api.js";
     import AddChapterDialog from "./AddChapterDialog.svelte";
     import AICleanupDialog from "./AICleanupDialog.svelte";
+    import ApplyTitlesDialog from "./apply_titles/ApplyTitlesDialog.svelte";
     import ShiftTimestampsDialog from "./ShiftTimestampsDialog.svelte";
     import Icon from "./Icon.svelte";
 
@@ -48,6 +49,7 @@
     let showAIConfirmation = $state(false);
     let showAddChapterDialog = $state(false);
     let showShiftTimestampsDialog = $state(false);
+    let showApplyTitlesDialog = $state(false);
     let addChapterDialogChapterId = $state(null);
     let addChapterDialogDefaultTab = $state(null);
 
@@ -1133,6 +1135,26 @@
                         </h5>
                         <div class="tools-split-layout">
                             <div class="tools-column">
+                                {#if ($session.cueSources || []).length > 0}
+                                    <button class="btn btn-cancel btn-sm tool-btn full-width" title="Apply titles from an existing source"
+                                        onclick={() => showApplyTitlesDialog = true}>
+                                        <BookMarked size="16" color="var(--primary-color)"/>
+                                        Apply titles from...
+                                    </button>
+                                {/if}
+                                <button class="btn btn-cancel btn-sm tool-btn full-width" title="Shift Timestamps"
+                                    onclick={() => showShiftTimestampsDialog = true}>
+                                    <Clock size="16" color="var(--primary-color)"/>
+                                    Shift Timestamps
+                                </button>
+                                <button class="btn btn-cancel btn-sm tool-btn full-width" title="Transcribe Selected"
+                                    onclick={transcribeSelected}
+                                    disabled={$selectionStats.selected === 0 || Object.keys($transcriptionStatuses).length > 0}>
+                                    <Mic size="16" color="var(--primary-color)"/>
+                                    Transcribe Selected
+                                </button>
+                            </div>
+                            <div class="tools-column">
                                 <button class="btn btn-cancel btn-sm tool-btn full-width" title="Delete Selected"
                                         onclick={() => deleteBySelection("selected")}
                                         disabled={$selectionStats.selected === 0}>
@@ -1144,19 +1166,6 @@
                                         disabled={$selectionStats.unselected === 0}>
                                     <Trash2 size="16" color="var(--danger)"/>
                                     Delete Unselected
-                                </button>
-                            </div>
-                            <div class="tools-column">
-                                <button class="btn btn-cancel btn-sm tool-btn full-width" title="Shift Timestamps"
-                                    onclick={() => showShiftTimestampsDialog = true}>
-                                    <Clock size="16" color="var(--primary-color)"/>
-                                    Shift Timestamps
-                                </button>
-                                <button class="btn btn-cancel btn-sm tool-btn full-width" title="Transcribe Selected"
-                                    onclick={transcribeSelected}
-                                    disabled={$selectionStats.selected === 0 || Object.keys($transcriptionStatuses).length > 0}>
-                                    <Mic size="16" color="var(--primary-color)"/>
-                                    Transcribe Selected
                                 </button>
                             </div>
                         </div>
@@ -1246,6 +1255,9 @@
 
 <!-- Shift Timestamps Dialog -->
 <ShiftTimestampsDialog bind:isOpen={showShiftTimestampsDialog} />
+
+<!-- Apply Titles Dialog -->
+<ApplyTitlesDialog bind:isOpen={showApplyTitlesDialog} />
 
 <style>
     .page-header {

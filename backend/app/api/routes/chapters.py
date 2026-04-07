@@ -85,6 +85,15 @@ class ShiftTimestampsRequest(BaseModel):
     shifts: List[TimestampShift]
 
 
+class TitleMapping(BaseModel):
+    chapter_id: str
+    new_title: str
+
+
+class ApplyTitlesRequest(BaseModel):
+    mappings: List[TitleMapping]
+
+
 class BatchOperationResponse(BaseModel):
     message: str
     affected_chapters: int
@@ -377,6 +386,42 @@ async def shift_timestamps(request: ShiftTimestampsRequest):
         raise
     except Exception as e:
         logger.error(f"Failed to shift timestamps: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/chapters/apply-titles", response_model=BatchOperationResponse)
+async def apply_titles(request: ApplyTitlesRequest):
+    """Apply titles from an external cue source to selected chapters"""
+    try:
+        app_state = get_app_state()
+
+        if not app_state.pipeline:
+            raise HTTPException(status_code=404, detail="Pipeline not found")
+
+        if not request.mappings:
+            raise HTTPException(status_code=400, detail="No mappings provided")
+
+        operations = [
+            EditTitleOperation(chapter_id=m.chapter_id, new_title=m.new_title)
+            for m in request.mappings
+        ]
+
+        batch_op = BatchChapterOperation(operations=operations)
+        batch_op.apply(app_state.pipeline)
+        app_state.pipeline.add_to_history(batch_op)
+
+        await app_state.broadcast_chapter_update()
+        await app_state.broadcast_history_update()
+
+        return BatchOperationResponse(
+            message=f"Applied titles to {len(operations)} chapters",
+            affected_chapters=len(operations),
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to apply titles: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
