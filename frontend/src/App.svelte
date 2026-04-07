@@ -6,6 +6,7 @@
     // Pages
     import ABSSetup from "./components/ABSSetup.svelte";
     import ASRSetup from "./components/ASRSetup.svelte";
+    import MigrationFailed from "./components/MigrationFailed.svelte";
     import AICleanup from "./components/AICleanup.svelte";
     import ChapterEditor from "./components/ChapterEditor.svelte";
     import ChapterReview from "./components/ChapterReview.svelte";
@@ -86,6 +87,8 @@
         if (!mounted) return Connecting;
         if (checkingConfig || !$isConnected) return Connecting;
         switch ($session.step) {
+            case "migration_failed":
+                return MigrationFailed;
             case "abs_setup":
                 return ABSSetup;
             case "llm_setup":
@@ -276,7 +279,7 @@
 
     // Check if restart button should be shown
     function shouldShowRestartButton(restartOptions) {
-        return !["abs_setup", "llm_setup", "asr_setup", "idle"].includes($session.step);
+        return !["migration_failed", "abs_setup", "llm_setup", "asr_setup", "idle"].includes($session.step);
     }
 
     // Check if restart button should be disabled
@@ -371,7 +374,7 @@
     // Check if settings button should be shown (hide during setup steps and while connecting)
     $: isConnectingView = currentComponent === Connecting;
     $: shouldShowSettings =
-        !["abs_setup", "llm_setup", "asr_setup"].includes($session.step) && !isConnectingView;
+        !["migration_failed", "abs_setup", "llm_setup", "asr_setup"].includes($session.step) && !isConnectingView;
 
     $: updateAvailable = isNewerVersion($session.version, latestVersion);
 </script>
@@ -526,6 +529,7 @@
                         on:abs-configured={handleABSConfigured}
                         on:llm-setup-complete={handleLLMSetupComplete}
                         on:asr-setup-complete={() => session.loadActiveSession()}
+                        on:migration-reset={() => session.loadActiveSession()}
                 />
             {/if}
         {:else}

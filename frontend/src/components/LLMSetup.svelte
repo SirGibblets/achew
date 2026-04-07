@@ -451,7 +451,7 @@
                     color="linear-gradient(135deg, var(--accent-gradient-start) 0%, var(--accent-gradient-end) 100%)"
             />
         </div>
-        <h1>LLM Configuration</h1>
+        <h1>LLM Setup</h1>
         <p class="optional-label">OPTIONAL</p>
         <p>
             Configure access to LLM services for enhanced cleanup and processing of
@@ -500,7 +500,10 @@
                                 >
                             </div>
                         </div>
-                        <p class="provider-desc">{provider.description}</p>
+                        <p class="provider-desc">{@html provider.description}</p>
+                        {#if provider.instructions}
+                            <p class="provider-instructions">{@html provider.instructions}</p>
+                        {/if}
                     </div>
                 </div>
 
@@ -739,6 +742,14 @@
         margin: 0;
         color: var(--text-primary);
         font-size: 0.9rem;
+        line-height: 1.3;
+    }
+
+    .provider-instructions {
+        margin: 0.25rem 0 0 0;
+        color: var(--text-secondary);
+        font-size: 0.8rem;
+        line-height: 1.2;
     }
 
     .provider-status {

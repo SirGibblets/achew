@@ -120,7 +120,7 @@ class WhisperCppASRService(ASRService):
     async def __aenter__(self):
         """Initialize the ASR model"""
         try:
-            self._notify_progress(Step.ASR_PROCESSING, 0, "Loading ASR model. This may take a while the first time…")
+            self._notify_progress(Step.ASR_PROCESSING, -1, "Loading ASR model. This may take a while the first time…")
 
             model_cache_dir = os.getenv("MODEL_CACHE_DIR", None)
 

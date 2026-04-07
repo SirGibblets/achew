@@ -81,6 +81,7 @@ class ProviderInfo(BaseModel):
     id: str
     name: str
     description: str
+    instructions: Optional[str] = None
     setup_fields: List[Dict[str, Any]]  # Fields needed for setup (e.g., api_key, base_url)
     is_available: bool = False
     is_enabled: bool = False

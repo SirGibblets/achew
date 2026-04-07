@@ -981,7 +981,7 @@ class ProcessingPipeline:
             logger.info("Processing was cancelled during audio analysis, stopping cue detection")
             return
 
-        self._notify_progress(Step.AUDIO_ANALYSIS, 100, f"Found {len(silences)} silence segments")
+        self._notify_progress(Step.AUDIO_ANALYSIS, -1, "Processing results…")
 
         self.detected_cues = [DetectedCue.from_silences(start, end) for start, end in silences]
         self.normal_scanned_regions = [(0.0, self.book.duration)]
@@ -1153,7 +1153,6 @@ class ProcessingPipeline:
             # Store the trimmed segments for transcription
             self.trimmed_segment_files = trimmed_files
 
-            self._notify_progress(Step.ASR_PROCESSING, 100, f"Finished trimming {len(trimmed_files)} chapters")
             logger.info(f"Created {len(trimmed_files)} trimmed segments, copy_only={copy_only}")
 
         except asyncio.CancelledError:
@@ -1171,7 +1170,7 @@ class ProcessingPipeline:
 
         self._notify_progress(
             Step.ASR_PROCESSING,
-            0,
+            -1,
             "Initializing. This may take a while the first time…",
         )
 
@@ -1247,8 +1246,6 @@ class ProcessingPipeline:
             if self.segment_files is None or self.step != Step.AUDIO_EXTRACTION:
                 logger.info("Processing was cancelled during segment extraction")
                 return {"success": False, "message": "Processing was cancelled"}
-
-            self._notify_progress(Step.ASR_PROCESSING, 0, "Preparing files…")
 
             # Then create trimmed segments for transcription
             await self._create_trimmed_segments()

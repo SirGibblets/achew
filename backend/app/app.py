@@ -54,6 +54,10 @@ class AppState:
 
     @property
     def step(self) -> Step:
+        from .core.config import is_migration_failed
+        if is_migration_failed():
+            return Step.MIGRATION_FAILED
+
         config_status = get_configuration_status()
         if config_status["needs_abs_setup"]:
             return Step.ABS_SETUP
