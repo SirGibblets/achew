@@ -124,10 +124,7 @@ class DetectedCue(BaseModel):
         )
 
 
-class ExistingCue(BaseModel):
-    timestamp: float
-    title: str
-
+from ...models.sources import ExistingCue  # noqa: E402 — placed here to avoid import-order churn
 
 class DeletedChapter(BaseModel):
     timestamp: float
@@ -770,7 +767,6 @@ async def export_chapters_json():
                 {
                     "chapter": idx + 1,
                     "timestamp": chapter.timestamp,
-                    "timestamp_formatted": _format_timestamp_readable(chapter.timestamp),
                     "title": chapter.current_title,
                 }
                 for idx, chapter in enumerate(selected_chapters)

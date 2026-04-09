@@ -22,7 +22,7 @@ async function apiRequest(endpoint, options = {}) {
         ...options,
     };
 
-    if (config.body && typeof config.body === 'object') {
+    if (config.body && typeof config.body === 'object' && !(config.body instanceof FormData)) {
         config.body = JSON.stringify(config.body);
     }
 
@@ -512,6 +512,51 @@ export const audiobookshelf = {
     },
 };
 
+export const sources = {
+    async getAll() {
+        return apiRequest('/pipeline/sources');
+    },
+
+    async upload(formData) {
+        return apiRequest('/pipeline/sources/upload', {
+            method: 'POST',
+            // Let the browser set Content-Type with the correct boundary
+            headers: {},
+            body: formData,
+        });
+    },
+
+    async addAudnexus(asin, provider) {
+        return apiRequest('/pipeline/sources/audnexus', {
+            method: 'POST',
+            body: {asin, provider},
+        });
+    },
+
+    async delete(sourceId) {
+        return apiRequest(`/pipeline/sources/${encodeURIComponent(sourceId)}`, {
+            method: 'DELETE',
+        });
+    },
+
+    async updateTitles(sourceId, titles) {
+        return apiRequest(`/pipeline/sources/${encodeURIComponent(sourceId)}/titles`, {
+            method: 'PUT',
+            body: {titles},
+        });
+    },
+};
+
+export const abs = {
+    async searchBooks({provider, title = '', author = '', id = ''}) {
+        const params = new URLSearchParams({provider});
+        if (title) params.append('title', title);
+        if (author) params.append('author', author);
+        if (id) params.append('id', id);
+        return apiRequest(`/audiobookshelf/search/books?${params.toString()}`);
+    },
+};
+
 // Export the main API object
 export const api = {
     session,
@@ -522,6 +567,8 @@ export const api = {
     config,
     llm,
     audiobookshelf,
+    sources,
+    abs,
 };
 
 export default api;

@@ -4,6 +4,8 @@
     import {api} from "../utils/api.js";
     import AudiobookCard from "./AudiobookCard.svelte";
     import ChapterModal from "./ChapterModal.svelte";
+    import AddSourceDialog from "./AddSourceDialog.svelte";
+    import SourceFooter from "./SourceFooter.svelte";
 
     // Icons
     import CircleQuestionMark from "@lucide/svelte/icons/circle-question-mark";
@@ -20,6 +22,19 @@
     let existingCueSources = [];
     let error = null;
 
+    let showAddSource = false;
+
+    $: titleSources = $session.titleSources || [];
+
+    function handleSourceAdded(newSource) {
+        // Auto-select the new source in the active tab if it's a cue source
+        if ('cues' in newSource) {
+            if (activeTab === 'realign') selectedRealignSource = newSource.id;
+            else if (activeTab === 'regenerate_titles') selectedExistingSource = newSource.id;
+            else if (activeTab === 'quick_edit') selectedQuickEditSource = newSource.id;
+        }
+    }
+
     // Chapter details modal state
     let chapterModalOpen = false;
     let chapterModalTitle = "";
@@ -35,8 +50,9 @@
     // Get existing cue sources from session store
     $: if ($session.cueSources) {
         existingCueSources = $session.cueSources;
-        if (!selectedQuickEditSource && existingCueSources.some(s => s.id === 'abs')) {
-            selectedQuickEditSource = 'abs';
+        if (!selectedQuickEditSource) {
+            const absSource = existingCueSources.find(s => s.type === 'abs');
+            if (absSource) selectedQuickEditSource = absSource.id;
         }
     }
 
@@ -324,6 +340,8 @@
                         </div>
                     {/each}
 
+                    <SourceFooter {titleSources} onAddSource={() => showAddSource = true}/>
+
                     <div class="dramatized-toggle">
                         <label>
                             <input
@@ -423,6 +441,8 @@
                         </div>
                     {/each}
 
+                    <SourceFooter {titleSources} onAddSource={() => showAddSource = true}/>
+
                     <div class="actions" style="margin-top: 1.5rem;">
                         <button
                                 class="btn btn-verify"
@@ -485,6 +505,8 @@
                         </div>
                     {/each}
 
+                    <SourceFooter {titleSources} onAddSource={() => showAddSource = true}/>
+
                     <div class="actions" style="margin-top: 1.5rem;">
                         <button
                                 class="btn btn-verify"
@@ -519,6 +541,12 @@
         chapters={chapterModalData}
         loading={chapterModalLoading}
         on:close={closeChapterModal}
+/>
+
+<AddSourceDialog
+    bind:isOpen={showAddSource}
+    expectCues={true}
+    onSourceAdded={handleSourceAdded}
 />
 
 <style>

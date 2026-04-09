@@ -6,9 +6,10 @@ import subprocess
 import tempfile
 import threading
 import uuid
+from enum import Enum
 from typing import Optional, List, Dict, Any, Tuple
 
-from app.api.routes.chapters import DetectedCue, ExistingCue
+from app.api.routes.chapters import DetectedCue
 from app.app import get_app_state
 from app.models.abs import AudioFile, Book
 from pydantic import BaseModel, Field
@@ -22,7 +23,12 @@ from ..models.chapter import ChapterData, RealignmentData
 from ..models.enums import RestartStep, Step
 from ..models.progress import ProgressCallback
 from ..models.chapter_operation import AICleanupOperation, BatchChapterOperation, ChapterOperation
+from ..models.sources import (
+    CueSourceType, TitleSourceType,
+    ExistingCue, ExistingCueSource, ExistingTitleSource,
+)
 from .chapter_aligner import ChapterAligner
+from .source_parsers import csv_parser, cue_parser, epub_parser, json_parser, text_parser
 
 logger = logging.getLogger(__name__)
 
@@ -38,15 +44,6 @@ class PipelineProgress(BaseModel):
     percent: float = 0.0
     message: str = ""
     details: Dict[str, Any] = Field(default_factory=dict)
-
-
-class ExistingCueSource(BaseModel):
-    id: str
-    name: str
-    short_name: str
-    description: str
-    cues: List[ExistingCue]
-    duration: float
 
 
 class AIOptions:
@@ -114,6 +111,7 @@ class ProcessingPipeline:
         self.audio_file_path: str = ""
         self.file_starts: Optional[List[float]] = None
         self.existing_cue_sources: List[ExistingCueSource] = []
+        self.existing_title_sources: List[ExistingTitleSource] = []
 
         self.cues: List[float] = []
         self.segment_files: List[str] = []
@@ -560,6 +558,80 @@ class ProcessingPipeline:
             logger.error(f"Error during download: {e}")
             raise
 
+    async def _scan_library_files(self, abs_service: "ABSService") -> None:
+        """Scan book.libraryFiles and create ExistingCueSource / ExistingTitleSource objects."""
+        if not self.book or not self.book.libraryFiles:
+            return
+
+        _TITLE_STEMS = {"chapters", "titles", "chapter-titles"}
+
+        for lib_file in self.book.libraryFiles:
+            filename = lib_file.metadata.filename.lower()
+            ext = lib_file.metadata.ext.lower()  # already includes leading dot, e.g. ".json"
+            stem = filename[: -len(ext)] if filename.endswith(ext) else filename
+
+            is_cue_candidate = (
+                (ext == ".json" and filename == "chapters.json") or
+                (ext == ".csv"  and filename == "chapters.csv") or
+                ext == ".cue"
+            )
+            is_title_candidate = ext == ".epub" or (ext == ".txt" and stem in _TITLE_STEMS)
+
+            if not is_cue_candidate and not is_title_candidate:
+                continue
+
+            # Download to a temp file
+            tmp_path = os.path.join(self.temp_dir, f"libfile_{lib_file.ino}{ext}")
+            downloaded = await abs_service.download_file(self.book.id, lib_file.ino, tmp_path)
+            if not downloaded:
+                logger.warning(f"Failed to download library file: {lib_file.metadata.filename}")
+                continue
+
+            original_name = lib_file.metadata.filename
+            try:
+                if ext == ".json":
+                    self.existing_cue_sources.append(
+                        json_parser.parse(tmp_path, source_name=original_name, duration=self.book.duration)
+                    )
+                elif ext == ".csv":
+                    self.existing_cue_sources.append(
+                        csv_parser.parse(tmp_path, source_name=original_name, duration=self.book.duration)
+                    )
+                elif ext == ".cue":
+                    self.existing_cue_sources.append(
+                        cue_parser.parse(tmp_path, source_name=original_name, duration=self.book.duration)
+                    )
+                elif ext == ".txt":
+                    self.existing_title_sources.append(
+                        text_parser.parse(tmp_path, source_name=original_name)
+                    )
+                elif ext == ".epub":
+                    self.existing_title_sources.append(
+                        epub_parser.parse(tmp_path, source_name=original_name)
+                    )
+
+            except ValueError as e:
+                logger.warning(f"Failed to parse library file {original_name}: {e}")
+            except Exception as e:
+                logger.warning(f"Unexpected error parsing library file {original_name}: {e}", exc_info=True)
+            finally:
+                try:
+                    if os.path.exists(tmp_path):
+                        os.remove(tmp_path)
+                except Exception:
+                    pass
+
+        # Always add the CUSTOM title source (singleton — only one allowed)
+        self.existing_title_sources.append(
+            ExistingTitleSource(
+                type=TitleSourceType.CUSTOM,
+                name="Custom Titles",
+                short_name="Custom",
+                description="Manually entered list of chapter titles",
+                titles=[],
+            )
+        )
+
     async def fetch_item(self, item_id: str) -> Dict[str, Any]:
         """Fetch the audiobook info and files for processing"""
 
@@ -619,7 +691,7 @@ class ProcessingPipeline:
                     if abs_cues:
                         self.existing_cue_sources.append(
                             ExistingCueSource(
-                                id="abs",
+                                type=CueSourceType.ABS,
                                 name="Audiobookshelf Chapters",
                                 short_name="ABS",
                                 description="Uses the existing Audiobookshelf chapter data for this book",
@@ -643,7 +715,7 @@ class ProcessingPipeline:
                     if embedded_cues:
                         self.existing_cue_sources.append(
                             ExistingCueSource(
-                                id="embedded",
+                                type=CueSourceType.EMBEDDED,
                                 name="Embedded Chapters",
                                 short_name="Embedded",
                                 description="Uses chapter data from the book's embedded metadata",
@@ -666,14 +738,20 @@ class ProcessingPipeline:
                             )
                         )
                     if audnexus_cues:
+                        audnexus_duration_sec = float(audnexus_chapter_data.runtimeLengthMs) / 1000
+                        audnexus_meta: Dict[str, str] = {
+                            "ASIN": book.media.metadata.asin,
+                            "Duration": f"{int(audnexus_duration_sec // 60)}m",
+                        }
                         self.existing_cue_sources.append(
                             ExistingCueSource(
-                                id="audnexus",
+                                type=CueSourceType.AUDNEXUS,
                                 name="Audnexus Chapters",
                                 short_name="Audnexus",
                                 description="Uses the Audnexus chapter data associated with the ASIN assigned to this book",
+                                metadata=audnexus_meta,
                                 cues=audnexus_cues,
-                                duration=float(audnexus_chapter_data.runtimeLengthMs) / 1000,
+                                duration=audnexus_duration_sec,
                             )
                         )
 
@@ -692,7 +770,7 @@ class ProcessingPipeline:
                     if file_start_cues:
                         self.existing_cue_sources.append(
                             ExistingCueSource(
-                                id="file_starts",
+                                type=CueSourceType.FILE_DATA,
                                 name="File Info",
                                 short_name="Files",
                                 description="Uses the audiobook file names and start times as chapter data",
@@ -700,6 +778,9 @@ class ProcessingPipeline:
                                 duration=book.duration,
                             )
                         )
+
+                # Scan library files for additional sources
+                await self._scan_library_files(abs_service)
 
                 self._notify_progress(Step.VALIDATING, 0, "Validation complete")
 
@@ -1549,11 +1630,17 @@ class ProcessingPipeline:
 
             # Get preferred titles
             if self.ai_options.usePreferredTitles and self.ai_options.preferredTitlesSource:
-                selected_source: Optional[ExistingCueSource] = next(
+                cue_source: Optional[ExistingCueSource] = next(
                     (s for s in self.existing_cue_sources if s.id == self.ai_options.preferredTitlesSource), None
                 )
-                if selected_source:
-                    preferred_titles = [ch.title for ch in selected_source.cues if ch.title]
+                if cue_source:
+                    preferred_titles = [ch.title for ch in cue_source.cues if ch.title]
+                else:
+                    title_source: Optional[ExistingTitleSource] = next(
+                        (s for s in self.existing_title_sources if s.id == self.ai_options.preferredTitlesSource), None
+                    )
+                    if title_source:
+                        preferred_titles = [t for t in title_source.titles if t]
 
             # Prepare additional instructions list
             instructions_list = []

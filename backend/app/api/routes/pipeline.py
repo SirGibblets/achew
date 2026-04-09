@@ -2,7 +2,8 @@ import logging
 import traceback
 from typing import List, Optional, Dict
 
-from app.services.processing_pipeline import ExistingCueSource, PipelineProgress
+from app.models.sources import ExistingCueSource, ExistingTitleSource
+from app.services.processing_pipeline import PipelineProgress
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 
@@ -54,6 +55,7 @@ class PipelineStateResponse(BaseModel):
     can_redo: bool
     book: Optional[Book] = None
     cue_sources: List[ExistingCueSource] = []
+    title_sources: List[ExistingTitleSource] = []
     restart_options: List[str] = []
 
 
@@ -81,7 +83,10 @@ async def create_pipeline(request: CreatePipelineRequest, background_tasks: Back
 
                 await app_state.broadcast_step_change(
                     Step.SELECT_WORKFLOW,
-                    extras={"cue_sources": pipeline.existing_cue_sources},
+                    extras={
+                        "cue_sources": pipeline.existing_cue_sources,
+                        "title_sources": pipeline.existing_title_sources,
+                    },
                 )
 
             except Exception as e:
@@ -130,6 +135,7 @@ async def get_pipeline_state():
             can_redo=pipeline.can_redo(),
             book=pipeline.book if pipeline.book else None,
             cue_sources=pipeline.existing_cue_sources,
+            title_sources=pipeline.existing_title_sources,
             restart_options=pipeline.get_restart_options(),
         )
 

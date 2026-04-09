@@ -205,6 +205,19 @@ class AppState:
             )
             await self.broadcast_message(error_msg)
 
+    async def broadcast_sources_update(self):
+        """Broadcast updated cue and title sources to all WebSocket connections."""
+        if not self.pipeline:
+            return
+        message = WSMessage(
+            type=WSMessageType.SOURCES_UPDATE,
+            data={
+                "cue_sources": [s.model_dump() for s in self.pipeline.existing_cue_sources],
+                "title_sources": [s.model_dump() for s in self.pipeline.existing_title_sources],
+            },
+        )
+        await self.broadcast_message(message)
+
     # ASR service warm cache management
     async def get_or_create_asr_service(self, progress_callback=None):
         """Get the cached ASR service, or create a new one if config changed"""

@@ -19,7 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from .api.routes import core, chapters, audio, config, audiobookshelf, pipeline
+from .api.routes import core, chapters, audio, config, audiobookshelf, pipeline, sources
 from .api.routes.chapter_search import routes as chapter_search_routes
 from .core.config import get_settings
 from .models.websocket import WSMessage, WSMessageType
@@ -134,6 +134,7 @@ app.include_router(chapters.router, prefix="/api", tags=["chapters"])
 app.include_router(audio.router, prefix="/api", tags=["audio"])
 app.include_router(audiobookshelf.router, prefix="/api/audiobookshelf", tags=["audiobookshelf"])
 app.include_router(chapter_search_routes.router, prefix="/api", tags=["chapter-search"])
+app.include_router(sources.router, prefix="/api", tags=["sources"])
 
 # Setup static file serving
 static_dir = get_static_directory()

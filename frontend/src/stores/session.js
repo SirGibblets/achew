@@ -32,6 +32,7 @@ function createSessionStore() {
         // Book metadata
         book: null,
         cueSources: [],
+        titleSources: [],
 
         restartOptions: [],
 
@@ -79,6 +80,8 @@ function createSessionStore() {
                     step: data.new_step,
                     // Handle cue sources data if present
                     ...(data.cue_sources && {cueSources: data.cue_sources}),
+                    // Handle title sources data if present
+                    ...(data.title_sources && {titleSources: data.title_sources}),
                     // Handle restart_options if present
                     ...(data.restart_options && {restartOptions: data.restart_options}),
                 }));
@@ -128,6 +131,17 @@ function createSessionStore() {
                         selected: data.selected,
                         unselected: data.unselected
                     }
+                }));
+            })
+        );
+
+        // Sources updates (from file uploads or Audnexus adds)
+        unsubscribeFunctions.push(
+            onWebSocketMessage(WS_MESSAGE_TYPES.SOURCES_UPDATE, (data) => {
+                update(state => ({
+                    ...state,
+                    ...(data.cue_sources && {cueSources: data.cue_sources}),
+                    ...(data.title_sources && {titleSources: data.title_sources}),
                 }));
             })
         );
@@ -221,6 +235,7 @@ function createSessionStore() {
                     canUndo: data.can_undo,
                     canRedo: data.can_redo,
                     cueSources: data.cue_sources || [],
+                    titleSources: data.title_sources || [],
                     book: data.book || null,
                     restartOptions: data.restart_options || [],
                     state: data, // Store the full state object for debugging
@@ -263,6 +278,7 @@ function createSessionStore() {
                     canRedo: false,
                     book: null,
                     cueSources: [],
+                    titleSources: [],
                     restartOptions: [],
                     transcriptionStatuses: {},
                     version: state.version,
@@ -296,6 +312,7 @@ function createSessionStore() {
                 canRedo: false,
                 book: null,
                 cueSources: [],
+                titleSources: [],
                 restartOptions: [],
                 transcriptionStatuses: {},
                 version: state.version,

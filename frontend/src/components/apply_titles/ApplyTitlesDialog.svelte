@@ -7,7 +7,11 @@
 
     import X from "@lucide/svelte/icons/x";
     import Eye from "@lucide/svelte/icons/eye";
+    import Pencil from "@lucide/svelte/icons/pencil";
+    import Plus from "@lucide/svelte/icons/plus";
     import ChapterModal from "../ChapterModal.svelte";
+    import AddSourceDialog from "../AddSourceDialog.svelte";
+    import CustomTitlesDialog from "../CustomTitlesDialog.svelte";
 
     let {
         isOpen = $bindable(false),
@@ -27,12 +31,32 @@
     let chapterTitlesModalLoading = false;
 
     let cueSources = $derived($session.cueSources || []);
-    let selectedSource = $derived(
-        cueSources.find(s => s.id === selectedSourceId) ?? null
-    );
+    let titleSources = $derived($session.titleSources || []);
+
+    /** All sources available for title mapping, cue first then title. */
+    let allSources = $derived([
+        ...cueSources.map(s => ({...s, _isCue: true})),
+        ...titleSources.map(s => ({
+            ...s,
+            _isCue: false,
+            // Normalise to cues shape so tabs work positionally
+            cues: (s.titles || []).map(t => ({timestamp: null, title: t})),
+        })),
+    ]);
+
+    let selectedSource = $derived(allSources.find(s => s.id === selectedSourceId) ?? null);
+    let selectedSourceIsCustom = $derived(selectedSource?.type === 'custom');
+    let selectedSourceIsCue = $derived(selectedSource?._isCue ?? true);
+
+    // Custom title source id for the edit dialog
+    let customTitlesSourceId = $derived(titleSources.find(s => s.type === 'custom')?.id ?? '');
+
+    // Add / edit dialog state
+    let showAddSource = $state(false);
+    let showCustomTitles = $state(false);
 
     let currentMappings = $derived(
-        activeTab === 'alignment' ? alignmentMappings : selectionMappings
+        selectedSourceIsCue && activeTab === 'alignment' ? alignmentMappings : selectionMappings
     );
 
     let canApply = $derived.by(() => {
@@ -44,8 +68,8 @@
     });
 
     $effect(() => {
-        if (isOpen && cueSources.length > 0 && !selectedSourceId) {
-            selectedSourceId = cueSources[0].id;
+        if (isOpen && allSources.length > 0 && !selectedSourceId) {
+            selectedSourceId = allSources[0].id;
         }
         if (!isOpen) {
             audio.stop();
@@ -62,6 +86,7 @@
             const originalOverflow = document.body.style.overflow;
             const originalPosition = document.body.style.position;
             const originalTop = document.body.style.top;
+            const originalWidth = document.body.style.width;
             const scrollY = window.scrollY;
 
             document.body.style.overflow = 'hidden';
@@ -73,7 +98,7 @@
                 document.body.style.overflow = originalOverflow;
                 document.body.style.position = originalPosition;
                 document.body.style.top = originalTop;
-                document.body.style.width = '';
+                document.body.style.width = originalWidth;
                 window.scrollTo(0, scrollY);
             };
         }
@@ -168,40 +193,56 @@
                         <span class="source-label">Apply titles from:</span>
                         <div class="source-select-group">
                             <select class="source-select" bind:value={selectedSourceId}>
-                                {#each cueSources as src (src.id)}
-                                    <option value={src.id}>{src.name} ({src.cues.length} chapters)</option>
+                                {#each allSources as src (src.id)}
+                                    <option value={src.id}>
+                                        {src.name} ({src._isCue ? src.cues.length + ' chapters' : (src.titles?.length ?? 0) + ' titles'})
+                                    </option>
                                 {/each}
                             </select>
                         </div>
                         <button
                                 type="button"
                                 class="view-titles-btn"
-                                onclick={viewChapterTitles}
+                                onclick={() => selectedSourceIsCustom ? (showCustomTitles = true) : viewChapterTitles()}
                                 disabled={!selectedSourceId}
-                                title="View chapter titles from selected source"
+                                title={selectedSourceIsCustom ? "Edit custom titles" : "View chapter titles from selected source"}
                         >
-                            <Eye size="20"/>
+                            {#if selectedSourceIsCustom}
+                                <Pencil size="20"/>
+                            {:else}
+                                <Eye size="20"/>
+                            {/if}
+                        </button>
+                        <button
+                                type="button"
+                                class="view-titles-btn"
+                                onclick={() => showAddSource = true}
+                                title="Add source"
+                        >
+                            <Plus size="20"/>
                         </button>
                     </div>
 
-                    <div class="mode-selector">
-                        <button
-                            class="mode-btn"
-                            class:active={activeTab === 'alignment'}
-                            onclick={() => switchTab('alignment')}
-                        >
-                            By Alignment
-                        </button>
-                        <button
-                            class="mode-btn"
-                            class:active={activeTab === 'selection'}
-                            onclick={() => switchTab('selection')}
-                        >
-                            By Selection
-                        </button>
-                    </div>
+                    {#if selectedSourceIsCue}
+                        <div class="mode-selector">
+                            <button
+                                class="mode-btn"
+                                class:active={activeTab === 'alignment'}
+                                onclick={() => switchTab('alignment')}
+                            >
+                                By Alignment
+                            </button>
+                            <button
+                                class="mode-btn"
+                                class:active={activeTab === 'selection'}
+                                onclick={() => switchTab('selection')}
+                            >
+                                By Selection
+                            </button>
+                        </div>
+                    {/if}
 
-                    {#if activeTab === 'alignment'}
+                    {#if selectedSourceIsCue && activeTab === 'alignment'}
                         <AlignmentTab
                             source={selectedSource}
                             bind:mappings={alignmentMappings}
@@ -237,6 +278,17 @@
         chapters={chapterTitlesModalData}
         loading={chapterTitlesModalLoading}
         on:close={closeChapterTitlesModal}
+/>
+
+<AddSourceDialog
+    bind:isOpen={showAddSource}
+    expectCues={false}
+    onSourceAdded={(src) => { selectedSourceId = src.id; }}
+/>
+
+<CustomTitlesDialog
+    bind:isOpen={showCustomTitles}
+    sourceId={customTitlesSourceId}
 />
 
 <style>
