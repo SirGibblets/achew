@@ -1,0 +1,118 @@
+name: Build and publish images
+
+on:
+  push:
+    branches: ["main"]
+    tags: ["v*"]
+  workflow_dispatch:
+
+env:
+  IMAGE_NAME: sirgibblets/achew
+
+jobs:
+  build-and-push-image:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get build metadata
+        id: meta
+        # This step figures out what type of build is running (release, main branch, or feature branch)
+        # and defines the base tag and metadata strings passed to Docker.
+        run: |
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          FULL_SHA=$(git rev-parse HEAD)
+          BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+          
+          # 1. Release builds (Triggered by git tags matching v*)
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            VERSION_ARG="${GITHUB_REF_NAME}"
+            BUILD_META="release ${SHORT_SHA} ${FULL_SHA}"
+            
+          # 2. Main branch builds (Triggered by merges/commits to the 'main' branch)
+          elif [[ "${GITHUB_REF_NAME}" == "main" ]]; then
+            VERSION_ARG="dev"
+            BUILD_META="main ${SHORT_SHA} ${FULL_SHA}"
+            
+          # 3. Feature branch builds (Triggered manually via workflow_dispatch)
+          else
+            BRANCH=$(echo "${GITHUB_REF_NAME}" | sed 's/[^a-zA-Z0-9._-]/-/g' | tr '[:upper:]' '[:lower:]')
+            VERSION_ARG="dev-${BRANCH}"
+            BUILD_META="${BRANCH} ${SHORT_SHA} ${FULL_SHA}"
+          fi
+
+          {
+            echo "version_arg=${VERSION_ARG}"
+            echo "full_sha=${FULL_SHA}"
+            echo "build_date=${BUILD_DATE}"
+            echo "build_meta=${BUILD_META}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3.4.0
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: docker_meta
+        uses: docker/metadata-action@v5.7.0
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=${{ steps.meta.outputs.version_arg }},enable=${{ github.ref_type != 'tag' }}
+
+      # Builds the standard image for both amd64 and arm64 platforms
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6.18.0
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.docker_meta.outputs.tags }}
+          labels: ${{ steps.docker_meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version_arg }}
+            REVISION=${{ steps.meta.outputs.full_sha }}
+            BUILD_DATE=${{ steps.meta.outputs.build_date }}
+            BUILD_META=${{ steps.meta.outputs.build_meta }}
+
+      # Automatically generates OCI labels and appends the '-legacy-cpu' suffix to the dev/semver tags
+      - name: Extract metadata for legacy-cpu image
+        id: docker_meta_legacy
+        uses: docker/metadata-action@v5.7.0
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          flavor: |
+            latest=false
+          tags: |
+            type=semver,pattern={{version}},suffix=-legacy-cpu
+            type=raw,value=${{ steps.meta.outputs.version_arg }}-legacy-cpu,enable=${{ github.ref_type != 'tag' }}
+            type=raw,value=legacy-cpu,enable=${{ github.ref_type == 'tag' }}
+
+      # Builds the legacy-cpu single-platform image designed for older processors without AVX support
+      - name: Build and push legacy-cpu Docker image
+        uses: docker/build-push-action@v6.18.0
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.docker_meta_legacy.outputs.tags }}
+          labels: ${{ steps.docker_meta_legacy.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version_arg }}-legacy-cpu
+            REVISION=${{ steps.meta.outputs.full_sha }}
+            BUILD_DATE=${{ steps.meta.outputs.build_date }}
+            BUILD_META=${{ steps.meta.outputs.build_meta }}
+            LEGACY_CPU=1
