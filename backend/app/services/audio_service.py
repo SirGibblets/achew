@@ -248,7 +248,7 @@ class AudioProcessingService:
                             cue_count = len(silence_ends)
                             now = time.monotonic()
                             details = None
-                            if now - last_feed_time >= 0.5:
+                            if now - last_feed_time >= 0.2:
                                 details = {
                                     "feed_text": f"Found {cue_count} potential chapter cue{'s' if cue_count != 1 else ''}"
                                 }
@@ -293,6 +293,7 @@ class AudioProcessingService:
         last_feed_time: list,
         last_progress_time: list,
         finishing: threading.Event,
+        progress_lock: threading.Lock,
     ) -> Optional[List[Tuple[float, float]]]:
         """Detect silences in a virtual segment of the audio file."""
         if cancelled.is_set():
@@ -323,6 +324,15 @@ class AudioProcessingService:
             pattern_end = re.compile(r"silence_end:\s*([\d\.]+)")
             pattern_progress = re.compile(r"out_time=(\d+):(\d+):([\d.]+)")
 
+            # Monotonic floor for progress timestamps. silencedetect reports
+            # input-stream time while -progress out_time reports the muxer's
+            # output position, and the two can drift wildly apart when the
+            # decoder produces few frames (e.g. repeated AAC decode errors on
+            # the first worker pin out_time near 0 while silencedetect is
+            # already minutes in). Clamping to max_progress_ts prevents the
+            # slot from bouncing backwards.
+            max_progress_ts = 0.0
+
             for line in process.stderr:
                 if cancelled.is_set():
                     process.terminate()
@@ -352,29 +362,34 @@ class AudioProcessingService:
                 if local_ts is None:
                     continue
 
-                if segment_duration > 0:
-                    worker_progress[worker_index] = min((local_ts / segment_duration) * 100, 100)
+                if local_ts > max_progress_ts:
+                    max_progress_ts = local_ts
 
-                avg_progress = sum(worker_progress) / len(worker_progress)
-                virtual_ts = (avg_progress / 100) * duration
-                message = f"Analyzing audio… ({_format_time(virtual_ts)} / {_format_time(duration)})"
+                with progress_lock:
+                    if segment_duration > 0:
+                        worker_progress[worker_index] = min(
+                            (max_progress_ts / segment_duration) * 100, 100
+                        )
 
-                details = None
-                if is_silence_end:
-                    with self._process_lock:
+                    avg_progress = sum(worker_progress) / len(worker_progress)
+                    virtual_ts = (avg_progress / 100) * duration
+                    message = f"Analyzing audio… ({_format_time(virtual_ts)} / {_format_time(duration)})"
+
+                    details = None
+                    if is_silence_end:
                         cue_counter[0] += 1
                         cue_count = cue_counter[0]
 
-                    now = time.monotonic()
-                    if now - last_feed_time[0] >= 0.5:
-                        details = {
-                            "feed_text": f"Found {cue_count} potential chapter cue{'s' if cue_count != 1 else ''}"
-                        }
-                        last_feed_time[0] = now
+                        now = time.monotonic()
+                        if now - last_feed_time[0] >= 0.2:
+                            details = {
+                                "feed_text": f"Found {cue_count} potential chapter cue{'s' if cue_count != 1 else ''}"
+                            }
+                            last_feed_time[0] = now
 
-                last_progress_time[0] = time.monotonic()
-                if not finishing.is_set():
-                    self._notify_progress(Step.AUDIO_ANALYSIS, avg_progress, message, details)
+                    last_progress_time[0] = time.monotonic()
+                    if not finishing.is_set():
+                        self._notify_progress(Step.AUDIO_ANALYSIS, avg_progress, message, details)
 
             process.wait()
 
@@ -411,6 +426,7 @@ class AudioProcessingService:
         last_feed_time = [0.0]
         last_progress_time = [time.monotonic()]
         finishing = threading.Event()
+        progress_lock = threading.Lock()
 
         logger.info(
             f"Running parallel silence detection: {len(segments)} segments "
@@ -425,7 +441,8 @@ class AudioProcessingService:
                     self._run_silence_detection_worker,
                     input_file, seek, seg_dur, silence_threshold,
                     duration, cancelled, worker_progress, i,
-                    cue_counter, last_feed_time, last_progress_time, finishing
+                    cue_counter, last_feed_time, last_progress_time, finishing,
+                    progress_lock,
                 ): i
                 for i, (seek, seg_dur) in enumerate(segments)
             }
@@ -837,11 +854,11 @@ class AudioProcessingService:
             with self._process_lock:
                 completed_count[0] += 1
                 count = completed_count[0]
-            self._notify_progress(
-                Step.TRIMMING, (count / total) * 100,
-                f"Trimmed chapter {count} of {total}…",
-                {"trimmed_segments": count, "total_segments": total},
-            )
+                self._notify_progress(
+                    Step.TRIMMING, (count / total) * 100,
+                    f"Trimmed chapter {count} of {total}…",
+                    {"trimmed_segments": count, "total_segments": total},
+                )
             return (index, dst)
 
         try:
@@ -914,11 +931,11 @@ class AudioProcessingService:
             with self._process_lock:
                 completed_count[0] += 1
                 count = completed_count[0]
-            self._notify_progress(
-                Step.TRIMMING, (count / total) * 100,
-                f"Trimmed chapter {count} of {total}…",
-                {"trimmed_segments": count, "total_segments": total},
-            )
+                self._notify_progress(
+                    Step.TRIMMING, (count / total) * 100,
+                    f"Trimmed chapter {count} of {total}…",
+                    {"trimmed_segments": count, "total_segments": total},
+                )
 
             return (index, trimmed_path)
 
