@@ -17,7 +17,7 @@ from .abs_service import ABSService
 from .audio_service import AudioProcessingService, audio_uses_xhe_aac
 from .vad_detection_service import VadDetectionService
 from ..core.config import get_app_config
-from ..core.constants import CHAPTER_START_PADDING
+from ..core.constants import CHAPTER_START_PADDING, BOOK_END_IGNORE_WINDOW
 from .asr_service_options import get_asr_buffer
 from ..models.chapter import ChapterData, RealignmentData
 from ..models.enums import RestartStep, Step
@@ -454,6 +454,11 @@ class ProcessingPipeline:
             )
 
         return filtered_cues
+
+    def _silences_to_cues(self, silences: List[Tuple[float, float]]) -> List[DetectedCue]:
+        """Convert silence intervals to DetectedCues, dropping false positives near the book's end."""
+        cutoff = self.book.duration - BOOK_END_IGNORE_WINDOW
+        return [DetectedCue.from_silences(s, e) for s, e in silences if e < cutoff]
 
     async def _get_file_durations_and_starts(self, audio_files: List[AudioFile]) -> Tuple[List[float], List[float]]:
         """Get the duration of each file and their start positions in a virtual concatenated timeline"""
@@ -1072,7 +1077,7 @@ class ProcessingPipeline:
 
         self._notify_progress(Step.AUDIO_ANALYSIS, -1, "Processing results…")
 
-        self.detected_cues = [DetectedCue.from_silences(start, end) for start, end in silences]
+        self.detected_cues = self._silences_to_cues(silences)
         self.normal_scanned_regions = [(0.0, self.book.duration)]
 
         await self._transition_to_initial_chapter_selection()
@@ -1100,7 +1105,7 @@ class ProcessingPipeline:
                 logger.info("Processing was cancelled during VAD analysis, stopping cue detection")
                 return
 
-            self.detected_cues = [DetectedCue.from_silences(start, end) for start, end in silences]
+            self.detected_cues = self._silences_to_cues(silences)
             self.vad_scanned_regions = [(0.0, self.book.duration)]
 
             await self._transition_to_initial_chapter_selection()
@@ -1139,7 +1144,7 @@ class ProcessingPipeline:
             logger.info("Processing was cancelled during audio analysis, stopping cue detection")
             return
 
-        self.detected_cues = [DetectedCue.from_silences(start, end) for start, end in silences]
+        self.detected_cues = self._silences_to_cues(silences)
 
     async def _detect_realignment_cues_vad(self, segments: List[Tuple[float, str]]):
         """Detect potential chapter boundaries using VAD (Voice Activity Detection)."""
@@ -1162,7 +1167,7 @@ class ProcessingPipeline:
                 logger.info("Processing was cancelled during VAD analysis, stopping cue detection")
                 return
 
-            self.detected_cues = [DetectedCue.from_silences(start, end) for start, end in silences]
+            self.detected_cues = self._silences_to_cues(silences)
 
         except asyncio.CancelledError:
             logger.info("VAD detection was cancelled")
@@ -2165,7 +2170,7 @@ class ProcessingPipeline:
                     if file_silences:
                         # Offset timestamps to global time
                         adjusted = [(s + global_offset, e + global_offset) for s, e in file_silences]
-                        new_cues.extend([DetectedCue.from_silences(s, e) for s, e in adjusted])
+                        new_cues.extend(self._silences_to_cues(adjusted))
 
                 # ── Step 7: Merge results (drop near-duplicates) ─────────
                 near_dup_threshold = 0.75

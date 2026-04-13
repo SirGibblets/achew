@@ -15,3 +15,6 @@ MAX_JITTER_RETRIES = 3
 
 # Maximum seconds to crop from the start of audio for ASR jitter retries.
 MAX_JITTER_CROP = 0.1
+
+# Ignore silences within this many seconds of the book's end to prevent false positives.
+BOOK_END_IGNORE_WINDOW = 1.5
