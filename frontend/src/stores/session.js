@@ -33,6 +33,7 @@ function createSessionStore() {
         book: null,
         cueSources: [],
         titleSources: [],
+        audioUnsupportedCodec: false,
 
         restartOptions: [],
 
@@ -84,6 +85,8 @@ function createSessionStore() {
                     ...(data.title_sources && {titleSources: data.title_sources}),
                     // Handle restart_options if present
                     ...(data.restart_options && {restartOptions: data.restart_options}),
+                    // Handle audio_unsupported_codec flag if present
+                    ...(data.audio_unsupported_codec !== undefined && {audioUnsupportedCodec: data.audio_unsupported_codec}),
                 }));
                 // Re-open the add-chapter dialog if a partial scan just completed
                 if (data.new_step === 'chapter_editing' && data.chapter_id) {
@@ -238,6 +241,7 @@ function createSessionStore() {
                     titleSources: data.title_sources || [],
                     book: data.book || null,
                     restartOptions: data.restart_options || [],
+                    audioUnsupportedCodec: data.audio_unsupported_codec || false,
                     state: data, // Store the full state object for debugging
                     loading: false
                 }));
@@ -279,6 +283,7 @@ function createSessionStore() {
                     book: null,
                     cueSources: [],
                     titleSources: [],
+                    audioUnsupportedCodec: false,
                     restartOptions: [],
                     transcriptionStatuses: {},
                     version: state.version,

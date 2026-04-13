@@ -1,4 +1,5 @@
 import asyncio
+import functools
 import logging
 import multiprocessing
 import os
@@ -44,6 +45,20 @@ def _get_worker_count() -> int:
     """Use 2/3 of cores"""
     total_cores = multiprocessing.cpu_count()
     return max(1, total_cores * 2 // 3)
+
+
+@functools.lru_cache(maxsize=32)
+def audio_uses_xhe_aac(audio_file: str) -> bool:
+    """Return True if ffmpeg reports the audio stream as xHE-AAC."""
+    try:
+        result = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-i", audio_file],
+            capture_output=True, text=True, timeout=30,
+        )
+        return "xhe-aac" in result.stderr.lower()
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
+        logger.warning(f"Failed to probe audio profile for {audio_file}: {e}")
+        return False
 
 
 def _compute_virtual_segments(
