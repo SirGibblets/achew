@@ -14,7 +14,7 @@ from app.app import get_app_state
 from app.models.abs import AudioFile, Book
 from pydantic import BaseModel, Field
 from .abs_service import ABSService
-from .audio_service import AudioProcessingService
+from .audio_service import AudioProcessingService, audio_uses_xhe_aac
 from .vad_detection_service import VadDetectionService
 from ..core.config import get_app_config
 from ..core.constants import CHAPTER_START_PADDING
@@ -109,6 +109,7 @@ class ProcessingPipeline:
         # Processing data
         self.book: Optional[Book] = None
         self.audio_file_path: str = ""
+        self.audio_unsupported_codec: bool = False
         self.file_starts: Optional[List[float]] = None
         self.existing_cue_sources: List[ExistingCueSource] = []
         self.existing_title_sources: List[ExistingTitleSource] = []
@@ -837,6 +838,13 @@ class ProcessingPipeline:
                     self.audio_file_path = concatenated_file
 
                     logger.info(f"Successfully concatenated {original_file_count} files into: {concatenated_file}")
+
+                # Probe for unsupported audio codecs (e.g. xHE-AAC)
+                if self.audio_file_path and audio_uses_xhe_aac(self.audio_file_path):
+                    logger.warning(
+                        f"Audio file uses xHE-AAC codec which is not currently supported: {self.audio_file_path}"
+                    )
+                    self.audio_unsupported_codec = True
 
                 self.step = Step.SELECT_WORKFLOW
 
@@ -1873,14 +1881,16 @@ class ProcessingPipeline:
             "-c", "copy",
             output_path,
         ]
-        # Use DEVNULL for both pipes — ffmpeg writes progress to stderr and if we
-        # use PIPE without reading it the OS pipe buffer fills, ffmpeg blocks on
-        # write, process.wait() blocks on exit → deadlock on longer files.
-        process = subprocess.Popen(cmd, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+        # Use subprocess.PIPE and process.communicate() to capture error output in memory
+        # without risking pipe buffer deadlock.
+        process = subprocess.Popen(cmd, stderr=subprocess.PIPE, stdout=subprocess.DEVNULL)
         with self._process_lock:
             self._running_processes.append(process)
         try:
-            process.wait()
+            _, stderr_data = process.communicate()
+            if process.returncode != 0:
+                error_output = stderr_data.decode("utf-8", errors="replace") if stderr_data else ""
+                logger.error(f"ffmpeg extraction failed: {' '.join(cmd)}\nOutput:\n{error_output}")
             return process.returncode == 0
         finally:
             with self._process_lock:
@@ -1918,11 +1928,14 @@ class ProcessingPipeline:
             "-segment_times", segment_times_str,
             output_pattern,
         ]
-        process = subprocess.Popen(cmd, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+        process = subprocess.Popen(cmd, stderr=subprocess.PIPE, stdout=subprocess.DEVNULL)
         with self._process_lock:
             self._running_processes.append(process)
         try:
-            process.wait()
+            _, stderr_data = process.communicate()
+            if process.returncode != 0:
+                error_output = stderr_data.decode("utf-8", errors="replace") if stderr_data else ""
+                logger.error(f"ffmpeg split extraction failed: {' '.join(cmd)}\nOutput:\n{error_output}")
             return process.returncode == 0
         finally:
             with self._process_lock:

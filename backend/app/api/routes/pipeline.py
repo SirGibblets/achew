@@ -57,6 +57,7 @@ class PipelineStateResponse(BaseModel):
     cue_sources: List[ExistingCueSource] = []
     title_sources: List[ExistingTitleSource] = []
     restart_options: List[str] = []
+    audio_unsupported_codec: bool = False
 
 
 @router.post("/pipeline", response_model=dict)
@@ -86,6 +87,7 @@ async def create_pipeline(request: CreatePipelineRequest, background_tasks: Back
                     extras={
                         "cue_sources": pipeline.existing_cue_sources,
                         "title_sources": pipeline.existing_title_sources,
+                        "audio_unsupported_codec": pipeline.audio_unsupported_codec,
                     },
                 )
 
@@ -137,6 +139,7 @@ async def get_pipeline_state():
             cue_sources=pipeline.existing_cue_sources,
             title_sources=pipeline.existing_title_sources,
             restart_options=pipeline.get_restart_options(),
+            audio_unsupported_codec=pipeline.audio_unsupported_codec,
         )
 
     except HTTPException:
