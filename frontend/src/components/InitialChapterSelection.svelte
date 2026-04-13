@@ -310,7 +310,7 @@
 
             if (isComparing) {
                 if (nearestTick.type === 'existing') {
-                    timelineTooltip.topContent = nearestTick.source.id === 'file_starts'
+                    timelineTooltip.topContent = nearestTick.source.type === 'file_data'
                         ? `File Start: ${formatTimelineTime(nearestTick.timestamp)}${formatCueTitle(nearestTick.title)}`
                         : `${nearestTick.source.short_name} Chapter: ${formatTimelineTime(nearestTick.timestamp)}${formatCueTitle(nearestTick.title)}`;
                     timelineTooltip.showTop = true;
@@ -326,7 +326,7 @@
                             Math.abs(cue.timestamp - nearestTick.timestamp) <= 5
                         );
                         if (alignedExisting) {
-                            timelineTooltip.topContent = activeSource.id === 'file_starts'
+                            timelineTooltip.topContent = activeSource.type === 'file_data'
                                 ? `File Start: ${formatTimelineTime(alignedExisting.timestamp)}${formatCueTitle(alignedExisting.title)}`
                                 : `${activeSource.short_name} Chapter: ${formatTimelineTime(alignedExisting.timestamp)}${formatCueTitle(alignedExisting.title)}`;
                             timelineTooltip.showTop = true;

@@ -138,7 +138,7 @@ async def _fetch_all_library_items(
                 all_items.append({
                     "id": item["id"],
                     "name": item.get("media", {}).get("metadata", {}).get("title", ""),
-                    "author": item.get("media", {}).get("metadata", {}).get("authorName"),
+                    "author": _extract_author(item.get("media", {}).get("metadata", {})),
                     "series": _extract_series(item),
                 })
 
@@ -191,7 +191,7 @@ async def _fetch_and_cache_book(
         id=book_id,
         library_id=library_id,
         name=metadata.get("title", item.get("name", "")),
-        author=metadata.get("authorName") or item.get("author"),
+        author=_extract_author(metadata) or item.get("author"),
         series=_extract_series_from_metadata(metadata) or item.get("series"),
         has_cover=has_cover,
         chapters=chapters,
@@ -225,6 +225,17 @@ async def sync_specific_books(
         await asyncio.gather(*tasks, return_exceptions=True)
 
     return completed
+
+
+def _extract_author(metadata: dict) -> Optional[str]:
+    """Return author name, handling both the legacy `authorName` string and the new `authors` list."""
+    author_name = metadata.get("authorName")
+    if author_name:
+        return author_name
+    authors = metadata.get("authors")
+    if authors and isinstance(authors, list) and authors:
+        return authors[0].get("name")
+    return None
 
 
 def _extract_series(item: dict) -> Optional[str]:

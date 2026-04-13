@@ -35,6 +35,7 @@
         if ($isPlaying && $currentSegmentId?.startsWith('chapter-modal-')) {
             audio.stop();
         }
+        isOpen = false;
         dialog?.close();
         dispatch("close");
     }
@@ -51,6 +52,9 @@
             console.error("Failed to preview audio:", err);
         }
     }
+
+    // True when at least one chapter has a valid timestamp
+    $: hasTiming = chapters.some(ch => ch.timestamp != null && ch.timestamp !== '');
 
     // React to isOpen prop changes
     $: if (dialog) {
@@ -94,26 +98,28 @@
                     <p>No chapter data available</p>
                 </div>
             {:else}
-                <div class="chapters-list">
+                <div class="chapters-list" class:title-only={!hasTiming}>
                     <div class="chapter-header">
-                        <span class="header-time">Timestamp</span>
+                        {#if hasTiming}
+                            <span class="header-time">Timestamp</span>
+                        {/if}
                         <span class="header-title">Chapter Title</span>
                     </div>
                     {#each chapters as chapter, index}
                         <div class="chapter-row">
-                            <div class="chapter-time-container">
-                                <button class="preview-play-btn" on:click|preventDefault={() => previewAudio(chapter.timestamp, index)} title="Preview audio">
-                                    {#if $isPlaying && $currentSegmentId === `chapter-modal-${index}`}
-                                        <Pause size="14"/>
-                                    {:else}
-                                        <Play size="14"/>
-                                    {/if}
-                                </button>
-                                <span class="chapter-time">{formatTime(chapter.timestamp)}</span>
-                            </div>
-                            <span class="chapter-title"
-                            >{chapter.title || `Chapter ${index + 1}`}</span
-                            >
+                            {#if hasTiming}
+                                <div class="chapter-time-container">
+                                    <button class="preview-play-btn" on:click|preventDefault={() => previewAudio(chapter.timestamp, index)} title="Preview audio">
+                                        {#if $isPlaying && $currentSegmentId === `chapter-modal-${index}`}
+                                            <Pause size="14"/>
+                                        {:else}
+                                            <Play size="14"/>
+                                        {/if}
+                                    </button>
+                                    <span class="chapter-time">{formatTime(chapter.timestamp)}</span>
+                                </div>
+                            {/if}
+                            <span class="chapter-title">{chapter.title || `Chapter ${index + 1}`}</span>
                         </div>
                     {/each}
                 </div>
@@ -255,6 +261,11 @@
         z-index: 1;
     }
 
+    .title-only .chapter-header,
+    .title-only .chapter-row {
+        grid-template-columns: 1fr;
+    }
+
     .chapter-row {
         display: grid;
         grid-template-columns: 120px 1fr;
@@ -344,6 +355,11 @@
             grid-template-columns: 100px 1fr;
             gap: 0.75rem;
             padding: 0.75rem 1rem;
+        }
+
+        .title-only .chapter-header,
+        .title-only .chapter-row {
+            grid-template-columns: 1fr;
         }
 
         .chapter-time {

@@ -1,10 +1,12 @@
 <script>
     import {slide} from "svelte/transition";
-    import {selectionStats} from "../stores/session.js";
+    import {selectionStats, session} from "../stores/session.js";
     import {api} from "../utils/api.js";
     import ChapterModal from "./ChapterModal.svelte";
     import CustomInstructionsList from "./CustomInstructionsList.svelte";
     import Icon from "./Icon.svelte";
+    import AddSourceDialog from "./AddSourceDialog.svelte";
+    import CustomTitlesDialog from "./CustomTitlesDialog.svelte";
 
     // Icons
     import Ban from "@lucide/svelte/icons/ban";
@@ -13,7 +15,9 @@
     import CircleQuestionMark from "@lucide/svelte/icons/circle-question-mark";
     import Delete from "@lucide/svelte/icons/delete";
     import Eye from "@lucide/svelte/icons/eye";
+    import Pencil from "@lucide/svelte/icons/pencil";
     import List from "@lucide/svelte/icons/list";
+    import Plus from "@lucide/svelte/icons/plus";
     import Search from "@lucide/svelte/icons/search";
     import TriangleAlert from "@lucide/svelte/icons/triangle-alert";
 
@@ -44,8 +48,41 @@
     // Features section collapsed state
     let featuresCollapsed = $state(true);
 
-    // Available chapter sources for preferred titles
-    let availableChapterSources = $state([]);
+    // Available chapter sources for preferred titles (cue + title) — kept in sync
+    // reactively so SOURCES_UPDATE messages never trigger a full options reload.
+    let availableChapterSources = $derived.by(() => {
+        const fromCue = cueSources.map((source) => ({
+            id: source.id,
+            type: source.type,
+            name: source.name,
+            count: source.cues.length,
+            chapters: source.cues.map((cue, i) => ({
+                timestamp: cue.timestamp,
+                title: cue.title || `Chapter ${i + 1}`,
+            })),
+        }));
+        const fromTitle = ($session.titleSources || []).map((source) => ({
+            id: source.id,
+            type: source.type,
+            name: source.name,
+            count: source.titles.length,
+            chapters: source.titles.map((t) => ({title: t})),
+        }));
+        return [...fromCue, ...fromTitle];
+    });
+
+    let customTitlesSourceId = $derived(
+        ($session.titleSources || []).find(s => s.type === 'custom')?.id ?? ''
+    );
+
+    // Add-source / edit-custom dialog state
+    let showAddSource = $state(false);
+    let showCustomTitles = $state(false);
+
+    let selectedSourceIsCustom = $derived(
+        !!aiOptions.preferredTitlesSource &&
+        availableChapterSources.find(s => s.id === aiOptions.preferredTitlesSource)?.type === 'custom'
+    );
 
     // Chapter titles modal state
     let showChapterTitlesModal = $state(false);
@@ -63,10 +100,15 @@
     let filteredModels = $state([]);
     let showModelDropdown = $state(false);
 
-    // Load AI options when component mounts or when dialog opens
+    // Load AI options exactly once per dialog open (not on every reactive re-run).
+    let _optionsLoaded = $state(false);
     $effect(() => {
-        if (isOpen && sessionStep === "chapter_editing") {
+        if (isOpen && sessionStep === "chapter_editing" && !_optionsLoaded) {
+            _optionsLoaded = true;
             loadAIOptions();
+        }
+        if (!isOpen) {
+            _optionsLoaded = false;
         }
     });
 
@@ -77,6 +119,7 @@
             const originalOverflow = document.body.style.overflow;
             const originalPosition = document.body.style.position;
             const originalTop = document.body.style.top;
+            const originalWidth = document.body.style.width;
             const scrollY = window.scrollY;
             
             // Prevent background scrolling
@@ -90,7 +133,7 @@
                 document.body.style.overflow = originalOverflow;
                 document.body.style.position = originalPosition;
                 document.body.style.top = originalTop;
-                document.body.style.width = '';
+                document.body.style.width = originalWidth;
                 window.scrollTo(0, scrollY);
             };
         }
@@ -122,8 +165,11 @@
             console.warn("Failed to load AI options, using defaults:", err);
         }
 
-        // Load available chapter sources and LLM providers
-        await loadAvailableChapterSources();
+        // If the backend had no preferred source set, default to the first available one.
+        if (!aiOptions.preferredTitlesSource && availableChapterSources.length > 0) {
+            aiOptions.preferredTitlesSource = availableChapterSources[0].id;
+        }
+
         await loadAvailableProviders();
     }
 
@@ -137,30 +183,10 @@
         }
     }
 
-    async function loadAvailableChapterSources() {
-        if (sessionStep !== "chapter_editing") return;
-
-        availableChapterSources = [];
-
-        if (cueSources.length > 0) {
-            availableChapterSources = cueSources.map((source) => ({
-                id: source.id,
-                name: source.name,
-                count: source.cues.length,
-                chapters: source.cues.map((cue) => ({
-                    timestamp: cue.timestamp,
-                    title: cue.title || `Chapter ${source.cues.indexOf(cue) + 1}`,
-                })),
-            }));
-        }
-
-        // Set default source if available
-        if (
-            availableChapterSources.length > 0 &&
-            !aiOptions.preferredTitlesSource
-        ) {
-            aiOptions.preferredTitlesSource = availableChapterSources[0].id;
-        }
+    function handleSourceAdded(newSource) {
+        aiOptions.preferredTitlesSource = newSource.id;
+        // Also enable the checkbox so the selection is immediately visible
+        aiOptions.usePreferredTitles = true;
     }
 
     async function loadAvailableProviders() {
@@ -586,10 +612,7 @@
                                             disabled={!aiOptions.usePreferredTitles}
                                     >
                                         {#each availableChapterSources as source}
-                                            <option value={source.id}
-                                            >{source.name} ({source.count} chapters)
-                                            </option
-                                            >
+                                            <option value={source.id}>{source.name} ({source.count} {source.type === 'custom' || !source.chapters?.[0]?.timestamp ? 'titles' : 'chapters'})</option>
                                         {/each}
                                     </select>
                                 </div>
@@ -597,11 +620,25 @@
                                 <button
                                         type="button"
                                         class="view-titles-btn"
-                                        onclick={viewChapterTitles}
+                                        onclick={() => { if (selectedSourceIsCustom) { showCustomTitles = true; } else { viewChapterTitles(); } }}
                                         disabled={!aiOptions.preferredTitlesSource || !aiOptions.usePreferredTitles}
-                                        title="View chapter titles from selected source"
+                                        title={selectedSourceIsCustom ? "Edit custom titles" : "View chapter titles from selected source"}
                                 >
-                                    <Eye size="20"/>
+                                    {#if selectedSourceIsCustom}
+                                        <Pencil size="20"/>
+                                    {:else}
+                                        <Eye size="20"/>
+                                    {/if}
+                                </button>
+
+                                <button
+                                        type="button"
+                                        class="view-titles-btn"
+                                        onclick={() => showAddSource = true}
+                                        disabled={!aiOptions.usePreferredTitles}
+                                        title="Add Chapter Source"
+                                >
+                                    <Plus size="20"/>
                                 </button>
                             </div>
                         </div>
@@ -661,6 +698,17 @@
         chapters={chapterTitlesModalData}
         loading={chapterTitlesModalLoading}
         on:close={closeChapterTitlesModal}
+/>
+
+<AddSourceDialog
+    bind:isOpen={showAddSource}
+    expectCues={false}
+    onSourceAdded={handleSourceAdded}
+/>
+
+<CustomTitlesDialog
+    bind:isOpen={showCustomTitles}
+    sourceId={customTitlesSourceId}
 />
 
 <style>

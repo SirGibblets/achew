@@ -91,7 +91,7 @@
     $effect(() => {
         const sourceId = source?.id ?? null;
         const pairs = alignedMap;
-        if (sourceId !== lastSourceId || Object.keys(checked).length === 0) {
+        if (sourceId !== lastSourceId) {
             const next = {};
             for (const [id] of pairs) {
                 next[id] = true;

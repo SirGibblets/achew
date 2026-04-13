@@ -67,11 +67,11 @@ class ABSService:
             logger.error(f"Error fetching book details for {book_id}: {e}")
             return None
 
-    async def get_audnexus_chapters(self, asin: str) -> Optional[AudnexusChapterList]:
+    async def get_audnexus_chapters(self, asin: str, region: str="US") -> Optional[AudnexusChapterList]:
         """Fetch chapters from Audnexus for a given ASIN"""
         try:
             url = f"{self.config.url}/api/search/chapters"
-            params = {"asin": asin}
+            params = {"asin": asin, "region": region}
             async with self.session.get(url, headers=self._get_headers(), params=params) as resp:
                 if resp.status == 200:
                     data = await resp.json()
@@ -142,6 +142,60 @@ class ABSService:
         except Exception as e:
             logger.error(f"Error downloading audio file: {e}")
             return False
+
+    async def download_file(self, book_id: str, ino: str, output_path: str) -> bool:
+        """Download a library file (non-audio) from ABS"""
+        try:
+            url = f"{self.config.url}/api/items/{book_id}/file/{ino}/download"
+            async with self.session.get(url, headers=self._get_headers()) as resp:
+                resp.raise_for_status()
+                with open(output_path, "wb") as f:
+                    async for chunk in resp.content.iter_chunked(1024 * 256):
+                        f.write(chunk)
+                return True
+        except Exception as e:
+            logger.error(f"Error downloading library file (ino={ino}): {e}")
+            return False
+
+    async def search_books(
+        self,
+        provider: str,
+        title: str = "",
+        author: str = "",
+        book_id: str = "",
+    ) -> List:
+        """Search for books via the ABS /api/search/books endpoint.
+
+        Returns a list of BookSearchResult objects.
+        """
+        from ..models.abs import BookSearchResult
+
+        try:
+            url = f"{self.config.url}/audiobookshelf/api/search/books"
+            params: Dict[str, str] = {"provider": provider, "fallbackTitleOnly": "1"}
+            if title:
+                params["title"] = title
+            if author:
+                params["author"] = author
+            if book_id:
+                params["id"] = book_id
+
+            async with self.session.get(url, headers=self._get_headers(), params=params) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    results = []
+                    for item in data:
+                        try:
+                            results.append(BookSearchResult(**item))
+                        except Exception as e:
+                            logger.warning(f"Could not parse book search result: {e}")
+                    return results
+                else:
+                    logger.error(f"Book search failed: {resp.status}")
+                    return []
+        except Exception as e:
+            logger.error(f"Error searching books: {e}")
+            return []
 
     async def upload_chapters(
         self,

@@ -273,6 +273,7 @@ export const WS_MESSAGE_TYPES = {
     HISTORY_UPDATE: 'history_update',
     BATCH_OPERATION: 'batch_operation',
     TRANSCRIBING_UPDATE: 'transcribing_update',
+    SOURCES_UPDATE: 'sources_update',
     ERROR: 'error',
     SELECTION_STATS: 'selection_stats'
 };
