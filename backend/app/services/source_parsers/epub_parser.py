@@ -58,7 +58,7 @@ class EpubParser(BaseTitleParser):
         logger.info(f"Parsed {source_name} as EPUB title source ({len(titles)} titles)")
         return ExistingTitleSource(
             type=TitleSourceType.EPUB,
-            name=f"[EPUB] {name}",
+            name=f"EPUB File ({name})",
             short_name=self.short_name,
             description=f"Chapter titles extracted from EPUB file \"{name}\"",
             metadata={"File": source_name},

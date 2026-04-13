@@ -143,7 +143,7 @@ class JsonParser(BaseCueParser):
         logger.info(f"Parsed {source_name} as JSON cue source ({len(cues)} cues)")
         return ExistingCueSource(
             type=CueSourceType.JSON,
-            name=f"[JSON] {name}",
+            name=f"JSON File ({name})",
             short_name=self.short_name,
             description=f"Chapter data parsed from JSON file \"{name}\"",
             metadata={"File": source_name},

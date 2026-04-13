@@ -636,7 +636,7 @@
                                         class="view-titles-btn"
                                         onclick={() => showAddSource = true}
                                         disabled={!aiOptions.usePreferredTitles}
-                                        title="Add source"
+                                        title="Add Chapter Source"
                                 >
                                     <Plus size="20"/>
                                 </button>

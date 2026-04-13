@@ -771,7 +771,7 @@ class ProcessingPipeline:
                         self.existing_cue_sources.append(
                             ExistingCueSource(
                                 type=CueSourceType.FILE_DATA,
-                                name="File Info",
+                                name="Audio File Info",
                                 short_name="Files",
                                 description="Uses the audiobook file names and start times as chapter data",
                                 cues=file_start_cues,

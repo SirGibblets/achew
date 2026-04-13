@@ -260,14 +260,11 @@
         <div class="options-grid">
             {#if activeTab === 'smart_detect'}
                 <p class="tab-description">
-                    The <b>Smart Detect</b> workflow uses audio analysis to locate potential chapter cues within the audiobook. In the following step you will choose which cues will become your initial chapters.
-                    {#if existingCueSources.length > 0}
-                        {@const availableSourceNames = existingCueSources.map(source => source.name)}
-                        {@const sourcesList = availableSourceNames.length === 1 ? availableSourceNames[0] : availableSourceNames.length === 2 ? availableSourceNames.join(" and ") : availableSourceNames.slice(0, -1).join(", ") + ", and " + availableSourceNames[availableSourceNames.length - 1]}
-                         You will also be able to compare to the {sourcesList}.
-                    {/if}
+                    The <b>Smart Detect</b> workflow uses audio analysis to locate potential chapter cues within
+                    the audiobook. After detection, you'll choose which cues to use as your initial chapters.
                 </p>
 
+                <SourceFooter {cueSources} {titleSources} showCueSources onAddSource={() => showAddSource = true} />
 
                 <div class="dramatized-toggle">
                     <label>
@@ -382,6 +379,7 @@
                         <TriangleAlert size="16" />
                         <p>No existing chapters to realign</p>
                     </div>
+                    <button class="empty-add-source" on:click={() => showAddSource = true}>+ Add Chapter Source</button>
                 {/if}
 
             {:else if activeTab === 'regenerate_titles'}
@@ -464,6 +462,7 @@
                         <TriangleAlert size="16" />
                         <p>No existing chapters to regenerate</p>
                     </div>
+                    <button class="empty-add-source" on:click={() => showAddSource = true}>+ Add Chapter Source</button>
                 {/if}
 
             {:else if activeTab === 'quick_edit'}
@@ -528,6 +527,7 @@
                         <TriangleAlert size="16" />
                         <p>No existing chapters to edit</p>
                     </div>
+                    <button class="empty-add-source" on:click={() => showAddSource = true}>+ Add Chapter Source</button>
                 {/if}
             {/if}
         </div>
@@ -1027,4 +1027,17 @@
         font-size: 0.95rem;
         color: var(--warning);
     }
+
+    .empty-add-source {
+        display: block;
+        margin: 0 auto;
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: var(--primary-color);
+        font-size: 0.875rem;
+        padding: 0;
+    }
+
+    .empty-add-source:hover { opacity: 0.8; }
 </style>

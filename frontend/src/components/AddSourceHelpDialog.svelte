@@ -80,11 +80,11 @@
                         Standard Identification Number (ASIN). This is the source Audiobookshelf itself uses
                         to fetch chapter data when the book has an associated ASIN. This source is
                         automatically added if an ASIN is assigned to the selected book in ABS. You may also search
-                        for, preview chapters for, and add new Audnexus sources from the Add Source dialog.
+                        for, preview chapters for, and add new Audnexus sources from the Add Chapter Source dialog.
                     </li>
                     <li>
                         <strong>JSON</strong> — a .json file containing an array of objects. These can be
-                        uploaded through the Add Source dialog. Library Files* named <em>"chapters.json"</em> are
+                        uploaded through the Add Chapter Source dialog. Library Files* named <em>"chapters.json"</em> are
                         automatically detected and added. Achew attempts to automatically find timestamps** and
                         titles, but it helps to use predictable field names like <code>start</code> or
                         <code>timestamp</code> and <code>name</code> or <code>title</code>. Here is an example:
@@ -102,13 +102,13 @@
                     </li>
                     <li>
                         <strong>CSV</strong> — a .csv file containing columns for both timestamps and titles.
-                        These can be added through the Add Source dialog. Library Files* named <em>"chapters.csv"</em>
+                        These can be added through the Add Chapter Source dialog. Library Files* named <em>"chapters.csv"</em>
                         are automatically detected and added. Achew attempts to automatically find the timestamp**
                         and title columns, even without column names, but it helps to use predictable column names
                         like <code>start</code> or <code>timestamp</code> and <code>name</code> or <code>title</code>.
                     </li>
                     <li>
-                        <strong>CUE Sheet</strong> — a standard .cue file. These can be uploaded through the Add Source
+                        <strong>CUE Sheet</strong> — a standard .cue file. These can be uploaded through the Add Chapter Source
                         dialog. Any Library Files* with the <em>".cue"</em> extension are automatically detected and added.
                     </li>
                 </ul>
@@ -124,12 +124,12 @@
                 <ul>
                     <li>
                         <strong>Text File</strong> — a plain .txt file containing one title per line; blank lines are ignored.
-                        These can be uploaded through the Add Source dialog. Library Files* named <em>"titles.txt"</em>
+                        These can be uploaded through the Add Chapter Source dialog. Library Files* named <em>"titles.txt"</em>
                         are automatically detected and added.
                     </li>
                     <li>
                         <strong>EPUB</strong> — an epub e-book file; chapter titles are extracted from its table of contents.
-                        These can be uploaded through the Add Source dialog. Any Library Files* with the <em>".epub"</em>
+                        These can be uploaded through the Add Chapter Source dialog. Any Library Files* with the <em>".epub"</em>
                         extension are automatically detected and added.
                     </li>
                     <li>

@@ -109,7 +109,7 @@ class CsvParser(BaseCueParser):
         logger.info(f"Parsed {source_name} as CSV cue source ({len(cues)} cues)")
         return ExistingCueSource(
             type=CueSourceType.CSV,
-            name=f"[CSV] {name}",
+            name=f"CSV File ({name})",
             short_name=self.short_name,
             description=f"Chapter data parsed from CSV file \"{name}\"",
             metadata={"File": source_name},

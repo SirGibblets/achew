@@ -62,7 +62,7 @@ class CueParser(BaseCueParser):
         logger.info(f"Parsed {source_name} as CUE cue source ({len(cues)} cues)")
         return ExistingCueSource(
             type=CueSourceType.CUE,
-            name=f"[CUE Sheet] {name}",
+            name=f"Cue Sheet ({name})",
             short_name=self.short_name,
             description=f"Chapter data parsed from CUE Sheet file \"{name}\"",
             metadata={"File": source_name},

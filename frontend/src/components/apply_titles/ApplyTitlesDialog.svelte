@@ -217,7 +217,7 @@
                                 type="button"
                                 class="view-titles-btn"
                                 onclick={() => showAddSource = true}
-                                title="Add source"
+                                title="Add Chapter Source"
                         >
                             <Plus size="20"/>
                         </button>

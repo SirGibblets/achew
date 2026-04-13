@@ -39,7 +39,7 @@ class TextParser(BaseTitleParser):
         logger.info(f"Parsed {source_name} as text title source ({len(titles)} titles)")
         return ExistingTitleSource(
             type=TitleSourceType.TEXT,
-            name=f"[TXT] {name}",
+            name=f"Text File ({name})",
             short_name=self.short_name,
             description=f"Chapter titles parsed from text file \"{name}\"",
             metadata={"File": source_name},

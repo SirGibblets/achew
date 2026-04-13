@@ -253,7 +253,7 @@
             class="dialog"
             role="dialog"
             aria-modal="true"
-            aria-label="Add Source"
+            aria-label="Add Chapter Source"
             tabindex="-1"
             onclick={(e) => e.stopPropagation()}
             onkeydown={(e) => e.stopPropagation()}
@@ -261,7 +261,7 @@
             <!-- Header -->
             <div class="modal-header">
                 <div class="header-title">
-                    <h3>Add Source</h3>
+                    <h3>Add Chapter Source</h3>
                     <button class="help-btn" onclick={() => showHelp = true} aria-label="About sources">
                         <CircleQuestionMark size="16"/>
                     </button>
