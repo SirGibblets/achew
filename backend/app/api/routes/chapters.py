@@ -118,9 +118,9 @@ class DetectedCue(BaseModel):
 
     @classmethod
     def from_silences(cls, start: float, end: float) -> "DetectedCue":
-        return cls(
+        return cls.model_construct(
             timestamp=max(0.0, end - CHAPTER_START_PADDING),
-            gap=end - start
+            gap=end - start,
         )
 
 
