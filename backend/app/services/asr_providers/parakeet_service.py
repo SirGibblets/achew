@@ -6,8 +6,8 @@ This module provides CPU-based Parakeet ASR services using the onnx-asr library,
 
 import asyncio
 import logging
+import subprocess
 
-import librosa
 import numpy as np
 
 from app.models.enums import Step
@@ -72,11 +72,14 @@ class ParakeetASRService(ASRService):
             raise
 
     def _convert_audio_to_array(self, audio_file: str) -> np.ndarray:
-        """Convert audio file to 16kHz PCM_16 numpy array"""
+        """Convert audio file to 16kHz float32 numpy array"""
         try:
-            audio, _ = librosa.load(audio_file, sr=16000, mono=True)
-            audio_int16 = (audio * 32767).astype(np.int16)
-            return audio_int16
+            cmd = [
+                "ffmpeg", "-loglevel", "error", "-y", "-i", audio_file,
+                "-ac", "1", "-ar", "16000", "-f", "f32le", "-"
+            ]
+            process = subprocess.run(cmd, stdout=subprocess.PIPE, check=True)
+            return np.frombuffer(process.stdout, dtype=np.float32)
         except Exception as e:
             logger.error(f"Audio conversion error for {audio_file}: {e}")
             raise

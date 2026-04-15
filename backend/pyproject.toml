@@ -20,18 +20,14 @@ dependencies = [
     "httpx>=0.25.2",
     "pydantic>=2.5.0",
     "pydantic-settings>=2.1.0",
-    "torch>=2.0.0",
-    "torchaudio>=2.0.0",
     "openai>=1.3.0",
     "numpy>=1.24.4",
-    "librosa>=0.10.0",
-    "onnx-asr[cpu,hub]>=0.7.0",
-    "mlx-whisper>=0.4.2; sys_platform == 'darwin'",
+    "onnx-asr[cpu,hub]>=0.11.0",
+    "mlx-whisper>=0.4.3; sys_platform == 'darwin'",
     "parakeet-mlx>=0.5.1; sys_platform == 'darwin'",
     "ollama>=0.5.1",
     "google-genai[aiohttp]>=1.65.0",
     "anthropic>=0.76.0",
-    "silero-vad>=5.1.2",
     "lmstudio==1.4.1",
     "pywhispercpp>=1.3.3",
     "github-copilot-sdk>=0.2.1",
@@ -39,21 +35,23 @@ dependencies = [
     "python-multipart==0.0.24",
 ]
 
-[[tool.uv.index]]
-name = "pytorch-cpu"
-url = "https://download.pytorch.org/whl/cpu"
-explicit = true
-
-[tool.uv.sources]
-torch = [
-  { index = "pytorch-cpu" },
-]
-torchaudio = [
-  { index = "pytorch-cpu" },
-]
-
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
+
+# Override the metadata of mlx-whisper to omit torch, which is not needed for our use case.
+[[tool.uv.dependency-metadata]]
+name = "mlx-whisper"
+version = "0.4.3"
+requires-dist = [
+    "mlx>=0.11",
+    "numba",
+    "numpy",
+    "tqdm",
+    "more-itertools",
+    "tiktoken",
+    "huggingface_hub",
+    "scipy",
+]
 
 [project.optional-dependencies]
 dev = [
@@ -114,10 +112,7 @@ strict_equality = true
 [[tool.mypy.overrides]]
 module = [
     "ffmpeg.*",
-    "librosa.*",
     "soundfile.*",
-    "torch.*",
-    "torchaudio.*",
     "pympler.*",
     "mlx_whisper.*",
     "parakeet_mlx.*",
