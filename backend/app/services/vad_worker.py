@@ -15,9 +15,6 @@ Returns:
 
 import sys
 import json
-import librosa
-import warnings
-import time
 import subprocess
 import os
 
@@ -66,9 +63,15 @@ def process_multiple_chunks(chunk_files_with_indices, segment_duration, min_sile
         print(f"PROGRESS:{json.dumps({'type': 'worker_init', 'message': 'Loading VAD model…'})}", flush=True)
 
     try:
-        from silero_vad import load_silero_vad
+        import onnx_asr
+        import numpy as np
+        import onnxruntime as ort
 
-        model = load_silero_vad()
+        sess_opts = ort.SessionOptions()
+        sess_opts.intra_op_num_threads = 1
+        sess_opts.inter_op_num_threads = 1
+
+        model = onnx_asr.load_vad("silero", sess_options=sess_opts)
 
         if enable_progress:
             print(
@@ -89,10 +92,13 @@ def process_multiple_chunks(chunk_files_with_indices, segment_duration, min_sile
             start_time = chunk_index * segment_duration
 
             # Load the audio file
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", UserWarning)
-                warnings.simplefilter("ignore", FutureWarning)
-                wav, sr = librosa.load(chunk_file, sr=16000, mono=True)
+            cmd = [
+                "ffmpeg", "-loglevel", "error", "-y", "-i", chunk_file,
+                "-ac", "1", "-ar", "16000", "-f", "f32le", "-"
+            ]
+            process = subprocess.run(cmd, stdout=subprocess.PIPE, check=True)
+            wav = np.frombuffer(process.stdout, dtype=np.float32)
+            sr = 16000
 
             if len(wav) == 0:
                 result = {"chunk_index": chunk_index, "gaps": [], "error": "Empty audio"}
@@ -100,48 +106,51 @@ def process_multiple_chunks(chunk_files_with_indices, segment_duration, min_sile
                 print(f"RESULT:{json.dumps(result)}", flush=True)
                 continue
 
-            # Progress callback for this specific chunk
-            if enable_progress:
-                last_progress_time = 0
+            # Get speech timestamps using onnx_asr
+            hop_size = 512  # frames per step at 16kHz
+            waveforms = np.expand_dims(wav, axis=0)
+            waveforms_len = np.array([len(wav)], dtype=np.int64)
 
-                def progress_callback(progress_percent):
-                    nonlocal last_progress_time
-                    current_time = time.time()
-                    if current_time - last_progress_time >= 0.1:  # Throttle to 0.1 second intervals
-                        last_progress_time = current_time
-                        # Calculate overall progress across all chunks in this worker
-                        overall_progress = (i / len(chunk_files_with_indices) * 100) + (
-                            progress_percent / len(chunk_files_with_indices)
-                        )
+            if enable_progress:
+                total_frames = len(wav) // hop_size + 2
+                last_reported_pct = -1
+
+                def emit_progress(pct):
+                    nonlocal last_reported_pct
+                    if pct - last_reported_pct >= 5:
+                        last_reported_pct = pct
                         progress_data = {
                             "type": "progress",
                             "chunk_index": chunk_index,
-                            "progress": progress_percent,
-                            "worker_progress": overall_progress,
+                            "progress": pct,
+                            "worker_progress": (i / len(chunk_files_with_indices) * 100) + (pct / len(chunk_files_with_indices)),
                             "chunk_in_worker": i + 1,
                             "total_chunks_in_worker": len(chunk_files_with_indices),
                         }
                         print(f"PROGRESS:{json.dumps(progress_data)}", flush=True)
 
-                # Get speech timestamps with progress tracking
-                from silero_vad import get_speech_timestamps
+                frame_count = 0
 
-                speech_timestamps = get_speech_timestamps(
-                    wav,
-                    model,
-                    speech_pad_ms=100,
-                    return_seconds=True,
-                    progress_tracking_callback=progress_callback,
-                )
+                def counting_encode(*args, **kwargs):
+                    nonlocal frame_count
+                    for prob in model._encode(*args, **kwargs):
+                        frame_count += 1
+                        emit_progress(int(frame_count / total_frames * 100))
+                        yield prob
+
+                encoding = counting_encode(waveforms, sr, hop_size, 64)
+                segments = list(model._merge_segments(
+                    model._find_segments(
+                        (p[0] for p in encoding), hop_size, speech_pad_ms=30
+                    ),
+                    int(waveforms_len[0]), sr, speech_pad_ms=30
+                ))
+                emit_progress(100)
             else:
-                from silero_vad import get_speech_timestamps
+                seg_results = list(model.segment_batch(waveforms, waveforms_len, speech_pad_ms=30))
+                segments = list(seg_results[0]) if seg_results else []
 
-                speech_timestamps = get_speech_timestamps(
-                    wav,
-                    model,
-                    speech_pad_ms=100,
-                    return_seconds=True,
-                )
+            speech_timestamps = [{"start": s / sr, "end": e / sr} for s, e in segments]
 
             # Calculate end time for this chunk
             chunk_duration = len(wav) / sr

@@ -35,7 +35,7 @@ class VadDetectionService:
         self._is_cancelled = False  # Track cancellation state
 
         # VAD-specific parameters
-        self.segment_duration = 600  # 10 minutes in seconds
+        self.segment_duration = 300  # 5 minutes in seconds
 
         # Calculate number of parallel processes: 2/3 of available cores, minimum 1
         import multiprocessing
