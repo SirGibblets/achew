@@ -41,18 +41,70 @@ PARALLEL_SILENCE_OVERLAP = 20
 MIN_DURATION_FOR_PARALLEL = 30 * 60 # 30 minutes
 
 
+# Matches the first audio stream line ffmpeg prints to stderr
+_AUDIO_STREAM_RE = re.compile(r"Stream #\d+[:.\d\[\]\w()]*: Audio:\s+([\w\-]+)")
+
+
 @functools.lru_cache(maxsize=32)
-def audio_uses_xhe_aac(audio_file: str) -> bool:
-    """Return True if ffmpeg reports the audio stream as xHE-AAC."""
+def _ffmpeg_probe_stderr(audio_file: str) -> str:
+    """Run `ffmpeg -i` and return stderr. ffmpeg exits non-zero because no output
+    was specified, but the stream header info is still printed to stderr."""
     try:
         result = subprocess.run(
             ["ffmpeg", "-hide_banner", "-i", audio_file],
             capture_output=True, text=True, timeout=30,
         )
-        return "xhe-aac" in result.stderr.lower()
+        return result.stderr
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
-        logger.warning(f"Failed to probe audio profile for {audio_file}: {e}")
-        return False
+        logger.warning(f"Failed to probe audio file {audio_file}: {e}")
+        return ""
+
+
+def audio_uses_xhe_aac(audio_file: str) -> bool:
+    """Return True if ffmpeg reports the audio stream as xHE-AAC."""
+    return "xhe-aac" in _ffmpeg_probe_stderr(audio_file).lower()
+
+
+def get_audio_codec(audio_file: str) -> Optional[str]:
+    """Return the codec name of the first audio stream as reported by ffmpeg,
+    or None if the probe failed or no audio stream was found."""
+    match = _AUDIO_STREAM_RE.search(_ffmpeg_probe_stderr(audio_file))
+    return match.group(1).lower() if match else None
+
+
+# Containers where the default ffmpeg muxer (inferred from extension) can reject
+# streams whose codec doesn't match the container's typical codec. For these,
+# pick an output extension based on the actual audio codec so `-c copy` succeeds.
+_REMUX_CONTAINER_EXTS = {"m4b", "m4a", "mp4"}
+
+# Map of audio codec (from ffprobe) to a compatible raw/container extension.
+_CODEC_EXT_MAP = {
+    "mp3": "mp3",
+    "aac": "aac",
+    "alac": "m4a",
+    "flac": "flac",
+    "opus": "opus",
+    "vorbis": "ogg",
+    "ac3": "ac3",
+    "eac3": "eac3",
+}
+
+
+def pick_segment_extension(audio_file: str, fallback_ext: Optional[str] = None) -> str:
+    """Choose an output file extension suitable for `ffmpeg -c copy` segments.
+
+    For M4A/M4B/MP4 containers we probe the actual audio codec and pick a matching
+    extension, since the default muxer inferred from `.m4b` etc. (ipod) only accepts
+    AAC. For other containers, keep the original extension.
+    """
+    ext = (fallback_ext if fallback_ext is not None else Path(audio_file).suffix.lstrip(".")).lower()
+    if ext not in _REMUX_CONTAINER_EXTS:
+        return ext
+    codec = get_audio_codec(audio_file)
+    if codec and codec in _CODEC_EXT_MAP:
+        return _CODEC_EXT_MAP[codec]
+    # Default: AAC is the canonical codec for these containers.
+    return "aac"
 
 
 def _compute_virtual_segments(
@@ -275,10 +327,9 @@ class AudioProcessingService:
                     logger.info("ffmpeg silence detection was cancelled")
                     return None
                 else:
-                    logger.error(
-                        f"ffmpeg silence detection failed in _run_silence_detection with return code {process.returncode}"
+                    raise RuntimeError(
+                        f"ffmpeg silence detection failed with return code {process.returncode}"
                     )
-                    return []
 
             return list(zip(silence_starts, silence_ends))
         finally:
@@ -406,10 +457,9 @@ class AudioProcessingService:
                 cancelled.set()
                 return None
             if process.returncode != 0:
-                logger.error(
+                raise RuntimeError(
                     f"ffmpeg silence detection worker {worker_index} failed with return code {process.returncode}"
                 )
-                return []
 
             worker_progress[worker_index] = 100.0
             return list(zip(silence_starts, silence_ends))
@@ -467,7 +517,15 @@ class AudioProcessingService:
                     return None
 
                 for future in done:
-                    result = future.result()
+                    try:
+                        result = future.result()
+                    except Exception:
+                        # Signal other workers to stop, let the executor drain,
+                        # and propagate the failure so the pipeline can fail
+                        # detection as a whole instead of proceeding with
+                        # partial results.
+                        cancelled.set()
+                        raise
 
                     if result:
                         all_silences.extend(result)
@@ -676,10 +734,7 @@ class AudioProcessingService:
             str(ts) for ts in expanded_timestamps[1:]
         )  # Drop the first timestamp (0) as it is implicit
 
-        extension = "wav" if use_wav else Path(audio_file).suffix.lstrip(".")
-
-        if extension in ["m4b", "m4a", "mp4"]:
-            extension = "aac"  # Use aac for segment extraction to avoid issues with m4b/m4a/mp4 containers
+        extension = "wav" if use_wav else pick_segment_extension(audio_file)
 
         output_pattern = os.path.join(output_dir, f"segment_%03d.{extension}")
 
@@ -1061,9 +1116,7 @@ class AudioProcessingService:
             return None
 
         # Determine output extension from first file
-        ext = Path(input_files[0]).suffix.lstrip(".")
-        if ext in ["m4b", "m4a", "mp4"]:
-            ext = "aac"
+        ext = pick_segment_extension(input_files[0])
         output_file = os.path.join(os.path.dirname(input_files[0]), "concatenated." + ext)
 
         if not total_duration:

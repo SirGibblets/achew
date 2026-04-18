@@ -63,8 +63,10 @@ class VadDetectionService:
         if self._is_cancelled:
             return []
 
-        _, ext = os.path.splitext(audio_file)
-        output_pattern = os.path.join(temp_dir, f"vad_chunk_%03d{ext}")
+        from .audio_service import pick_segment_extension
+
+        ext = pick_segment_extension(audio_file)
+        output_pattern = os.path.join(temp_dir, f"vad_chunk_%03d.{ext}")
 
         # Use ffmpeg segment to efficiently split the file
         cmd = [
@@ -574,8 +576,7 @@ class VadDetectionService:
             self._check_cancellation()
 
             if not chunk_files:
-                logger.error("No chunks created, aborting VAD processing")
-                return []
+                raise RuntimeError("Failed to split audio into VAD chunks")
 
             self._notify_progress(Step.VAD_ANALYSIS, 0, f"File prep complete, starting smart detection…")
 
@@ -599,9 +600,6 @@ class VadDetectionService:
             # Cancel any running VAD processes
             await self.cancel_vad_processes()
             return None
-        except Exception as e:
-            logger.error(f"VAD processing failed: {e}")
-            return []
 
     async def _split_audio_into_chunks_async(self, audio_file: str, duration: float, temp_dir: str) -> List[str]:
         """Async wrapper for splitting audio into chunks with progress monitoring"""
