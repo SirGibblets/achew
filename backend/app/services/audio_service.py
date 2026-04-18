@@ -1,7 +1,6 @@
 import asyncio
 import functools
 import logging
-import multiprocessing
 import os
 import re
 import shutil
@@ -19,6 +18,7 @@ from app.core.constants import (
     MIN_SILENCE_DURATION,
     MIN_TRIMMED_SEGMENT_LENGTH,
 )
+from app.core.system_info import get_worker_count
 from app.models.enums import Step
 from app.models.progress import ProgressCallback
 
@@ -39,12 +39,6 @@ PARALLEL_SILENCE_OVERLAP = 20
 
 # Minimum duration (in seconds) to warrant parallel detection
 MIN_DURATION_FOR_PARALLEL = 30 * 60 # 30 minutes
-
-
-def _get_worker_count() -> int:
-    """Use 2/3 of cores"""
-    total_cores = multiprocessing.cpu_count()
-    return max(1, total_cores * 2 // 3)
 
 
 @functools.lru_cache(maxsize=32)
@@ -172,7 +166,7 @@ class AudioProcessingService:
         if publish_progress:
             self._notify_progress(Step.AUDIO_ANALYSIS, 0, "Starting audio analysis…")
 
-        num_workers = _get_worker_count()
+        num_workers = get_worker_count()
         use_parallel = (
             duration is not None
             and duration >= MIN_DURATION_FOR_PARALLEL
@@ -433,7 +427,7 @@ class AudioProcessingService:
         duration: float,
     ) -> Optional[List[Tuple[float, float]]]:
         """Run silence detection across virtual segments in parallel."""
-        num_workers = _get_worker_count()
+        num_workers = get_worker_count()
         segments = _compute_virtual_segments(duration, num_workers)
         cancelled = threading.Event()
         worker_progress = [0.0] * len(segments)
@@ -820,7 +814,7 @@ class AudioProcessingService:
         if not paths:
             return []
 
-        max_workers = min(_get_worker_count(), len(paths))
+        max_workers = min(get_worker_count(), len(paths))
         cancelled = threading.Event()
         completed_count = [0]
         total = len(paths)

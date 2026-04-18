@@ -8,6 +8,7 @@ set HOST=127.0.0.1
 set PORT=8000
 set DEBUG=false
 set LISTEN_FLAG=
+set WORKERS=
 
 REM Parse command-line arguments
 :parse_args
@@ -38,6 +39,12 @@ if "%~1"=="--listen" (
     shift
     goto :parse_args
 )
+if "%~1"=="--workers" (
+    set WORKERS=%~2
+    shift
+    shift
+    goto :parse_args
+)
 if "%~1"=="--debug" (
     set DEBUG=true
     shift
@@ -55,6 +62,7 @@ echo Server Configuration:
 echo   HOST: %HOST%
 echo   PORT: %PORT%
 echo   DEBUG: %DEBUG%
+if "%WORKERS%"=="" (echo   WORKER COUNT: auto) else (echo   WORKER COUNT: %WORKERS%)
 echo.
 
 REM Check if required dependencies are installed
@@ -136,6 +144,8 @@ if "%DEBUG%"=="true" (
     echo Debug mode enabled - using auto-reload
 )
 
+if not "%WORKERS%"=="" set ACHEW_WORKER_COUNT=%WORKERS%
+
 REM Run the backend server
 uv run python -m uvicorn app.main:app --host %HOST% --port %PORT% %UVICORN_ARGS%
 
@@ -146,6 +156,7 @@ echo Command-line Flags:
 echo   --host HOST              Set server host (default: 127.0.0.1)
 echo   --port PORT              Set server port (default: 8000)
 echo   --listen                 Listen on all interfaces (equivalent to --host 0.0.0.0)
+echo   --workers N              Number of parallel audio workers (default: auto-detect)
 echo   --debug                  Enable debug mode
 echo   --help                   Show this help message
 echo.
@@ -153,4 +164,5 @@ echo Examples:
 echo   %~nx0 --host 0.0.0.0 --port 9000
 echo   %~nx0 --listen --port 9000
 echo   %~nx0 --port 3000
+echo   %~nx0 --workers 2
 exit /b 0

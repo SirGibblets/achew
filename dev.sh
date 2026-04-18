@@ -51,6 +51,7 @@ show_usage() {
     echo "  --host HOST              Set backend server host (default: 127.0.0.1)"
     echo "  --port PORT              Set backend server port (default: 8000)"
     echo "  --listen                 Listen on all interfaces (equivalent to --host 0.0.0.0)"
+    echo "  --workers N              Number of parallel audio workers (default: auto-detect)"
     echo "  --no-debug               Disable debug mode"
     echo "  --help                   Show this help message"
     echo ""
@@ -69,6 +70,7 @@ HOST="127.0.0.1"
 PORT="8000"
 DEBUG="true"
 LISTEN_FLAG=""
+WORKERS=""
 
 # Parse command-line arguments
 while [[ $# -gt 0 ]]; do
@@ -96,6 +98,10 @@ while [[ $# -gt 0 ]]; do
             LISTEN_FLAG="true"
             shift
             ;;
+        --workers)
+            WORKERS="$2"
+            shift 2
+            ;;
         --no-debug)
             DEBUG="false"
             shift
@@ -116,6 +122,7 @@ log_info "Development Server Configuration:"
 log_info "  HOST: $HOST"
 log_info "  PORT: $PORT"
 log_info "  DEBUG: $DEBUG"
+log_info "  WORKER COUNT: ${WORKERS:-auto}"
 log_info ""
 
 # Check if required dependencies are installed
@@ -184,6 +191,10 @@ if [ "$DEBUG" = "true" ]; then
     export DEBUG="true"
 else
     export DEBUG="false"
+fi
+
+if [ -n "$WORKERS" ]; then
+    export ACHEW_WORKER_COUNT="$WORKERS"
 fi
 
 uv run python -m uvicorn app.main:app $UVICORN_ARGS &

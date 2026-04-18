@@ -10,6 +10,7 @@ import threading
 from typing import List, Tuple, Dict, Optional
 
 from app.core.constants import MIN_SILENCE_DURATION
+from app.core.system_info import get_worker_count
 from app.models.enums import Step
 from app.models.progress import ProgressCallback
 
@@ -37,12 +38,8 @@ class VadDetectionService:
         # VAD-specific parameters
         self.segment_duration = 300  # 5 minutes in seconds
 
-        # Calculate number of parallel processes: 2/3 of available cores, minimum 1
-        import multiprocessing
-
-        total_cores = multiprocessing.cpu_count()
-        self.max_processes = max(1, int(total_cores * 0.667))  # 2/3 of total cores
-        logger.info(f"VAD service will use {self.max_processes} parallel processes ({total_cores} total cores)")
+        self.max_processes = get_worker_count()
+        logger.info(f"VAD service will use {self.max_processes} parallel processes")
 
         # Get path to VAD worker script
         self.vad_worker_path = os.path.join(os.path.dirname(__file__), "vad_worker.py")
