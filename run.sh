@@ -36,6 +36,7 @@ show_usage() {
     echo "  --host HOST              Set server host (default: 127.0.0.1)"
     echo "  --port PORT              Set server port (default: 8000)"
     echo "  --listen                 Listen on all interfaces (equivalent to --host 0.0.0.0)"
+    echo "  --workers N              Number of parallel audio workers (default: auto-detect)"
     echo "  --debug                  Enable debug mode"
     echo "  --help                   Show this help message"
     echo ""
@@ -43,6 +44,7 @@ show_usage() {
     echo "  $0 --host 0.0.0.0 --port 9000"
     echo "  $0 --listen --port 9000"
     echo "  $0 --port 3000"
+    echo "  $0 --workers 2"
 }
 
 # Default arguments
@@ -50,6 +52,7 @@ HOST="127.0.0.1"
 PORT="8000"
 DEBUG="false"
 LISTEN_FLAG=""
+WORKERS=""
 
 # Parse command-line arguments
 while [[ $# -gt 0 ]]; do
@@ -77,6 +80,10 @@ while [[ $# -gt 0 ]]; do
             LISTEN_FLAG="true"
             shift
             ;;
+        --workers)
+            WORKERS="$2"
+            shift 2
+            ;;
         --debug)
             DEBUG="true"
             shift
@@ -97,6 +104,7 @@ log_info "Server Configuration:"
 log_info "  HOST: $HOST"
 log_info "  PORT: $PORT"
 log_info "  DEBUG: $DEBUG"
+log_info "  WORKER COUNT: ${WORKERS:-auto}"
 log_info ""
 
 # Check if required dependencies are installed
@@ -161,6 +169,10 @@ if [ "$DEBUG" = "true" ]; then
     export DEBUG="true"
 else
     export DEBUG="false"
+fi
+
+if [ -n "$WORKERS" ]; then
+    export ACHEW_WORKER_COUNT="$WORKERS"
 fi
 
 # Run the backend server

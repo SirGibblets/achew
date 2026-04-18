@@ -192,3 +192,16 @@ If AI Cleanup isn’t an option for you, try using one of the Whisper models wit
 
 You can fine-tune this by adjusting the Minimum Chapter Gap value, found in the Detection Settings before starting the Smart Detect workflow. If you are getting too few cue options, drop this down to 1.75s or 1.5s. Conversely, if you're getting too many cues, try raising it up to 2.5 or 3s.
 </details>
+
+<details>
+
+<summary>Can I run Achew on low-memory systems (or tune the worker count)?</summary>
+
+Achew runs part of its audio processing in parallel to improve performance. By default it picks a worker count based on available CPU cores and memory (respecting user-specified Docker memory limits), which should keep things safe on tight hosts without extra tuning. You can override the auto-detected value to either **lower** it (to free up memory on a constrained host) or **raise** it (if you find your system is being underutilized):
+
+- **Native install**: `./run.sh --workers 4` (or `run.bat --workers 4` / `./dev.sh --workers 4`)
+- **Docker run**: `docker run -e ACHEW_WORKER_COUNT=4 ...`
+- **docker-compose**: uncomment the `environment:` block in `docker-compose.yml` and set `ACHEW_WORKER_COUNT`
+
+Setting `ACHEW_WORKER_COUNT=1` disables parallelism entirely, which is the slowest but most memory-frugal setting. Higher values trade memory for speed.
+</details>
