@@ -239,14 +239,14 @@ class ChapterAligner:
                 prev_pair = next((p for p in reversed(matched_pairs) if p[0] < i), None)
                 next_pair = next((p for p in matched_pairs if p[0] > i), None)
 
-                src_t = src_chapter["time"]
+                src_t = src_chapter.timestamp
 
                 if prev_pair and next_pair:
                     # Interpolate linearly between the two surrounding anchors.
-                    src_prev  = source_chapters[prev_pair[0]]["time"]
-                    actual_prev = detected_cues[prev_pair[1]]["time"]
-                    src_next  = source_chapters[next_pair[0]]["time"]
-                    actual_next = detected_cues[next_pair[1]]["time"]
+                    src_prev  = source_chapters[prev_pair[0]].timestamp
+                    actual_prev = detected_cues[prev_pair[1]].timestamp
+                    src_next  = source_chapters[next_pair[0]].timestamp
+                    actual_next = detected_cues[next_pair[1]].timestamp
                     if src_next > src_prev:
                         t = (src_t - src_prev) / (src_next - src_prev)
                         timestamp = actual_prev + t * (actual_next - actual_prev)
@@ -254,20 +254,20 @@ class ChapterAligner:
                         timestamp = expected_times[i]
                 elif prev_pair:
                     # Extrapolate forward from the last known anchor.
-                    src_prev = source_chapters[prev_pair[0]]["time"]
-                    actual_prev = detected_cues[prev_pair[1]]["time"]
+                    src_prev = source_chapters[prev_pair[0]].timestamp
+                    actual_prev = detected_cues[prev_pair[1]].timestamp
                     timestamp = actual_prev + (src_t - src_prev) * scale
                 elif next_pair:
                     # Extrapolate backward from the next known anchor.
-                    src_next = source_chapters[next_pair[0]]["time"]
-                    actual_next = detected_cues[next_pair[1]]["time"]
+                    src_next = source_chapters[next_pair[0]].timestamp
+                    actual_next = detected_cues[next_pair[1]].timestamp
                     timestamp = actual_next + (src_t - src_next) * scale
                 else:
                     # No matched chapters at all — fall back to global transform.
                     timestamp = expected_times[i]
 
                 results.append({
-                    "title": src_chapter["title"],
+                    "title": src_chapter.title,
                     "timestamp": max(0.0, timestamp),
                     "confidence": 0.3,
                     "is_guess": True,
@@ -287,18 +287,18 @@ class ChapterAligner:
     
     def _fallback_alignment(
         self,
-        source_chapters: List[Dict[str, Any]],
+        source_chapters: List[ExistingCue],
         total_duration_source: float,
         total_duration_actual: float
     ) -> Tuple[List[Dict[str, Any]], Dict[str, float]]:
         scale = total_duration_actual / total_duration_source if total_duration_source > 0 else 1.0
         offset = 0.0
-        
+
         results = []
         for chapter in source_chapters:
-            timestamp = max(0.0, chapter["time"] * scale + offset)
+            timestamp = max(0.0, chapter.timestamp * scale + offset)
             results.append({
-                "title": chapter["title"],
+                "title": chapter.title,
                 "timestamp": timestamp,
                 "confidence": 0.2,
                 "is_guess": True,
