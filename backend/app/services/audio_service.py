@@ -77,6 +77,12 @@ def get_audio_codec(audio_file: str) -> Optional[str]:
 # pick an output extension based on the actual audio codec so `-c copy` succeeds.
 _REMUX_CONTAINER_EXTS = {"m4b", "m4a", "mp4"}
 
+# Container/codec extensions whose muxer writes packets sequentially without
+# seeking back to rewrite headers on close. Safe to redirect to /dev/null
+# via a symlink (see _extract_range_block). WAV/FLAC/M4A/MP4/OGG all patch
+# headers at trailer-write time and would fail against a non-seekable sink.
+_NULL_SINK_SAFE_EXTS = {"aac", "mp3", "ac3", "eac3"}
+
 # Map of audio codec (from ffprobe) to a compatible raw/container extension.
 _CODEC_EXT_MAP = {
     "mp3": "mp3",
@@ -691,6 +697,289 @@ class AudioProcessingService:
 
             shutil.copy2(segment_path, output_path)
 
+    def _run_parallel_range_extraction(
+        self,
+        audio_file: str,
+        ranges: List[Tuple[float, float]],
+        output_dir: str,
+        use_wav: bool,
+        allow_retry: bool,
+        name_timestamps: Optional[List[float]] = None,
+    ) -> List[str]:
+        """Extract a list of [start, end) ranges in parallel.
+
+        Ranges are sorted and partitioned into at most `num_workers` contiguous
+        blocks. Each block runs as one ffmpeg invocation with an input-side
+        `-ss`/`-t` so that worker only demuxes its own portion of the source
+        file. Within each block we use ffmpeg's segment muxer with timestamps
+        relative to the block start, splitting the kept ranges out from the 
+        inter-range gaps.
+
+        `name_timestamps`, when provided, gives the timestamp to use for each
+        output file's name (segment_<ms>.ext). If None, each range's own start
+        timestamp is used. Must be the same length as `ranges` when provided.
+        """
+        if not ranges:
+            return []
+
+        if name_timestamps is not None and len(name_timestamps) != len(ranges):
+            raise ValueError("name_timestamps must match ranges in length")
+
+        # Attach names to ranges so sorting keeps them in sync.
+        effective_names = (
+            name_timestamps if name_timestamps is not None
+            else [r[0] for r in ranges]
+        )
+        indexed = sorted(
+            zip(ranges, effective_names), key=lambda pair: pair[0][0]
+        )
+        sorted_ranges = [r for r, _ in indexed]
+        sorted_names = [n for _, n in indexed]
+
+        num_workers = get_worker_count()
+        num_blocks = max(1, min(num_workers, len(sorted_ranges)))
+
+        # Split into balanced contiguous blocks — index-range slicing so
+        # neighboring ranges stay together (amortizes the input-seek)
+        k, m = divmod(len(sorted_ranges), num_blocks)
+        blocks: List[List[Tuple[float, float]]] = []
+        block_names: List[List[float]] = []
+        pos = 0
+        for i in range(num_blocks):
+            size = k + (1 if i < m else 0)
+            if size:
+                blocks.append(sorted_ranges[pos:pos + size])
+                block_names.append(sorted_names[pos:pos + size])
+            pos += size
+
+        extension = "wav" if use_wav else pick_segment_extension(audio_file)
+        cancelled = threading.Event()
+        completed = [0]
+        progress_lock = threading.Lock()
+        total = len(sorted_ranges)
+
+        logger.debug(
+            f"Parallel range extraction: {total} ranges across {len(blocks)} blocks"
+        )
+        extraction_start = time.monotonic()
+
+        block_results: List[Optional[List[str]]] = [None] * len(blocks)
+        worker_failed = False
+
+        with ThreadPoolExecutor(max_workers=len(blocks)) as executor:
+            futures = {
+                executor.submit(
+                    self._extract_range_block,
+                    block_idx, block, names, audio_file, output_dir, extension,
+                    cancelled, completed, progress_lock, total,
+                ): block_idx
+                for block_idx, (block, names) in enumerate(zip(blocks, block_names))
+            }
+
+            for future in as_completed(futures):
+                block_idx = futures[future]
+                try:
+                    paths = future.result()
+                except Exception:
+                    cancelled.set()
+                    worker_failed = True
+                    logger.exception(f"Range extraction block {block_idx} failed")
+                    continue
+                if paths is None:
+                    cancelled.set()
+                    continue
+                block_results[block_idx] = paths
+
+        if cancelled.is_set():
+            self._cleanup_range_block_outputs(output_dir, len(blocks), extension)
+            self.clean_up_orphaned_segment_files(output_dir)
+            if worker_failed and allow_retry and not use_wav:
+                logger.warning("Parallel range extraction failed; retrying with WAV")
+                return self._run_parallel_range_extraction(
+                    audio_file, ranges, output_dir, True, False, name_timestamps,
+                )
+            return []
+
+        all_paths: List[str] = []
+        for paths in block_results:
+            if paths:
+                all_paths.extend(paths)
+        logger.info(
+            f"Parallel range extraction finished: {total} ranges across "
+            f"{len(blocks)} blocks in {time.monotonic() - extraction_start:.2f}s"
+        )
+        return all_paths
+
+    def _extract_range_block(
+        self,
+        block_idx: int,
+        block: List[Tuple[float, float]],
+        name_timestamps: List[float],
+        audio_file: str,
+        output_dir: str,
+        extension: str,
+        cancelled: threading.Event,
+        completed: list,
+        progress_lock: threading.Lock,
+        total: int,
+    ) -> Optional[List[str]]:
+        """Extract one contiguous block of ranges.
+
+        Returns the extracted segment paths in input order, or None if this
+        block was cancelled or failed."""
+        if not block or cancelled.is_set():
+            return []
+
+        block_start_time = time.monotonic()
+        b_start = block[0][0]
+        b_end = block[-1][1]
+
+        # Flatten (start, end) into alternating timestamps. The first (b_start)
+        # becomes our input-seek target; the remaining timestamps become the
+        # segment muxer split points relative to b_start.
+        expanded: List[float] = []
+        for start, end in block:
+            expanded.append(start)
+            expanded.append(end)
+        splits_rel = [t - b_start for t in expanded[1:]]
+        segment_times_str = ",".join(f"{t:.6f}" for t in splits_rel)
+
+        block_prefix = f"xrng{block_idx:02d}_"
+        output_pattern = os.path.join(output_dir, f"{block_prefix}%03d.{extension}")
+        use_copy = extension != "wav"
+
+        # Gap segments (odd indices) are pure overhead — ffmpeg must write them
+        # so the segment muxer can split at our range boundaries. For codecs
+        # whose muxer doesn't seek back on close, pre-creating each gap path
+        # as a symlink to /dev/null makes those writes no-ops at the kernel
+        # level, avoiding disk thrashing.
+        use_null_gaps = extension in _NULL_SINK_SAFE_EXTS
+        if use_null_gaps:
+            for gap_idx in range(1, 2 * len(block), 2):
+                gap_path = os.path.join(
+                    output_dir, f"{block_prefix}{gap_idx:03d}.{extension}"
+                )
+                try:
+                    try:
+                        os.unlink(gap_path)
+                    except FileNotFoundError:
+                        pass
+                    os.symlink("/dev/null", gap_path)
+                except OSError:
+                    logger.debug(
+                        f"Null-sink symlink failed at {gap_path}; "
+                        f"falling back to real gap writes for this block."
+                    )
+                    for cleanup_idx in range(1, gap_idx, 2):
+                        stale = os.path.join(
+                            output_dir,
+                            f"{block_prefix}{cleanup_idx:03d}.{extension}",
+                        )
+                        try:
+                            os.unlink(stale)
+                        except OSError:
+                            pass
+                    break
+
+        # noinspection SpellCheckingInspection
+        cmd = [
+            "ffmpeg", "-y",
+            "-ss", f"{b_start:.6f}",
+            "-t", f"{b_end - b_start:.6f}",
+            "-i", audio_file,
+        ]
+        if use_copy:
+            cmd.extend(["-acodec", "copy"])
+        cmd.extend([
+            "-f", "segment",
+            "-segment_times", segment_times_str,
+            output_pattern,
+        ])
+
+        process = subprocess.Popen(
+            cmd, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace",
+        )
+        with self._process_lock:
+            self._running_processes.append(process)
+
+        try:
+            open_pattern = re.compile(
+                r"Opening '.*" + re.escape(block_prefix) + r"\d+\."
+                + re.escape(extension) + r"' for writing"
+            )
+            block_opens = 0
+            for line in process.stderr or []:
+                if cancelled.is_set():
+                    process.terminate()
+                    break
+                if open_pattern.search(line):
+                    block_opens += 1
+                    # Every even-numbered open (2, 4, 6, …) marks the close of
+                    # a kept segment (output 0, 2, 4, …). Odd opens are gap
+                    # segments; don't count them toward progress.
+                    if block_opens >= 2 and block_opens % 2 == 0:
+                        with progress_lock:
+                            completed[0] += 1
+                            if total > 0:
+                                pct = min((completed[0] / total) * 100, 99.0)
+                                self._notify_progress(
+                                    Step.AUDIO_EXTRACTION, pct,
+                                    f"Extracted chapter {completed[0]} of {total}…",
+                                    {
+                                        "segments_created": completed[0],
+                                        "total_segments": total,
+                                    },
+                                )
+            process.wait()
+            if cancelled.is_set() or process.returncode in [254, 255]:
+                return None
+            if process.returncode != 0:
+                raise subprocess.CalledProcessError(process.returncode, cmd)
+        finally:
+            with self._process_lock:
+                try:
+                    self._running_processes.remove(process)
+                except ValueError:
+                    pass
+
+        # Rename kept outputs (even indices) to their timestamped names and
+        # delete the gap outputs (odd indices).
+        paths: List[str] = []
+        for seg_idx in range(len(block)):
+            kept = os.path.join(
+                output_dir, f"{block_prefix}{2 * seg_idx:03d}.{extension}"
+            )
+            if os.path.exists(kept):
+                name_ts = name_timestamps[seg_idx]
+                dst = os.path.join(
+                    output_dir, f"segment_{int(name_ts * 1000)}.{extension}"
+                )
+                os.rename(kept, dst)
+                paths.append(dst)
+            gap = os.path.join(
+                output_dir, f"{block_prefix}{2 * seg_idx + 1:03d}.{extension}"
+            )
+            if os.path.exists(gap):
+                os.remove(gap)
+
+        logger.debug(
+            f"  block {block_idx} ({len(block)} ranges, "
+            f"{b_start:.1f}s–{b_end:.1f}s) in "
+            f"{time.monotonic() - block_start_time:.2f}s"
+        )
+        return paths
+
+    def _cleanup_range_block_outputs(
+        self, output_dir: str, num_blocks: int, extension: str,
+    ):
+        """Remove any leftover xrngNN_* files from a cancelled/failed run."""
+        for filename in os.listdir(output_dir):
+            if filename.startswith("xrng") and filename.endswith(f".{extension}"):
+                try:
+                    os.remove(os.path.join(output_dir, filename))
+                except Exception:
+                    pass
+
     def _run_segment_extraction(
         self,
         audio_file: str,
@@ -699,136 +988,41 @@ class AudioProcessingService:
         use_wav: bool = False,
         allow_retry: bool = True,
     ) -> List[str]:
-        """Run segment extraction in a separate thread"""
+        """Run segment extraction in a separate thread.
 
-        def _timestamp_to_filename(timestamp: float | Tuple[float, float]) -> str:
-            """Convert timestamp to filename format using milliseconds"""
-            milliseconds: int
-            if isinstance(timestamp, tuple):
-                milliseconds = int(timestamp[0] * 1000)
-            else:
-                milliseconds = int(timestamp * 1000)
-            return f"{milliseconds}"
-
-        # Generate expanded timestamps for segment extraction
-        expanded_timestamps = []
+        Both input shapes (float cue timestamps for ASR extraction, and
+        [start, end) tuples for realignment) funnel through the parallel
+        range-extraction path — each worker demuxes only its own portion of
+        the source so the per-invocation container-parse cost is paid once
+        per worker rather than once per range.
+        """
+        if not timestamps:
+            return []
 
         if isinstance(timestamps[0], tuple):
-            for start_ts, end_ts in timestamps:
-                expanded_timestamps.append(start_ts)
-                expanded_timestamps.append(end_ts)
-        else:
-            segment_length = get_app_config().asr_options.segment_length
-            for i, ts in enumerate(timestamps):
-                start_ts = max(0, ts - self.asr_buffer)
-                expanded_timestamps.append(start_ts)
-                end_ts = ts + segment_length
+            return self._run_parallel_range_extraction(
+                audio_file, timestamps, output_dir,  # type: ignore[arg-type]
+                use_wav, allow_retry,
+            )
 
-                # Adjust if the end timestamp overlaps with the next start timestamp
-                if i < len(timestamps) - 1:
-                    next_start_ts = timestamps[i + 1] - self.asr_buffer
-                    end_ts = min(end_ts, next_start_ts - MIN_SEGMENT_GAP)  # Add a small gap to avoid overlap
-                expanded_timestamps.append(end_ts)
+        # Float cue timestamps: derive (start, end) ranges using the ASR
+        # segment-length / next-cue overlap-avoidance rules, and preserve the
+        # original cue timestamps as the naming keys.
+        cue_timestamps: List[float] = list(timestamps)  # type: ignore[arg-type]
+        segment_length = get_app_config().asr_options.segment_length
+        ranges: List[Tuple[float, float]] = []
+        for i, ts in enumerate(cue_timestamps):
+            start_ts = max(0, ts - self.asr_buffer)
+            end_ts = ts + segment_length
+            if i < len(cue_timestamps) - 1:
+                next_start_ts = cue_timestamps[i + 1] - self.asr_buffer
+                end_ts = min(end_ts, next_start_ts - MIN_SEGMENT_GAP)
+            ranges.append((start_ts, end_ts))
 
-        segment_times = ",".join(
-            str(ts) for ts in expanded_timestamps[1:]
-        )  # Drop the first timestamp (0) as it is implicit
-
-        extension = "wav" if use_wav else pick_segment_extension(audio_file)
-
-        output_pattern = os.path.join(output_dir, f"segment_%03d.{extension}")
-
-        # noinspection SpellCheckingInspection
-        command = [
-            "ffmpeg",
-            "-y",
-            "-i",
-            audio_file,
-            "-acodec",
-            "copy",  # Copy audio without re-encoding
-            "-f",
-            "segment",  # Segment mode
-            "-segment_times",
-            segment_times,  # Specify split points
-            output_pattern,  # Output pattern
-        ]
-
-        if use_wav:
-            command = [
-                "ffmpeg",
-                "-y",
-                "-i",
-                audio_file,
-                "-f",
-                "segment",  # Segment mode
-                "-segment_times",
-                segment_times,  # Specify split points
-                output_pattern,  # Output pattern
-            ]
-
-        process = subprocess.Popen(command, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
-
-        with self._process_lock:
-            self._running_processes.append(process)
-
-        try:
-            segment_pattern = re.compile(r"Opening '.*segment.*' for writing")
-            segments_created = 0
-            total_segments = len(expanded_timestamps) // 2
-
-            for line in process.stderr:
-                if segment_pattern.search(line):
-                    segments_created += 1
-                    corrected_segments = segments_created // 2
-                    # Update progress for segment creation
-                    if total_segments > 0:
-                        progress_percent = (corrected_segments / total_segments) * 100
-                        message = f"Extracted chapter {corrected_segments} of {total_segments}…"
-                        details = {"segments_created": corrected_segments, "total_segments": total_segments}
-
-                        self._notify_progress(Step.AUDIO_EXTRACTION, progress_percent, message, details)
-
-            process.wait()
-
-            if process.returncode != 0:
-                self.clean_up_orphaned_segment_files(output_dir)
-                if process.returncode in [254, 255]:
-                    # ffmpeg returns 254/255 when cancelled or input file missing
-                    logger.info(f"Segment extraction was cancelled. Cleaning up…")
-                    return []
-                elif allow_retry and not use_wav:
-                    logger.warning("Error extracting segments. Cleaning up and retrying with WAV output…")
-                    return self._run_segment_extraction(audio_file, timestamps, output_dir, True, False)
-                else:
-                    raise subprocess.CalledProcessError(process.returncode, command)
-        finally:
-            with self._process_lock:
-                try:
-                    self._running_processes.remove(process)
-                except ValueError:
-                    pass
-
-        # Delete all odd-numbered segments (extended segments) and rename even-numbered ones with timestamps
-        paths = []
-        for idx in range(0, len(expanded_timestamps), 2):
-            # Delete the extended segment (odd index)
-            if idx + 1 < len(expanded_timestamps):
-                extended_path = os.path.join(output_dir, f"segment_{(idx + 1):03d}.{extension}")
-                if os.path.exists(extended_path):
-                    os.remove(extended_path)
-
-            # Rename the main segment (even index) with timestamp
-            old_path = os.path.join(output_dir, f"segment_{idx:03d}.{extension}")
-            if os.path.exists(old_path):
-                # Use the original timestamp for naming
-                timestamp_idx = idx // 2
-                if timestamp_idx < len(timestamps):
-                    timestamp_name = _timestamp_to_filename(timestamps[timestamp_idx])
-                    new_path = os.path.join(output_dir, f"segment_{timestamp_name}.{extension}")
-                    os.rename(old_path, new_path)
-                    paths.append(new_path)
-
-        return paths
+        return self._run_parallel_range_extraction(
+            audio_file, ranges, output_dir, use_wav, allow_retry,
+            name_timestamps=cue_timestamps,
+        )
 
     async def trim_segments(
         self,
