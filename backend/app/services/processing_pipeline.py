@@ -14,7 +14,7 @@ from app.app import get_app_state
 from app.models.abs import AudioFile, Book
 from pydantic import BaseModel, Field
 from .abs_service import ABSService
-from .audio_service import AudioProcessingService, audio_uses_xhe_aac
+from .audio_service import AudioProcessingService, audio_uses_xhe_aac, pick_segment_extension
 from .vad_detection_service import VadDetectionService
 from ..core.config import get_app_config
 from ..core.constants import CHAPTER_START_PADDING, BOOK_END_IGNORE_WINDOW
@@ -1117,8 +1117,7 @@ class ProcessingPipeline:
         except Exception as e:
             logger.error(f"VAD detection failed: {e}", exc_info=True)
             self._vad_task = None
-            await self.restart_at_step(RestartStep.SELECT_WORKFLOW, f"VAD detection failed: {str(e)}")
-            raise ProcessingError(f"Error during VAD detection: {str(e)}")
+            raise ProcessingError(f"VAD detection failed: {str(e)}")
 
     async def _detect_realignment_cues(self, segments: List[Tuple[float, str]]):
         """Detect chapter cues for realignment"""
@@ -2069,9 +2068,7 @@ class ProcessingPipeline:
                 # ── Step 5: Extract audio (PARTIAL_SCAN_PREP) ──────────────────
                 self._notify_progress(Step.PARTIAL_SCAN_PREP, 0, "Extracting audio…")
 
-                ext = os.path.splitext(self.audio_file_path)[1].lstrip(".")
-                if ext in ["m4b", "m4a", "mp4"]:
-                    ext = "aac"
+                ext = pick_segment_extension(self.audio_file_path)
 
                 if use_original_file:
                     logger.info("Using original audio file for partial scan (coverage >= 80%)")
