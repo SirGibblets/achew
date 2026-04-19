@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 
+from app.models.abs import Book
 from app.models.enums import Step
 from app.models.progress import ProgressCallback
 
@@ -158,13 +159,25 @@ class AIService(ABC):
         infer_end_credits: bool = True,
         preferred_titles: List[str] = None,
         additional_instructions: List[str] = None,
+        book: Optional[Book] = None,
     ) -> str:
         """Build the system prompt dynamically based on options"""
+        book_title = book.media.metadata.title if book and book.media else None
+        book_author = book.media.metadata.authorName if book and book.media else None
 
         # Base prompt
         base_prompt = """You are a helpful assistant that validates and cleans up audiobook chapter titles.
 You will receive a JSON array of objects, each containing a chapter index (int) and a raw text transcription of the title. Note that there may be inaccuracies in the transcriptions.
-You will output the same array, but with processed titles. You must respond with ONLY the raw JSON data - no additional text, comments, or markdown.
+You will output the same array, but with processed titles. You must respond with ONLY the raw JSON data - no additional text, comments, or markdown."""
+
+        if book_title and book_author:
+            base_prompt += f'\n\nThe book is titled "{book_title}" by {book_author}.'
+        elif book_title:
+            base_prompt += f'\n\nThe book is titled "{book_title}".'
+        elif book_author:
+            base_prompt += f'\n\nThe book is by {book_author}.'
+
+        base_prompt += """
 
 Rules for processing chapter titles:
 - For transcriptions that clearly denote a numbered chapter/section (e.g., "Chapter 1", "Part 5", "One", "Section IX"):
@@ -222,6 +235,7 @@ Rules for processing chapter titles:
         infer_opening_credits: bool = True,
         infer_end_credits: bool = True,
         preferred_titles: List[str] = None,
+        book: Optional[Book] = None,
     ) -> List[Optional[str]]:
         """Process transcriptions into chapter titles using the LLM"""
         pass

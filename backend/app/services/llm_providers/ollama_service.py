@@ -3,6 +3,7 @@ import logging
 import time
 from typing import List, Optional
 from urllib.parse import urlparse
+from app.models.abs import Book
 import ollama
 
 from .base import AIService, ProviderInfo, ModelInfo, IncrementalJSONParser
@@ -286,6 +287,7 @@ class OllamaService(AIService):
         infer_opening_credits: bool = True,
         infer_end_credits: bool = True,
         preferred_titles: List[str] = None,
+        book: Optional[Book] = None,
     ) -> List[Optional[str]]:
         """Process transcriptions into chapter titles using Ollama"""
 
@@ -304,6 +306,7 @@ class OllamaService(AIService):
             infer_end_credits=infer_end_credits,
             preferred_titles=preferred_titles,
             additional_instructions=additional_instructions,
+            book=book,
         )
 
         # Create JSON input for all chapters
