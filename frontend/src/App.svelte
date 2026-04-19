@@ -543,7 +543,7 @@
     <!-- Version display in bottom right corner -->
     {#if $session.version}
         <div class="version-container">
-            {#if $session.buildMeta}
+            {#if $session.buildMeta && $session.buildMeta.branch !== "release"}
                 <a
                         href="https://github.com/SirGibblets/achew/commit/{$session.buildMeta.commit}"
                         target="_blank"
