@@ -424,10 +424,10 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
                     on:click={() => (advancedExpanded = !advancedExpanded)}
                     type="button"
             >
+                Advanced
                 <span class="chevron" class:expanded={advancedExpanded}>
                     <ChevronDown size="12"/>
                 </span>
-                Advanced
             </button>
 
             {#if advancedExpanded}
