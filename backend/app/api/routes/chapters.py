@@ -6,6 +6,7 @@ import json
 import io
 from datetime import datetime
 
+from app.models.ai_options import AIOptions
 from app.models.chapter import ChapterData
 from app.models.chapter_operation import (
     AddChapterOperation,
@@ -58,18 +59,6 @@ class BatchOperationRequest(BaseModel):
 
 class DeleteBySelectionRequest(BaseModel):
     target: Literal["selected", "unselected"]
-
-
-class AIOptions(BaseModel):
-    inferOpeningCredits: bool = True
-    inferEndCredits: bool = True
-    deselectNonChapters: bool = True
-    keepDeselectedTitles: bool = False
-    usePreferredTitles: bool = False
-    preferredTitlesSource: str = ""
-    additionalInstructions: str = ""
-    provider_id: str = ""
-    model_id: str = ""
 
 
 class ProcessSelectedRequest(BaseModel):
@@ -550,24 +539,14 @@ async def get_ai_options():
         if not app_state.pipeline:
             raise HTTPException(status_code=404, detail="Pipeline not found")
 
-        # Load saved preferences from config
         from ...core.config import get_app_config
 
         config = get_app_config()
 
-        # Convert pipeline AIOptions to the API AIOptions format
-        pipeline_options = app_state.pipeline.ai_options
-        return AIOptions(
-            inferOpeningCredits=pipeline_options.inferOpeningCredits,
-            inferEndCredits=pipeline_options.inferEndCredits,
-            deselectNonChapters=pipeline_options.deselectNonChapters,
-            keepDeselectedTitles=pipeline_options.keepDeselectedTitles,
-            usePreferredTitles=pipeline_options.usePreferredTitles,
-            preferredTitlesSource=pipeline_options.preferredTitlesSource,
-            additionalInstructions=pipeline_options.additionalInstructions,
-            provider_id=config.llm.last_used_provider,
-            model_id=config.llm.last_used_model,
-        )
+        ai_options = app_state.pipeline.ai_options.model_copy()
+        ai_options.provider_id = config.llm.last_used_provider
+        ai_options.model_id = config.llm.last_used_model
+        return ai_options
 
     except HTTPException:
         raise
@@ -593,23 +572,8 @@ async def update_ai_options(ai_options: AIOptions):
         config.llm.last_used_model = ai_options.model_id
         save_llm_config(config.llm)
 
-        # Convert the API AIOptions to the pipeline's AIOptions format
-        from ...services.processing_pipeline import AIOptions as PipelineAIOptions
+        app_state.pipeline.ai_options = ai_options
 
-        pipeline_ai_options = PipelineAIOptions(
-            inferOpeningCredits=ai_options.inferOpeningCredits,
-            inferEndCredits=ai_options.inferEndCredits,
-            deselectNonChapters=ai_options.deselectNonChapters,
-            keepDeselectedTitles=ai_options.keepDeselectedTitles,
-            usePreferredTitles=ai_options.usePreferredTitles,
-            preferredTitlesSource=ai_options.preferredTitlesSource,
-            additionalInstructions=ai_options.additionalInstructions,
-            provider_id=ai_options.provider_id,
-            model_id=ai_options.model_id,
-        )
-        app_state.pipeline.ai_options = pipeline_ai_options
-
-        # Return the original format
         return ai_options
 
     except HTTPException:
