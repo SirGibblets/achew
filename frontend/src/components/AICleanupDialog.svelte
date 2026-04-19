@@ -36,7 +36,7 @@
     let aiOptions = $state({
         inferOpeningCredits: true,
         inferEndCredits: true,
-        deselectNonChapters: true,
+        deselectNonChapters: false,
         keepDeselectedTitles: false,
         usePreferredTitles: false,
         preferredTitlesSource: "",

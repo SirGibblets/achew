@@ -19,6 +19,7 @@ from .vad_detection_service import VadDetectionService
 from ..core.config import get_app_config
 from ..core.constants import CHAPTER_START_PADDING, BOOK_END_IGNORE_WINDOW
 from .asr_service_options import get_asr_buffer
+from ..models.ai_options import AIOptions
 from ..models.chapter import ChapterData, RealignmentData
 from ..models.enums import RestartStep, Step
 from ..models.progress import ProgressCallback
@@ -44,30 +45,6 @@ class PipelineProgress(BaseModel):
     percent: float = 0.0
     message: str = ""
     details: Dict[str, Any] = Field(default_factory=dict)
-
-
-class AIOptions:
-    def __init__(
-        self,
-        inferOpeningCredits: bool = True,
-        inferEndCredits: bool = True,
-        deselectNonChapters: bool = True,
-        keepDeselectedTitles: bool = False,
-        usePreferredTitles: bool = False,
-        preferredTitlesSource: str = "",
-        additionalInstructions: str = "",
-        provider_id: str = "",
-        model_id: str = "",
-    ):
-        self.inferOpeningCredits = inferOpeningCredits
-        self.inferEndCredits = inferEndCredits
-        self.deselectNonChapters = deselectNonChapters
-        self.keepDeselectedTitles = keepDeselectedTitles
-        self.usePreferredTitles = usePreferredTitles
-        self.preferredTitlesSource = preferredTitlesSource
-        self.additionalInstructions = additionalInstructions
-        self.provider_id = provider_id
-        self.model_id = model_id
 
 
 class ProcessingPipeline:
@@ -1058,6 +1035,8 @@ class ProcessingPipeline:
     async def _detect_cues(self):
         """Detect chapter breaks and generate cues for user selection"""
 
+        self.ai_options.deselectNonChapters = True
+
         # Initialize services
         audio_service = AudioProcessingService(self._scoped_progress_callback(), self._running_processes, process_lock=self._process_lock)
 
@@ -1085,6 +1064,8 @@ class ProcessingPipeline:
     async def _detect_cues_vad(self):
         """Detect potential chapter boundaries using VAD (Voice Activity Detection)."""
         try:
+            self.ai_options.deselectNonChapters = True
+
             self._notify_progress(Step.VAD_PREP, 0, "Preparing files…")
 
             service = VadDetectionService(
