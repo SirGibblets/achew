@@ -1677,6 +1677,7 @@ class ProcessingPipeline:
                     infer_opening_credits=infer_opening_credits,
                     infer_end_credits=infer_end_credits,
                     preferred_titles=preferred_titles,
+                    book=self.book,
                 )
             except Exception as e:
                 logger.error(f"AI cleanup failed, no changes made to chapters: {e}")

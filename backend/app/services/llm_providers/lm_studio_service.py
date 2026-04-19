@@ -3,6 +3,7 @@ import logging
 import time
 import asyncio
 from typing import List, Optional
+from app.models.abs import Book
 from lmstudio import AsyncClient
 
 from .base import AIService, ProviderInfo, ModelInfo, IncrementalJSONParser
@@ -289,6 +290,7 @@ class LMStudioService(AIService):
         infer_opening_credits: bool = True,
         infer_end_credits: bool = True,
         preferred_titles: List[str] = None,
+        book: Optional[Book] = None,
     ) -> List[Optional[str]]:
         """Process transcriptions into chapter titles using LM Studio"""
 
@@ -307,6 +309,7 @@ class LMStudioService(AIService):
             infer_end_credits=infer_end_credits,
             preferred_titles=preferred_titles,
             additional_instructions=additional_instructions,
+            book=book,
         )
 
         # Create JSON input for all chapters
