@@ -22,7 +22,7 @@ requires-dist = ["mlx>=0.11", "numba", "numpy", "tqdm", "more-itertools", "tikto
 
 [[package]]
 name = "achew"
-version = "1.7.0"
+version = "1.7.1"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
