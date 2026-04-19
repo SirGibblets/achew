@@ -18,6 +18,7 @@ from .audio_service import AudioProcessingService, audio_uses_xhe_aac, pick_segm
 from .vad_detection_service import VadDetectionService
 from ..core.config import get_app_config
 from ..core.constants import CHAPTER_START_PADDING, BOOK_END_IGNORE_WINDOW
+from ..core.system_info import get_worker_count
 from .asr_service_options import get_asr_buffer
 from ..models.ai_options import AIOptions
 from ..models.chapter import ChapterData, RealignmentData
@@ -1101,28 +1102,59 @@ class ProcessingPipeline:
             raise ProcessingError(f"VAD detection failed: {str(e)}")
 
     async def _detect_realignment_cues(self, segments: List[Tuple[float, str]]):
-        """Detect chapter cues for realignment"""
+        """Detect chapter cues for realignment by running silence detection on
+        each extracted segment file in parallel, bounded by the worker pool."""
 
-        audio_service = AudioProcessingService(self._scoped_progress_callback(), self._running_processes, process_lock=self._process_lock)
+        audio_service = AudioProcessingService(
+            self._scoped_progress_callback(),
+            self._running_processes,
+            process_lock=self._process_lock,
+        )
 
         self._notify_progress(Step.AUDIO_ANALYSIS, 0, "Analyzing audio…")
 
-        silences: List[Tuple[float, float]] = []
+        total = len(segments)
+        if total == 0:
+            self.detected_cues = []
+            return
 
-        for idx, (segment_start, segment_file) in enumerate(segments):
-            segment_silences = await audio_service.get_silence_boundaries(
-                segment_file,
-                publish_progress=False,
-            )
-            if segment_silences:
-                adjusted_silences = [(start + segment_start, end + segment_start) for start, end in segment_silences]
-                silences.extend(adjusted_silences)
-            progress = (idx + 1) / len(segments) * 100
-            self._notify_progress(Step.AUDIO_ANALYSIS, progress, "Performing focused audio analysis…")
+        semaphore = asyncio.Semaphore(max(1, min(get_worker_count(), total)))
+        completed = 0
+        progress_lock = asyncio.Lock()
 
-        if silences is None or self.step != Step.AUDIO_ANALYSIS:
+        async def analyze_one(
+            segment_start: float, segment_file: str,
+        ) -> List[Tuple[float, float]]:
+            nonlocal completed
+            async with semaphore:
+                segment_silences = await audio_service.get_silence_boundaries(
+                    segment_file,
+                    publish_progress=False,
+                )
+            async with progress_lock:
+                completed += 1
+                pct = completed / total * 100
+                self._notify_progress(
+                    Step.AUDIO_ANALYSIS, pct, "Performing focused audio analysis…",
+                )
+            if not segment_silences:
+                return []
+            return [
+                (s + segment_start, e + segment_start) for s, e in segment_silences
+            ]
+
+        per_segment = await asyncio.gather(
+            *(analyze_one(start, path) for start, path in segments)
+        )
+
+        if self.step != Step.AUDIO_ANALYSIS:
             logger.info("Processing was cancelled during audio analysis, stopping cue detection")
             return
+
+        silences: List[Tuple[float, float]] = []
+        for result in per_segment:
+            silences.extend(result)
+        silences.sort(key=lambda s: s[0])
 
         self.detected_cues = self._silences_to_cues(silences)
 
