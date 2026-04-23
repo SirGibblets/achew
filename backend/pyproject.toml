@@ -20,7 +20,7 @@ dependencies = [
     "httpx>=0.25.2",
     "pydantic>=2.5.0",
     "pydantic-settings>=2.1.0",
-    "openai>=1.3.0",
+    "openai>=2.32.0",
     "numpy>=1.24.4",
     "onnx-asr[cpu,hub]>=0.11.0",
     "mlx-whisper>=0.4.3; sys_platform == 'darwin'",
