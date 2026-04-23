@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from typing import List, Optional
 
 from app.models.abs import Book
@@ -9,6 +10,73 @@ from openai.types.responses import ParsedResponse, EasyInputMessageParam
 from .base import AIService, ProviderInfo, ModelInfo, IncrementalJSONParser, ChapterList
 
 logger = logging.getLogger(__name__)
+
+_EXCLUDED_MODEL_FAMILIES = ("gpt-3.5", "gpt-4", "gpt-5-pro")
+
+_EXCLUDED_MODEL_TOKENS = (
+    "audio",
+    "image",
+    "realtime",
+    "transcribe",
+    "tts",
+    "search",
+    "codex",
+    "instruct",
+    "chat-latest",
+)
+
+_DATED_SNAPSHOT_RE = re.compile(r"-\d{4}-\d{2}-\d{2}$")
+
+
+def _is_supported_openai_model(model_id: str) -> bool:
+    """Whether this is a chat/reasoning model we want to expose."""
+    if not model_id.startswith("gpt-"):
+        return False
+    if _DATED_SNAPSHOT_RE.search(model_id):
+        return False
+    for family in _EXCLUDED_MODEL_FAMILIES:
+        if model_id == family or model_id.startswith(family + "-"):
+            return False
+    segments = model_id.split("-")
+    for token in _EXCLUDED_MODEL_TOKENS:
+        if "-" in token:
+            if token in model_id:
+                return False
+        elif token in segments:
+            return False
+    return True
+
+
+_NON_REASONING_FAMILIES = ("gpt-4o", "gpt-4.1")
+
+
+def _reasoning_effort_for(model_id: str) -> Optional[str]:
+    """Reasoning effort to request for this model, or None if the model
+    does not accept the `reasoning` parameter."""
+    for family in _NON_REASONING_FAMILIES:
+        if model_id == family or model_id.startswith(family + "-"):
+            return None
+    if model_id.endswith("-pro"):
+        return "medium"
+    return "low"
+
+
+_VARIANT_DISPLAY_RANK = {"mini": 0, "": 1, "nano": 2, "pro": 3}
+
+
+def _variant_rank(model_id: str) -> int:
+    for variant in ("mini", "nano", "pro"):
+        if model_id.endswith("-" + variant):
+            return _VARIANT_DISPLAY_RANK[variant]
+    return _VARIANT_DISPLAY_RANK[""]
+
+
+def _family_prefix(model_id: str) -> str:
+    for variant in ("mini", "nano", "pro"):
+        suffix = "-" + variant
+        if model_id.endswith(suffix):
+            return model_id[: -len(suffix)]
+    return model_id
 
 
 class OpenAIService(AIService):
@@ -199,83 +267,37 @@ class OpenAIService(AIService):
 
         try:
             models_response = await client.models.list()
-            gpt_models = []
 
-            # Filter for GPT models that support chat completions
+            allowed_ids: List[str] = []
+            rejected_ids: List[str] = []
             for model in models_response.data:
-                if "gpt" in model.id.lower() and not model.id.startswith("gpt-3.5-turbo-instruct"):
-                    # Map common models to user-friendly info
-                    if model.id == "gpt-4o":
-                        gpt_models.append(
-                            ModelInfo(
-                                id=model.id,
-                                name="GPT-4o",
-                                description="Most capable model, best for complex reasoning",
-                                context_length=128000,
-                                supports_streaming=True,
-                            )
-                        )
-                    elif model.id == "gpt-4o-mini":
-                        gpt_models.append(
-                            ModelInfo(
-                                id=model.id,
-                                name="GPT-4o Mini",
-                                description="Fast and efficient, good for most tasks",
-                                context_length=128000,
-                                supports_streaming=True,
-                            )
-                        )
-                    elif model.id.startswith("gpt-4"):
-                        gpt_models.append(
-                            ModelInfo(
-                                id=model.id,
-                                name=model.id.upper(),
-                                description="Advanced reasoning capabilities",
-                                context_length=8192 if "32k" not in model.id else 32768,
-                                supports_streaming=True,
-                            )
-                        )
-                    elif model.id.startswith("gpt-3.5"):
-                        gpt_models.append(
-                            ModelInfo(
-                                id=model.id,
-                                name=model.id.upper(),
-                                description="Fast and cost-effective",
-                                context_length=4096 if "16k" not in model.id else 16384,
-                                supports_streaming=True,
-                            )
-                        )
+                bucket = allowed_ids if _is_supported_openai_model(model.id) else rejected_ids
+                bucket.append(model.id)
+            allowed_ids.sort()
+            rejected_ids.sort()
 
-            # Sort by preference (gpt-4o first, then others)
-            def sort_key(model):
-                if model.id == "gpt-4o":
-                    return 0
-                elif model.id == "gpt-4o-mini":
-                    return 1
-                elif model.id.startswith("gpt-4"):
-                    return 2
-                else:
-                    return 3
+            logger.debug(f"OpenAI models allowed ({len(allowed_ids)}): {allowed_ids}")
+            logger.debug(f"OpenAI models rejected ({len(rejected_ids)}): {rejected_ids}")
 
-            gpt_models.sort(key=sort_key)
-            return gpt_models
+            allowed_ids.sort(key=_variant_rank)
+            allowed_ids.sort(key=_family_prefix, reverse=True)
+
+            return [
+                ModelInfo(
+                    id=mid,
+                    name=mid,
+                    supports_streaming=True,
+                )
+                for mid in allowed_ids
+            ]
 
         except Exception as e:
             logger.error(f"Failed to get OpenAI models: {e}")
-            # Return default models as fallback
             return [
                 ModelInfo(
-                    id="gpt-4o",
-                    name="GPT-4o",
-                    description="Most capable model (fallback)",
-                    context_length=128000,
-                    supports_streaming=True,
-                ),
-                ModelInfo(
-                    id="gpt-4o-mini",
-                    name="GPT-4o Mini",
-                    description="Fast and efficient (fallback)",
-                    context_length=128000,
+                    id="gpt-5.4-mini",
+                    name="gpt-5.4-mini (fallback)",
+                    description="Fallback",
                     supports_streaming=True,
                 ),
             ]
@@ -329,14 +351,23 @@ class OpenAIService(AIService):
             parser = IncrementalJSONParser()
             total_chapters = len(transcriptions)
 
-            async with client.responses.stream(
-                model=model_id,
-                input=[system_message, user_message],
-                text_format=ChapterList,
-            ) as stream:
+            stream_kwargs = {
+                "model": model_id,
+                "input": [system_message, user_message],
+                "text_format": ChapterList,
+            }
+            effort = _reasoning_effort_for(model_id)
+            if effort is not None:
+                stream_kwargs["reasoning"] = {"effort": effort}
+
+            async with client.responses.stream(**stream_kwargs) as stream:
                 async for event in stream:
                     if event.type == "response.created":
                         self._notify_progress(0, "Awaiting response…")
+                    elif event.type == "response.output_item.added":
+                        item_type = getattr(getattr(event, "item", None), "type", None)
+                        if item_type == "reasoning":
+                            self._notify_progress(0, "Thinking…")
                     elif event.type == "response.output_text.delta":
                         result = parser.feed(event.delta)
                         if result["new_chapters"]:
