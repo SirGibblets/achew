@@ -147,7 +147,7 @@ class EditTimestampOperation(ChapterOperation):
 
         self.old_timestamp = chapter.timestamp
         chapter.timestamp = self.new_timestamp
-        
+
         self.old_realignment = chapter.realignment
         if chapter.realignment:
             new_realignment = RealignmentData(
@@ -157,7 +157,11 @@ class EditTimestampOperation(ChapterOperation):
             )
             chapter.realignment = new_realignment
 
+        pipeline.chapters.sort(key=lambda c: c.timestamp)
+
     def undo(self, pipeline: "ProcessingPipeline"):
         chapter = self.find_chapter(pipeline, self.chapter_id)
         chapter.timestamp = self.old_timestamp
         chapter.realignment = self.old_realignment
+
+        pipeline.chapters.sort(key=lambda c: c.timestamp)
