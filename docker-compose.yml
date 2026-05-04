@@ -25,8 +25,9 @@ services:
       - ./cache:/root/.cache/huggingface/hub
 
       # Temporary audio files used during processing (OPTIONAL)
-      # Requires several GB of space and fast storage (SSD/RAM)
-      # - ./temp:/tmp/achew
+      # If you have a lot of available RAM (8GB+), mapping this to shared memory
+      # can reduce disk thrashing and improve the performance of some processes:
+      # - /dev/shm/achew:/tmp/achew
 
     # Optional: Specify the number of parallel audio workers. If unset,
     # Achew automatically chooses based on CPU count and available memory.

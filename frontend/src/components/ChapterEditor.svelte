@@ -64,7 +64,6 @@
     let editingTimestampId = $state(null);
     let timestampInputValue = $state("");
     let timestampValidationError = $state(null);
-    let showEditButton = $state(null);
 
     // Store textarea references for auto-resizing
     let textareaRefs = new Map();
@@ -83,7 +82,7 @@
     );
 
     let showTranscriptions = $derived(
-        hasTranscriptions && !editorSettings.hide_transcriptions && !hasAlignmentData
+        hasTranscriptions && !editorSettings.hide_transcriptions
     );
 
     // Load chapters and AI options when component mounts
@@ -1254,7 +1253,7 @@
 />
 
 <!-- Shift Timestamps Dialog -->
-<ShiftTimestampsDialog bind:isOpen={showShiftTimestampsDialog} />
+<ShiftTimestampsDialog bind:isOpen={showShiftTimestampsDialog} editorSettings={editorSettings} />
 
 <!-- Apply Titles Dialog -->
 <ApplyTitlesDialog bind:isOpen={showApplyTitlesDialog} />

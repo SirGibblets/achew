@@ -14,6 +14,7 @@
 
     let {
         isOpen = $bindable(false),
+        editorSettings = { show_formatted_time: true },
     } = $props();
 
     const dispatch = createEventDispatcher();
@@ -22,6 +23,7 @@
     let offsetValue = $state("0");
     let driftEnabled = $state(false);
     let driftValue = $state("0");
+    let driftMode = $state("chapter");
     let loading = $state(false);
     let error = $state(null);
 
@@ -61,13 +63,18 @@
     );
 
     function computeNewTimestamps() {
-        return affectedChapters.map(ch => {
+        return affectedChapters.map((ch, i) => {
             let newTs;
             if (driftEnabled && affectedChapters.length >= 2) {
-                const firstTs = firstAffected.timestamp;
-                const lastTs = lastAffected.timestamp;
-                const range = lastTs - firstTs;
-                const t = range > 0 ? (ch.timestamp - firstTs) / range : 0;
+                let t;
+                if (driftMode === "time") {
+                    const firstTs = firstAffected.timestamp;
+                    const lastTs = lastAffected.timestamp;
+                    const range = lastTs - firstTs;
+                    t = range > 0 ? (ch.timestamp - firstTs) / range : 0;
+                } else {
+                    t = i / (affectedChapters.length - 1);
+                }
                 newTs = ch.timestamp + offset + t * (drift - offset);
             } else {
                 newTs = ch.timestamp + offset;
@@ -90,6 +97,10 @@
     });
 
     function formatTimestamp(seconds) {
+        if (!editorSettings.show_formatted_time) {
+            return seconds.toFixed(2);
+        }
+
         const sign = seconds < 0 ? "-" : "";
         const abs = Math.abs(seconds);
         const hours = Math.floor(abs / 3600);
@@ -276,6 +287,7 @@
             offsetValue = "0";
             driftEnabled = false;
             driftValue = "0";
+            driftMode = "chapter";
             error = null;
             loading = false;
         }
@@ -380,39 +392,63 @@
                     <!-- Drift option -->
                     {#if showDriftOption}
                         <div class="input-group drift-group">
-                            <label class="checkbox-label">
-                                <input type="checkbox" bind:checked={driftEnabled}/>
-                                End Offset
-                                <div class="help-icon" data-tooltip="The offset applied to the last affected chapter. The offset gradually changes from the start value to this value across all affected chapters. Useful when timing drift accumulates over the course of the book.">
-                                    <CircleHelp size="14"/>
+                            <div class="drift-row">
+                                <div class="drift-left">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" bind:checked={driftEnabled}/>
+                                        End Offset
+                                        <div class="help-icon" data-tooltip="The offset applied to the last affected chapter. The offset gradually changes from the start value to this value across all affected chapters. Useful when timing drift accumulates over the course of the book.">
+                                            <CircleHelp size="14"/>
+                                        </div>
+                                    </label>
+                                    {#if driftEnabled}
+                                        <div class="offset-input-row">
+                                            <button class="adj-btn" onclick={() => adjustDrift(-1)} title="Decrease by 1 second">
+                                                <Minus size="16"/>
+                                            </button>
+                                            <input
+                                                type="text"
+                                                inputmode="decimal"
+                                                class="offset-input"
+                                                bind:value={driftValue}
+                                                onkeydown={handleDriftKeydown}
+                                                oninput={handleDriftInput}
+                                            />
+                                            <button class="adj-btn" onclick={() => adjustDrift(1)} title="Increase by 1 second">
+                                                <Plus size="16"/>
+                                            </button>
+                                            <button class="play-btn" onclick={togglePlayDrift} title="Preview at shifted position of last affected chapter" disabled={!lastAffected}>
+                                                {#if $isPlaying && $currentSegmentId === 'shift-preview-last'}
+                                                    <Pause size="16"/>
+                                                {:else}
+                                                    <Play size="16"/>
+                                                {/if}
+                                            </button>
+                                        </div>
+                                    {/if}
                                 </div>
-                            </label>
-                            {#if driftEnabled}
-                                <div class="offset-input-row">
-                                    <button class="adj-btn" onclick={() => adjustDrift(-1)} title="Decrease by 1 second">
-                                        <Minus size="16"/>
-                                    </button>
-                                    <input
-                                        type="text"
-                                        inputmode="decimal"
-                                        class="offset-input"
-                                        bind:value={driftValue}
-                                        onkeydown={handleDriftKeydown}
-        
-                                        oninput={handleDriftInput}
-                                    />
-                                    <button class="adj-btn" onclick={() => adjustDrift(1)} title="Increase by 1 second">
-                                        <Plus size="16"/>
-                                    </button>
-                                    <button class="play-btn" onclick={togglePlayDrift} title="Preview at shifted position of last affected chapter" disabled={!lastAffected}>
-                                        {#if $isPlaying && $currentSegmentId === 'shift-preview-last'}
-                                            <Pause size="16"/>
-                                        {:else}
-                                            <Play size="16"/>
-                                        {/if}
-                                    </button>
-                                </div>
-                            {/if}
+                                {#if driftEnabled}
+                                    <div class="distribute-by-group">
+                                        <span class="distribute-by-label">Distribute by</span>
+                                        <div class="radio-options">
+                                            <label class="radio-label">
+                                                <input type="radio" bind:group={driftMode} value="chapter"/>
+                                                Chapter
+                                                <div class="help-icon" data-tooltip="Drift is distributed evenly across the chapter list. Useful when each chapter contributes a fixed offset (e.g. silence added at each chapter start).">
+                                                    <CircleHelp size="14"/>
+                                                </div>
+                                            </label>
+                                            <label class="radio-label">
+                                                <input type="radio" bind:group={driftMode} value="time"/>
+                                                Time
+                                                <div class="help-icon" data-tooltip="Drift is distributed proportionally to each chapter's timestamp. Useful when offset accumulates over the audio duration (e.g. clock drift, encoding rate mismatch).">
+                                                    <CircleHelp size="14"/>
+                                                </div>
+                                            </label>
+                                        </div>
+                                    </div>
+                                {/if}
+                            </div>
                         </div>
                     {/if}
 
@@ -672,6 +708,32 @@
         border-top: 1px solid var(--border-color);
     }
 
+    .drift-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+
+    .drift-left {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .distribute-by-group {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        margin-right: 0.25rem;
+    }
+
+    .distribute-by-label {
+        font-weight: 600;
+        font-size: 0.9rem;
+        color: var(--text-primary);
+        white-space: nowrap;
+        padding-top: 0.2rem;
+    }
+
     /* Preview list */
     .preview-header {
         display: flex;
@@ -690,7 +752,7 @@
     }
 
     .preview-section {
-        margin-top: 0.5rem;
+        margin-top: 1.5rem;
     }
 
     .preview-list {

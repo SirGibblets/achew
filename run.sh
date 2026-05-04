@@ -110,16 +110,9 @@ log_info ""
 # Check if required dependencies are installed
 log_info "Checking dependencies..."
 
-# Check Node.js
-if ! command -v node &> /dev/null; then
-    log_error "Node.js is not installed. Please install Node.js first."
-    log_error "For installation instructions, visit: https://nodejs.org/en/download/"
-    exit 1
-fi
-
 # Check npm
 if ! command -v npm &> /dev/null; then
-    log_error "npm is not installed. Please install npm first."
+    log_error "npm is not installed. Please install Node.js (which includes npm) first."
     log_error "For installation instructions, visit: https://nodejs.org/en/download/"
     exit 1
 fi

@@ -68,18 +68,10 @@ echo.
 REM Check if required dependencies are installed
 echo Checking dependencies...
 
-REM Check Node.js
-where node >nul 2>&1
-if errorlevel 1 (
-    echo Node.js is not installed. Please install Node.js first.
-    echo For installation instructions, visit: https://nodejs.org/en/download/
-    exit /b 1
-)
-
 REM Check npm
 where npm >nul 2>&1
 if errorlevel 1 (
-    echo npm is not installed. Please install npm first.
+    echo npm is not installed. Please install Node.js ^(which includes npm^) first.
     echo For installation instructions, visit: https://nodejs.org/en/download/
     exit /b 1
 )

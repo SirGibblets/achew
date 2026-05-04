@@ -29,6 +29,7 @@ class AppState:
     def __init__(self):
         if not self._initialized:
             self._app_step: Optional[Step] = None
+            self._welcome_dismissed: bool = False
             self.pipeline = None
 
             # WebSocket connections
@@ -60,6 +61,8 @@ class AppState:
 
         config_status = get_configuration_status()
         if config_status["needs_abs_setup"]:
+            if not self._welcome_dismissed:
+                return Step.WELCOME
             return Step.ABS_SETUP
 
         if self._app_step:

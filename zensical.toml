@@ -1,0 +1,166 @@
+[project]
+site_name = "Achew Docs"
+site_description = "Achew user documentation"
+site_url = "https://achew.readthedocs.io/"
+repo_url = "https://github.com/SirGibblets/achew"
+repo_name = "SirGibblets/achew"
+edit_uri = "edit/main/docs/"
+dev_addr = "localhost:3000"
+
+extra_css = ["stylesheets/custom.css"]
+
+[project.theme]
+name = "material"
+logo = "img/logo.svg"
+favicon = "img/favicon.svg"
+features = [
+  "navigation.indexes",
+  "navigation.footer",
+  "toc.follow",
+  "content.code.copy",
+  "content.footnote.tooltips",
+  "content.tabs.link",
+  "search.suggest",
+  "search.highlight",
+  "search.share",
+]
+
+[project.theme.icon]
+repo = "fontawesome/brands/github"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+primary = "custom"
+accent = "custom"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+primary = "custom"
+accent = "custom"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to light mode"
+
+[project.markdown_extensions.admonition]
+[project.markdown_extensions.attr_list]
+[project.markdown_extensions.footnotes]
+[project.markdown_extensions.md_in_html]
+[project.markdown_extensions.tables]
+
+[project.markdown_extensions.toc]
+permalink = true
+
+[project.markdown_extensions.pymdownx.blocks.caption]
+[project.markdown_extensions.pymdownx.details]
+[project.markdown_extensions.pymdownx.superfences]
+
+[project.markdown_extensions.pymdownx.tabbed]
+alternate_style = true
+
+[project.markdown_extensions.pymdownx.snippets]
+[project.markdown_extensions.pymdownx.keys]
+[project.markdown_extensions.pymdownx.tilde]
+
+[project.markdown_extensions.pymdownx.highlight]
+anchor_linenums = true
+
+[project.markdown_extensions.pymdownx.inlinehilite]
+
+[project.markdown_extensions.pymdownx.emoji]
+emoji_index = "zensical.extensions.emoji.twemoji"
+emoji_generator = "zensical.extensions.emoji.to_svg"
+
+[project.markdown_extensions.zensical.extensions.glightbox]
+
+[project.extra]
+generator = false
+
+[project.extra.version]
+provider = "mike"
+default = "latest"
+
+[[project.nav]]
+"Introduction" = "index.md"
+
+[[project.nav]]
+"Installation" = [
+  "installation/index.md",
+  { "Install with Docker" = "installation/installation-docker.md" },
+  { "Install on Linux/macOS" = "installation/installation-linux-macos.md" },
+  { "Install on Windows" = "installation/installation-windows.md" },
+  { "First Run" = "installation/first-run.md" },
+  { "Upgrading" = "installation/upgrading.md" },
+  { "Storage and Backup" = "installation/storage-and-backup.md" },
+  { "Reverse Proxy" = "installation/reverse-proxy.md" },
+]
+
+[[project.nav]]
+"Getting Started" = [
+  "getting-started/index.md",
+  { "Achew Basics" = "getting-started/achew-basics.md" },
+  { "Chapters vs Cues" = "getting-started/chapters-and-cues.md" },
+  { "Chapter Sources" = "getting-started/chapter-sources.md" },
+  { "Finding a Book" = "getting-started/finding-a-book.md" },
+  { "Choosing a Workflow" = "getting-started/workflows-overview.md" },
+  { "Set up LLM Providers" = "getting-started/setup-llm-providers.md" },
+]
+
+[[project.nav]]
+"Workflows" = [
+  "workflows/index.md",
+  { "Smart Detect" = "workflows/smart-detect.md" },
+  { "Realign Chapters" = "workflows/realign-chapters.md" },
+  { "Regenerate Titles" = "workflows/regenerate-titles.md" },
+  { "Quick Edit" = "workflows/quick-edit.md" },
+]
+
+[[project.nav]]
+"Chapter Editor" = [
+  "editor/index.md",
+  { "Overview" = "editor/overview.md" },
+  { "Adding Chapters" = "editor/add-chapter-dialog.md" },
+  { "Apply Titles" = "editor/apply-titles.md" },
+  { "Shift Timestamps" = "editor/shift-timestamps.md" },
+  { "Undo and Redo" = "editor/undo-redo.md" },
+  { "Keyboard Shortcuts" = "editor/keyboard-shortcuts.md" },
+  { "AI Cleanup" = "editor/ai-cleanup.md" },
+  { "Review and Submit" = "editor/review-submit-export.md" },
+]
+
+[[project.nav]]
+"Examples" = [
+  "examples/index.md",
+  { "Start from scratch with Smart Detect" = "examples/start-from-scratch-with-smart-detect.md" },
+  { "Create titles from audio files" = "examples/create-titles-from-audio-files.md" },
+  { "Fill in a few missing chapters" = "examples/fill-missing-chapters.md" },
+  { "Realign chapters for a different revision" = "examples/realign-chapters-for-a-different-revision.md" },
+  { "Improve titles with AI Cleanup" = "examples/improve-titles-with-ai-cleanup.md" },
+  { "Audit your library with Chapter Search" = "examples/audit-library-with-chapter-search.md" },
+]
+
+[[project.nav]]
+"Reference" = [
+  "reference/index.md",
+  { "Transcription" = "reference/transcription.md" },
+  { "Supported Formats" = "reference/supported-formats.md" },
+  { "Supported Languages" = "reference/supported-languages.md" },
+  { "Privacy and Data" = "reference/privacy-and-data.md" },
+  { "Glossary" = "reference/glossary.md" },
+]
+
+[[project.nav]]
+"Troubleshooting" = [
+  "troubleshooting/index.md",
+  { "Common Issues" = "troubleshooting/common-issues.md" },
+  { "Performance Tuning" = "troubleshooting/performance-tuning.md" },
+  { "Logs and Support" = "troubleshooting/logs-and-support.md" },
+]
+
+[[project.nav]]
+"FAQ" = "faq.md"
+
+[[project.nav]]
+"Changelog" = "changelog.md"

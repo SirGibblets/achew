@@ -11,6 +11,9 @@ __pycache__/
 # Node
 node_modules/
 
+# Zensical Docs
+site/
+
 # OS Files
 .DS_Store
 .Spotlight-V100

@@ -479,6 +479,7 @@
         flex: 1;
         min-width: 0;
         margin: 0;
+        padding: 0.1rem 0.3rem 0.1rem 0.3rem;
         font-size: 0.6875rem;
         font-family: inherit;
         color: var(--text-secondary);

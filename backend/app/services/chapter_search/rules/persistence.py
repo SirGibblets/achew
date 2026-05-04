@@ -1,4 +1,4 @@
-"""Persist/load the chapter search rule set as a JSON file."""
+"""Persist/load the chapter search ruleset as a JSON file."""
 
 import json
 import logging
@@ -16,7 +16,7 @@ def _get_ruleset_json_path() -> Path:
 
 
 def load_ruleset() -> RuleSet:
-    """Load the root rule set from persistent storage, creating defaults if absent."""
+    """Load the root ruleset from persistent storage, creating defaults if absent."""
     try:
         path = _get_ruleset_json_path()
         if path.exists():
@@ -29,7 +29,7 @@ def load_ruleset() -> RuleSet:
 
 
 def save_ruleset(ruleset: RuleSet) -> bool:
-    """Persist the root rule set to a JSON file."""
+    """Persist the root ruleset to a JSON file."""
     try:
         path = _get_ruleset_json_path()
         path.parent.mkdir(parents=True, exist_ok=True)

@@ -355,7 +355,7 @@
                                 </select>
                             </div>
                             <div class="field-col">
-                                <label class="field-label" for="search-title">Title or ASIN</label>
+                                <label class="field-label" for="search-title">Title</label>
                                 <input
                                     id="search-title"
                                     class="field-input"

@@ -56,8 +56,8 @@
                 <p>
                     Full chapter sources contain both a timestamp and a title for each chapter.
                     They can be used to start the <em>Chapter Realignment</em>, <em>Regenerate Titles</em>,
-                    and <em>Quick Edit</em> workflows, and can be used for cue comparison when selecting
-                    initial chapters in the <em>Smart Detect</em> workflow. 
+                    and <em>Quick Edit</em> workflows, and can be compared against detected cues when
+                    selecting initial chapters in the <em>Smart Detect</em> workflow.
                 </p>
                 <p>They can also be used anywhere that title-only sources are used.</p>
 
@@ -133,7 +133,7 @@
                         extension are automatically detected and added.
                     </li>
                     <li>
-                        <strong>Custom List</strong> — a user-defined list of chapter titles. An empty list is automatically
+                        <strong>Custom Titles</strong> — a user-defined list of chapter titles. An empty list is automatically
                         added, and can be edited directly in Achew.
                     </li>
                 </ul>

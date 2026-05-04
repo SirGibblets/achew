@@ -55,16 +55,16 @@
                 </li>
             </ol>
 
-            <h3>Rules and rule sets</h3>
+            <h3>Rules and Rulesets</h3>
             <p>
                 <strong>Rules</strong> are individual checks against a book's chapters
                 (e.g., "chapter count is less than 3"). A rule requires a target
                 ("Chapter count") and one or more conditions ("is less than 3").
             </p>
             <p>
-                <strong>Rule sets</strong> allow you to group rules together and
+                <strong>Rulesets</strong> allow you to group rules together and
                 can either <em>Match Any</em>
-                or <em>Match All</em> of the grouped rules. You can nest rule sets
+                or <em>Match All</em> of the grouped rules. You can nest rulesets
                 inside each other for arbitrarily complex conditions. Rules and rule
                 sets can be individually enabled or disabled without deleting them.
             </p>
@@ -73,7 +73,7 @@
             <p>
                 Conditions that are phrased as <em>"similar"</em> or
                 <em>"similar to"</em> use fuzzy text comparison and are always case-insensitive.
-                They match text that is significantly similar to the provided value
+                They match text that is substantially similar to the provided value
                 and can be useful for finding chapters that closely resemble a phrase
                 or book title.
             </p>
