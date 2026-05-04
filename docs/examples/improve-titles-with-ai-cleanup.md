@@ -12,7 +12,7 @@ If you're already in the editor after another workflow, you're set. Otherwise:
 
 ## Open AI Cleanup
 
-1. Select the chapters you want to clean up. The top checkbox selects all of them.
+1. Select the chapters you want to clean up. The top checkbox selects all of them, and <kbd>Shift</kbd>-clicking a checkbox toggles every chapter in the range between it and the previous click.
 2. Click the :material-creation:{ .icon-token .inverted-primary } **Clean Up Selected** button in the Action Bar.
 
 ## Pick a provider and model

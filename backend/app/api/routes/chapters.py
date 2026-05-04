@@ -1,6 +1,6 @@
 import logging
 import asyncio
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import csv
 import json
 import io
@@ -45,15 +45,12 @@ class UpdateTimestampRequest(BaseModel):
     timestamp: float
 
 
-class ToggleSelectionRequest(BaseModel):
+class SetSelectionRequest(BaseModel):
     selected: bool
+    chapter_ids: Optional[List[str]] = None
 
 
 class UndoRedoRequest(BaseModel):
-    pass
-
-
-class BatchOperationRequest(BaseModel):
     pass
 
 
@@ -235,37 +232,49 @@ async def update_chapter_timestamp(chapter_id: str, request: UpdateTimestampRequ
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.put("/chapters/{chapter_id}/select")
-async def toggle_chapter_selection(chapter_id: str, request: ToggleSelectionRequest):
-    """Toggle chapter selection status"""
+@router.put("/chapters/selection", response_model=BatchOperationResponse)
+async def set_chapter_selection(request: SetSelectionRequest):
+    """Set selection state for one, many, or all chapters.
+
+    If chapter_ids is None, applies to every chapter; otherwise only the listed ids.
+    """
     try:
         app_state = get_app_state()
 
         if not app_state.pipeline:
             raise HTTPException(status_code=404, detail="Pipeline not found")
 
-        # Find the chapter
-        chapter = None
-        for ch in app_state.pipeline.chapters:
-            if ch.id == chapter_id:
-                chapter = ch
-                break
+        if request.chapter_ids is None:
+            targets = list(app_state.pipeline.chapters)
+        else:
+            ids = set(request.chapter_ids)
+            targets = [ch for ch in app_state.pipeline.chapters if ch.id in ids]
+            if len(targets) != len(ids):
+                missing = ids - {ch.id for ch in targets}
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Chapter(s) not found: {sorted(missing)}",
+                )
 
-        if not chapter:
-            raise HTTPException(status_code=404, detail="Chapter not found")
+        affected_count = 0
+        for chapter in targets:
+            if chapter.selected != request.selected:
+                chapter.selected = request.selected
+                affected_count += 1
 
-        # Update selection
-        chapter.selected = request.selected
+        if affected_count > 0:
+            await app_state.broadcast_chapter_update()
 
-        # Broadcast updates
-        await app_state.broadcast_chapter_update()
-
-        return {"message": "Chapter selection updated"}
+        verb = "Selected" if request.selected else "Deselected"
+        return BatchOperationResponse(
+            message=f"{verb} {affected_count} chapters",
+            affected_chapters=affected_count,
+        )
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to toggle chapter selection: {e}")
+        logger.error(f"Failed to set chapter selection: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -408,70 +417,6 @@ async def apply_titles(request: ApplyTitlesRequest):
         raise
     except Exception as e:
         logger.error(f"Failed to apply titles: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/chapters/select-all", response_model=BatchOperationResponse)
-async def select_all(request: BatchOperationRequest):
-    """Select all chapters"""
-    try:
-        app_state = get_app_state()
-
-        if not app_state.pipeline:
-            raise HTTPException(status_code=404, detail="Pipeline not found")
-
-        affected_count = 0
-
-        for chapter in app_state.pipeline.chapters:
-            if not chapter.selected:
-                chapter.selected = True
-                affected_count += 1
-
-        if affected_count > 0:
-            # Broadcast updates
-            await app_state.broadcast_chapter_update()
-
-        return BatchOperationResponse(
-            message=f"Selected {affected_count} chapters",
-            affected_chapters=affected_count,
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to select all chapters: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/chapters/deselect-all", response_model=BatchOperationResponse)
-async def deselect_all(request: BatchOperationRequest):
-    """Deselect all chapters"""
-    try:
-        app_state = get_app_state()
-
-        if not app_state.pipeline:
-            raise HTTPException(status_code=404, detail="Pipeline not found")
-
-        affected_count = 0
-
-        for chapter in app_state.pipeline.chapters:
-            if chapter.selected:
-                chapter.selected = False
-                affected_count += 1
-
-        if affected_count > 0:
-            # Broadcast updates
-            await app_state.broadcast_chapter_update()
-
-        return BatchOperationResponse(
-            message=f"Deselected {affected_count} chapters",
-            affected_chapters=affected_count,
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to deselect all chapters: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -16,7 +16,7 @@ The editor shows a list of chapters and an Action Bar at the bottom.
 
 | # | Component | What it does |
 |--:|---|---|
-| 1 | :material-checkbox-marked:{ .icon-token .primary } Checkbox | Selects or deselects the chapter. The checkbox at the very top can be used to select/deselect all chapters. |
+| 1 | :material-checkbox-marked:{ .icon-token .primary } Checkbox | Selects or deselects the chapter. <kbd>Shift</kbd>-click another checkbox to apply the same selection state to every chapter in the range between the two clicks. The checkbox at the very top can be used to select/deselect all chapters. |
 | 2 | Timestamp | The chapter timestamp. Clicking on the timestamp allows you to edit it. Toggle between formatted timestamps and raw seconds in the [editor settings](#editor-settings). |
 | 3 | Offset | Shown when using the [Realignment](../workflows/realign-chapters.md) workflow. Shows the difference between the original source timestamp and the realigned one. A warning icon :lucide-triangle-alert:{ .icon-token .warning } appears on low-confidence or guessed alignments; give those a listen to verify accuracy before submitting your chapters. |
 | 4 | Transcription | The raw transcription for the chapter. Non-editable, serves as a reference for writing the title. The transcription column can be hidden via the [editor settings](#editor-settings). |

@@ -65,6 +65,9 @@
     let timestampInputValue = $state("");
     let timestampValidationError = $state(null);
 
+    // Shift-click range selection
+    let lastClickedChapterId = $state(null);
+
     // Store textarea references for auto-resizing
     let textareaRefs = new Map();
 
@@ -394,12 +397,37 @@
         }
     }
 
-    async function toggleChapterSelection(chapterId, selected) {
+    async function setChapterSelection(chapterIds, selected) {
         try {
-            await api.chapters.toggleSelection(chapterId, selected);
+            await api.chapters.setSelection({chapterIds, selected});
         } catch (err) {
             error = handleApiError(err);
         }
+    }
+
+    async function handleSelectionCheckboxClick(chapterId, event) {
+        event.preventDefault();
+
+        const visible = $chapters.filter(ch => ch.id !== undefined && ch.id !== null);
+        const idx = visible.findIndex(ch => ch.id === chapterId);
+        if (idx === -1) return;
+
+        const newValue = !visible[idx].selected;
+
+        if (event.shiftKey && lastClickedChapterId !== null) {
+            const lastIdx = visible.findIndex(ch => ch.id === lastClickedChapterId);
+            if (lastIdx !== -1 && lastIdx !== idx) {
+                const lo = Math.min(lastIdx, idx);
+                const hi = Math.max(lastIdx, idx);
+                const ids = visible.slice(lo, hi + 1).map(ch => ch.id);
+                lastClickedChapterId = chapterId;
+                await setChapterSelection(ids, newValue);
+                return;
+            }
+        }
+
+        lastClickedChapterId = chapterId;
+        await setChapterSelection([chapterId], newValue);
     }
 
     async function deleteChapter(chapterId) {
@@ -828,9 +856,7 @@
                                 indeterminate={$selectionStats.selected > 0 &&
                   $selectionStats.selected < $selectionStats.total}
                                 onchange={(e) =>
-                  e.target.checked
-                    ? api.batch.selectAll()
-                    : api.batch.deselectAll()}
+                  api.chapters.setSelection({selected: e.target.checked})}
                         />
                     </th>
                     <th width="1" class="time-header">
@@ -862,8 +888,7 @@
                             <input
                                     type="checkbox"
                                     checked={chapter.selected}
-                                    onchange={(e) =>
-                    toggleChapterSelection(chapter.id, e.target.checked)}
+                                    onclick={(e) => handleSelectionCheckboxClick(chapter.id, e)}
                             />
                             {#if $transcriptionStatuses[chapter.id]}
                                 <div class="transcribing-overlay">
