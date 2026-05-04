@@ -1,7 +1,7 @@
 # Upgrading Achew
 
-![Upgrade Available](/img/update-available-dark.webp#only-dark){ width="140"; align=left }
-![Upgrade Available](/img/update-available-light.webp#only-light){ width="140"; align=left }
+![Upgrade Available](../img/update-available-dark.webp#only-dark){ width="140"; align=left }
+![Upgrade Available](../img/update-available-light.webp#only-light){ width="140"; align=left }
 
 When a new version of Achew is available, a small download icon will be displayed next to the currently-installed version in the bottom right. Clicking the icon will take you to the Github release page for the new version.
 
