@@ -8,11 +8,11 @@
   <h3><a href="https://achew.readthedocs.io"><strong>Explore the docs »</strong></a></h3>
 
   <p>
-    <a href="https://achew.readthedocs.io/en/latest/#demo-video">View Demo</a>
+    <a href="https://achew.readthedocs.io/latest/#demo-video">View Demo</a>
     &middot;
-    <a href="https://achew.readthedocs.io/en/latest/troubleshooting/logs-and-support/#filing-a-bug-report">Report Bug</a>
+    <a href="https://achew.readthedocs.io/latest/troubleshooting/logs-and-support/#filing-a-bug-report">Report Bug</a>
     &middot;
-    <a href="https://achew.readthedocs.io/en/latest/troubleshooting/logs-and-support/#requesting-a-feature">Request Feature</a>
+    <a href="https://achew.readthedocs.io/latest/troubleshooting/logs-and-support/#requesting-a-feature">Request Feature</a>
   </p>
 
 </div>
@@ -48,16 +48,16 @@
 
 | Platform | Guide |
 | --- | --- |
-| Docker | [Install with Docker](https://achew.readthedocs.io/en/latest/getting-started/installation-docker/) |
-| Linux / macOS | [Install on Linux or macOS](https://achew.readthedocs.io/en/latest/getting-started/installation-linux-macos/) |
-| Windows | [Install on Windows](https://achew.readthedocs.io/en/latest/getting-started/installation-windows/) |
+| Docker | [Install with Docker](https://achew.readthedocs.io/latest/getting-started/installation-docker/) |
+| Linux / macOS | [Install on Linux or macOS](https://achew.readthedocs.io/latest/getting-started/installation-linux-macos/) |
+| Windows | [Install on Windows](https://achew.readthedocs.io/latest/getting-started/installation-windows/) |
 
-After installation, follow the [first-run walkthrough](https://achew.readthedocs.io/en/latest/getting-started/first-run/) to connect Audiobookshelf.
+After installation, follow the [first-run walkthrough](https://achew.readthedocs.io/latest/getting-started/first-run/) to connect Audiobookshelf.
 
 ## Links
 
 - [Full documentation](https://achew.readthedocs.io)
-- [FAQ](https://achew.readthedocs.io/en/latest/faq/)
-- [Troubleshooting](https://achew.readthedocs.io/en/latest/troubleshooting/)
-- [Report an issue](https://achew.readthedocs.io/en/latest/troubleshooting/logs-and-support/#filing-a-bug-report)
-- [Request a feature](https://achew.readthedocs.io/en/latest/troubleshooting/logs-and-support/#requesting-a-feature)
+- [FAQ](https://achew.readthedocs.io/latest/faq/)
+- [Troubleshooting](https://achew.readthedocs.io/latest/troubleshooting/)
+- [Report an issue](https://achew.readthedocs.io/latest/troubleshooting/logs-and-support/#filing-a-bug-report)
+- [Request a feature](https://achew.readthedocs.io/latest/troubleshooting/logs-and-support/#requesting-a-feature)
