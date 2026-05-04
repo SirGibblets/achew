@@ -125,15 +125,15 @@ You can edit a list of custom titles directly in Achew:
 
 New sources can be manually added using the **Add Chapter Source** dialog. This dialog can be accessed from [Workflow Selection](./workflows-overview.md), the [Apply Titles](../editor/apply-titles.md) dialog, or the [AI Cleanup](../editor/ai-cleanup.md) dialog: 
 
-![Add Chapter Source button](/img/add-source-button-light.webp#only-light)
-![Add Chapter Source button](/img/add-source-button-dark.webp#only-dark)
+![Add Chapter Source button](../img/add-source-button-light.webp#only-light)
+![Add Chapter Source button](../img/add-source-button-dark.webp#only-dark)
 
 Two tabs are available: **Upload File** and **Audnexus Search**.
 
 ### Upload File 
 
-![Upload File tab](/img/add-source-upload-light.webp#only-light){ width="480" }
-![Upload File tab](/img/add-source-upload-dark.webp#only-dark){ width="480" }
+![Upload File tab](../img/add-source-upload-light.webp#only-light){ width="480" }
+![Upload File tab](../img/add-source-upload-dark.webp#only-dark){ width="480" }
 
 In the **Upload File** tab, drop a file into the upload zone or click **browse** to pick one. 
 
@@ -163,8 +163,8 @@ Supported Formats:
 
 In the **Audnexus Search** tab, you can search the [Audnexus](https://audnex.us){:target="_blank"} database by book title and/or author. Changing the **provider** allows you to change which Audible storefront region is searched.
 
-![Audnexus Search tab](/img/add-source-search-light.webp#only-light){ width="480"; .center}
-![Audnexus Search tab](/img/add-source-search-dark.webp#only-dark){ width="480"; .center}
+![Audnexus Search tab](../img/add-source-search-light.webp#only-light){ width="480"; .center}
+![Audnexus Search tab](../img/add-source-search-dark.webp#only-dark){ width="480"; .center}
 
 Each result displays relevant information that can help you decide on a good match. Use the **Eye** button in the top right of each result to preview its chapter list, and click the **Add** button to add it as a chapter source.
 

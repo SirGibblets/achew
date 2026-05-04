@@ -33,8 +33,8 @@ See the relevant provider card below for setup steps.
 ??? example "OpenAI"
     To create a key, go to <https://platform.openai.com/api-keys>{:target="_blank"}. At the bottom, click **Create new secret key**.
     
-    ![OpenAI New Key Dialog](/img/openai-new-key-light.webp#only-light){ width="360"; .center }
-    ![OpenAI New Key Dialog](/img/openai-new-key-dark.webp#only-dark){ width="360"; .center }
+    ![OpenAI New Key Dialog](../img/openai-new-key-light.webp#only-light){ width="360"; .center }
+    ![OpenAI New Key Dialog](../img/openai-new-key-dark.webp#only-dark){ width="360"; .center }
 
     In the dialog, type a name for the key (e.g. "Achew"), set permissions to `All`, then click **Create Secret Key**. After a moment it will show you the newly-created key. *Make sure to copy the key at this point*, as you won't be able to view it again.
     
@@ -44,8 +44,8 @@ See the relevant provider card below for setup steps.
 ??? example "Claude (Anthropic)"
     To create a key, go to <https://console.anthropic.com/settings/keys>{:target="_blank"}. In the top right, click **Create key**.
     
-    ![Claude New Key Dialog](/img/claude-new-key-light.webp#only-light){ width="360"; .center }
-    ![Claude New Key Dialog](/img/claude-new-key-dark.webp#only-dark){ width="360"; .center }
+    ![Claude New Key Dialog](../img/claude-new-key-light.webp#only-light){ width="360"; .center }
+    ![Claude New Key Dialog](../img/claude-new-key-dark.webp#only-dark){ width="360"; .center }
     
     In the dialog, select a workspace (`Default` is fine), type a name for the key (e.g. "achew") and click **Add**. After a moment it will show you the newly-created key. *Make sure to copy the key at this point*, as you won't be able to view it again.
 
@@ -55,8 +55,8 @@ See the relevant provider card below for setup steps.
 ??? example "Gemini (Google)"
     To create a key, go to <https://aistudio.google.com/apikey>{:target="_blank"}. In the top right, click **Create API key**.
     
-    ![Gemini New Key Dialog](/img/gemini-new-key-light.webp#only-light){ width="420"; .center }
-    ![Gemini New Key Dialog](/img/gemini-new-key-dark.webp#only-dark){ width="420"; .center }
+    ![Gemini New Key Dialog](../img/gemini-new-key-light.webp#only-light){ width="420"; .center }
+    ![Gemini New Key Dialog](../img/gemini-new-key-dark.webp#only-dark){ width="420"; .center }
     
     In the dialog, type a name for the key (e.g. "Achew"), select a project (`Default Gemini Project` is fine), then click **Create key**. After a moment the newly-created key will be displayed; copy it.
 
@@ -66,7 +66,7 @@ See the relevant provider card below for setup steps.
 ??? example "OpenRouter"
     One OpenRouter key fronts dozens of underlying models; you pick the specific model at cleanup time. To create a key, go to <https://openrouter.ai/keys>{:target="_blank"} and sign in. In the top right, click **Create**.
     
-    ![OpenRouter New Key Dialog](/img/openrouter-new-key.webp){ width="420"; .center }
+    ![OpenRouter New Key Dialog](../img/openrouter-new-key.webp){ width="420"; .center }
     
     In the dialog, provide a name for the key (e.g. "Achew"), optionally set a credit limit and expiration, then click **Create**. After a moment the new key will be displayed. *Make sure to copy the key at this point*, as you won't be able to view it again.
 
@@ -76,13 +76,13 @@ See the relevant provider card below for setup steps.
 ??? example "GitHub Copilot"
     First, make sure Copilot is enabled on your GitHub account by visiting your [Copilot settings](https://github.com/settings/copilot/features){:target="_blank"}. If you have not previously enabled Copilot, you can do so by clicking the **Start Using Copilot Free** button. If you don't see this button, Copilot is likely already enabled.
     
-    ![Enable Copilot](/img/copilot-enable-light.webp#only-light)
-    ![Enable Copilot](/img/copilot-enable-dark.webp#only-dark)
+    ![Enable Copilot](../img/copilot-enable-light.webp#only-light)
+    ![Enable Copilot](../img/copilot-enable-dark.webp#only-dark)
 
     Next, go [here](https://github.com/settings/personal-access-tokens/new){:target="_blank"} to create a new fine-grained personal access token. 
     
-    ![Copilot New PAT](/img/copilot-new-key-light.webp#only-light){ width="640"; .center }
-    ![Copilot New PAT](/img/copilot-new-key-dark.webp#only-dark){ width="640"; .center }
+    ![Copilot New PAT](../img/copilot-new-key-light.webp#only-light){ width="640"; .center }
+    ![Copilot New PAT](../img/copilot-new-key-dark.webp#only-dark){ width="640"; .center }
     
     Give it a name (e.g. "Achew"), set an expiration, and add the **Copilot Requests** permission (Read-only). Click **Generate token** at the bottom, confirm, and then the token will be displayed. *Make sure to copy the token at this point*, as you won't be able to view it again.
 
