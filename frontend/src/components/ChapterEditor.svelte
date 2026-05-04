@@ -697,7 +697,7 @@
         const prevChapter = currentChapterIndex > 0 ? $chapters[currentChapterIndex - 1] : null;
         const nextChapter = currentChapterIndex < $chapters.length - 1 ? $chapters[currentChapterIndex + 1] : null;
 
-        const minTimestamp = prevChapter ? prevChapter.timestamp + 1 : 0;
+        const minTimestamp = prevChapter ? prevChapter.timestamp + 1 : 1;
         const maxTimestamp = nextChapter ? nextChapter.timestamp - 1 : $session.book?.duration - 1 || Infinity;
 
         if (timestamp < minTimestamp) {
@@ -955,7 +955,7 @@
                                         <X size="14"/>
                                     </button>
                                 </div>
-                            {:else}
+                            {:else if chapter.timestamp > 0.01}
                                 <button
                                     class="timestamp-display"
                                     onclick={() => startTimestampEdit(chapter.id, chapter.timestamp)}
@@ -963,6 +963,13 @@
                                 >
                                     {formatTimestamp(chapter.timestamp)}
                                 </button>
+                            {:else}
+                                <span
+                                    class="timestamp-display readonly"
+                                    title="The first chapter must start at 0"
+                                >
+                                    {formatTimestamp(chapter.timestamp)}
+                                </span>
                             {/if}
                         </td>
                         {#if hasAlignmentData}
@@ -1557,12 +1564,16 @@
         transition: all 0.2s ease;
     }
 
-    .timestamp-display:hover {
+    .timestamp-display:hover:not(.readonly) {
         color: var(--text-primary);
         background-color: var(--hover-bg);
         border-radius: 0.25rem;
         padding: 0.25rem;
         margin: -0.25rem;
+    }
+
+    .timestamp-display.readonly {
+        cursor: default;
     }
 
 

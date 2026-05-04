@@ -36,15 +36,16 @@
 
     let showBetweenOption = $derived(selectedChapters.length >= 2);
 
+    // The first chapter is always pinned to 0 and cannot be shifted.
     let affectedChapters = $derived.by(() => {
-        const nonDeleted = $chapters.filter(ch => !ch.deleted);
-        if (applyTo === "selected") return nonDeleted.filter(ch => ch.selected);
-        if (applyTo === "all") return nonDeleted;
+        const shiftable = $chapters.filter(ch => !ch.deleted && ch.timestamp > 0.01);
+        if (applyTo === "selected") return shiftable.filter(ch => ch.selected);
+        if (applyTo === "all") return shiftable;
         // "between": all non-deleted chapters between first and last selected timestamps
-        if (selectedChapters.length < 2) return selectedChapters;
+        if (selectedChapters.length < 2) return shiftable.filter(ch => ch.selected);
         const minTs = Math.min(...selectedChapters.map(ch => ch.timestamp));
         const maxTs = Math.max(...selectedChapters.map(ch => ch.timestamp));
-        return nonDeleted.filter(ch => ch.timestamp >= minTs && ch.timestamp <= maxTs);
+        return shiftable.filter(ch => ch.timestamp >= minTs && ch.timestamp <= maxTs);
     });
 
     let showDriftOption = $derived(affectedChapters.length >= 3);
@@ -63,7 +64,9 @@
     );
 
     function computeNewTimestamps() {
-        return affectedChapters.map((ch, i) => {
+        const result = [];
+        let prevTs = 0; // Reflects fixed first chapter at 0:00
+        affectedChapters.forEach((ch, i) => {
             let newTs;
             if (driftEnabled && affectedChapters.length >= 2) {
                 let t;
@@ -79,11 +82,12 @@
             } else {
                 newTs = ch.timestamp + offset;
             }
-            return {
-                chapter_id: ch.id,
-                new_timestamp: Math.max(0, Math.min(bookDuration - 1, newTs)),
-            };
+            newTs = Math.max(0, Math.min(bookDuration - 1, newTs));
+            newTs = Math.min(bookDuration - 1, Math.max(newTs, prevTs + 1));
+            result.push({chapter_id: ch.id, new_timestamp: newTs});
+            prevTs = newTs;
         });
+        return result;
     }
 
     let previewData = $derived.by(() => {

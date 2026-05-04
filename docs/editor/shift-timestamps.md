@@ -13,6 +13,8 @@ Choose which chapters get shifted:
 - **All chapters:** Every chapter in the chapter editor.
 - **Between first and last selected:** Every chapter (including unselected ones) between the first and last selected chapters in the editor. Only available when at least two chapters are selected.
 
+Regardless of which mode you choose, the very first chapter (timestamp `0`) is fixed and never shifted.
+
 ## Offset
 
 The amount to shift, in seconds. Positive values shift later, negative values shift earlier.
@@ -54,6 +56,6 @@ Controls how the offset drift is interpolated:
 
 The dialog lists every affected chapter, showing both old and new timestamps. Changed timestamps are highlighted, and a counter at the top shows how many chapters will actually move. Click the :lucide-play:{ .icon-token .primary } play button on any row to hear the audio at that chapter's new position.
 
-Timestamps are clamped to the book's duration, so a shift that would push a chapter past the end (or before zero) is capped rather than rejected.
+Timestamps are clamped between `0:01` and the book's duration. Shifted chapters are also spaced at least 1 second apart to avoid collapsing onto the same timestamp.
 
 Click **Apply** to perform the shift. Like any editor action, it's recoverable via [Undo](undo-redo.md).
