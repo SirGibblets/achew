@@ -194,10 +194,10 @@ export const chapters = {
         });
     },
 
-    async toggleSelection(chapterId, selected) {
-        return apiRequest(`/chapters/${chapterId}/select`, {
+    async setSelection({chapterIds = null, selected}) {
+        return apiRequest('/chapters/selection', {
             method: 'PUT',
-            body: {selected},
+            body: {chapter_ids: chapterIds, selected},
         });
     },
 
@@ -313,20 +313,6 @@ export const chapters = {
 
 // Batch operations API
 export const batch = {
-    async selectAll() {
-        return apiRequest('/chapters/select-all', {
-            method: 'POST',
-            body: {},
-        });
-    },
-
-    async deselectAll() {
-        return apiRequest('/chapters/deselect-all', {
-            method: 'POST',
-            body: {},
-        });
-    },
-
     async processSelected(aiOptions = {}) {
         return apiRequest('/chapters/ai-cleanup', {
             method: 'POST',
