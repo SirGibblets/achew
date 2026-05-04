@@ -386,7 +386,7 @@ class ChapterSearchState:
         return load_ruleset()
 
     def reset_ruleset(self) -> RuleSet:
-        """Reset the rule set to factory defaults and persist it."""
+        """Reset the ruleset to factory defaults and persist it."""
         from .rules.models import create_default_ruleset
         defaults = create_default_ruleset()
         save_ruleset(defaults)

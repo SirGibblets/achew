@@ -1,0 +1,28 @@
+name: Validate docs
+
+on:
+  pull_request:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  validate-docs:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Read zensical version from docs/requirements.txt
+        id: zensical
+        run: |
+          VERSION=$(awk -F'==' '/^zensical==/{print $2; exit}' docs/requirements.txt)
+          if [ -z "$VERSION" ]; then
+            echo "::error::Could not find a pinned zensical version in docs/requirements.txt"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Validate docs (zensical build --strict)
+        run: docker run --rm -v "${{ github.workspace }}:/docs" zensical/zensical:${{ steps.zensical.outputs.version }} build --strict

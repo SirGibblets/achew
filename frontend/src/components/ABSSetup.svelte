@@ -3,6 +3,7 @@
 
     // Icons
     import Check from "@lucide/svelte/icons/check";
+    import ExternalLink from "@lucide/svelte/icons/external-link";
     import Headphones from "@lucide/svelte/icons/headphones";
     import Info from "@lucide/svelte/icons/info";
     import TriangleAlert from "@lucide/svelte/icons/triangle-alert";
@@ -196,38 +197,42 @@
                         </div>
                     </div>
                     <p class="provider-desc">
-                        Enter your Audiobookshelf URL and API key. The key must act on
-                        behalf of a user with the following permissions: Can Download, Can
-                        Update.
+                        Enter your Audiobookshelf URL and API key.
+                    </p>
+                    <p class="api-key-help">
+                        <a class="api-key-help" href="https://www.audiobookshelf.org/guides/api-keys/#creating-api-keys" target="_blank" rel="noopener noreferrer">
+                            How do I create an API key?
+                            <ExternalLink size="12"/>
+                        </a>
                     </p>
                 </div>
             </div>
 
             <div class="provider-form">
                 <div class="form-group">
+                    <p class="field-hint">
+                        Server URL
+                    </p>
                     <input
                             id="abs-url"
                             type="url"
                             bind:value={absUrl}
-                            placeholder="https://abs.your-server.com"
+                            placeholder="Include the http/https scheme, e.g. https://abs.your-server.com"
                             disabled={loading}
                     />
-                    <p class="field-hint">
-                        Server URL. Must include the protocol, e.g. https://
-                    </p>
                 </div>
 
                 <div class="form-group">
+                    <p class="field-hint">
+                        API Key
+                    </p>
                     <input
                             id="abs-api-key"
                             type="text"
                             bind:value={absApiKey}
-                            placeholder="API Key"
+                            placeholder="*******"
                             disabled={loading}
                     />
-                    <p class="field-hint">
-                        API Key. Create new keys in your Audiobookshelf settings.
-                    </p>
                 </div>
             </div>
         </div>
@@ -260,8 +265,27 @@
 
 <style>
     .abs-setup-container {
+        width: 100%;
         max-width: 700px;
         margin: 0 auto;
+    }
+
+    .api-key-help {
+        font-size: 0.75rem;
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        color: var(--primary-color);
+        margin-top: 0.25rem;
+    }
+
+    .api-key-help a {
+        margin: 0;
+        text-decoration: none;
+    }
+
+    .api-key-help a:hover {
+        text-decoration: underline;
     }
 
     .setup-header {
@@ -305,7 +329,7 @@
     }
 
     .provider-header {
-        margin-bottom: 1rem;
+        margin-bottom: 1.25rem;
     }
 
     .provider-title-row {
@@ -364,7 +388,7 @@
     .provider-form {
         display: flex;
         flex-direction: column;
-        gap: 1.5rem;
+        gap: 0.75rem;
     }
 
     .form-group {
@@ -376,7 +400,7 @@
 
     .field-hint {
         font-size: 0.8rem;
-        margin: 0;
+        margin: 0 0 0 0.25rem;
     }
 
     .spinner {

@@ -336,22 +336,8 @@
             {#if !isChapterSearch}
             <div class="header-area" transition:slide={{ duration: 200 }}>
                 <div class="header-section" transition:fade={{ duration: 33 }}>
-                    <div class="title-row">
-                        <div class="logo-container">
-                            <Icon
-                                    name="achew-logo"
-                                    size="86"
-                                    color="linear-gradient(135deg, var(--accent-gradient-start) 0%, var(--accent-gradient-end) 100%)"
-                            />
-                        </div>
-                        <div class="title-stack">
-                            <h2 class="main-title">achew</h2>
-                            <p class="subtitle">
-                                <strong>a</strong>udiobook <strong>ch</strong>apter
-                                <strong>e</strong>xtraction <strong>w</strong>izard
-                            </p>
-                        </div>
-                    </div>
+                    <img class="header-image header-image-light" src="/img/hero-light.webp" alt="Achew header" />
+                    <img class="header-image header-image-dark" src="/img/hero-dark.webp" alt="Achew header" />
                 </div>
             </div>
             {/if}
@@ -587,47 +573,6 @@
         width: 100%;
     }
 
-    .title-row {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 1rem;
-        margin-bottom: 1rem;
-    }
-
-    .logo-container {
-        margin-top: 0.5rem;
-    }
-
-    .title-stack {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 0;
-    }
-
-    .main-title {
-        margin-top: -0.8rem;
-        margin-bottom: -0.75rem;
-        margin-left: 0.5rem;
-        font-size: 5rem;
-        font-weight: 100;
-        color: var(--text-primary);
-        letter-spacing: 0.12em;
-    }
-
-    .subtitle {
-        margin: 0;
-        color: var(--text-secondary);
-        font-size: 0.95rem;
-        font-weight: 200;
-        white-space: nowrap;
-    }
-
-    .subtitle strong {
-        font-weight: 700;
-    }
-
     .success-card p {
         margin-bottom: 4rem;
         max-width: 360px;
@@ -659,6 +604,23 @@
 
     .form-control.is-invalid {
         border-color: var(--danger);
+    }
+
+    .header-image {
+        width: 100%;
+        max-width: 440px;
+    }
+
+    .header-image-dark {
+        display: none;
+    }
+
+    :global([data-theme="dark"]) .header-image-dark {
+        display: inline-block;
+    }
+
+    :global([data-theme="dark"]) .header-image-light {
+        display: none;
     }
 
     .help-icon {
@@ -906,18 +868,6 @@
 
         .header-section {
             padding: 0;
-        }
-
-        .title-stack {
-            align-items: center;
-        }
-
-        .main-title {
-            font-size: 3.75rem;
-        }
-
-        .subtitle {
-            font-size: 0.75rem;
         }
 
         .form-control {

@@ -28,7 +28,7 @@ class ClearCacheRequest(BaseModel):
 
 @router.get("/ruleset")
 async def get_ruleset():
-    """Return the current root rule set."""
+    """Return the current root ruleset."""
     state = get_chapter_search_state()
     ruleset = state.get_ruleset()
     return {"ruleset": ruleset.model_dump()}
@@ -36,7 +36,7 @@ async def get_ruleset():
 
 @router.put("/ruleset")
 async def save_ruleset(request: SaveRulesetRequest):
-    """Save an updated rule set to persistent storage."""
+    """Save an updated ruleset to persistent storage."""
     try:
         ruleset = RuleSet.model_validate(request.ruleset)
     except Exception as e:
@@ -64,7 +64,7 @@ async def toggle_ignore(book_id: str):
 
 @router.post("/ruleset/reset")
 async def reset_ruleset():
-    """Reset the rule set to factory defaults."""
+    """Reset the ruleset to factory defaults."""
     state = get_chapter_search_state()
     state.reset_ruleset()
     if state.page == "landing":

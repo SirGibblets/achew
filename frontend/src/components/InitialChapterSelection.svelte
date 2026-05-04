@@ -482,7 +482,7 @@
                                                     </div>
                                                 </div>
                                                 <div class="legend-text">
-                                                    <strong>Red ticks:</strong> Unaligned existing cue
+                                                    <strong>Red ticks:</strong> Unaligned source chapter
                                                 </div>
                                             </div>
 
@@ -496,9 +496,9 @@
                                                 </div>
                                                 <div class="legend-text">
                                                     {#if isDarkMode}
-                                                        <strong>White ticks:</strong> Unaligned new cue
+                                                        <strong>White ticks:</strong> Unaligned selected cue
                                                     {:else}
-                                                        <strong>Black ticks:</strong> Unaligned new cue
+                                                        <strong>Black ticks:</strong> Unaligned selected cue
                                                     {/if}
                                                 </div>
                                             </div>
@@ -514,9 +514,9 @@
                                                 </div>
                                                 <div class="legend-text">
                                                     {#if isDarkMode}
-                                                        <strong>Yellow/Green ticks:</strong> Aligned cues (both sources match)
+                                                        <strong>Yellow/Green ticks:</strong> Selected cue aligned with source chapter
                                                     {:else}
-                                                        <strong>Blue/Purple ticks:</strong> Aligned cues (both sources match)
+                                                        <strong>Blue/Purple ticks:</strong> Selected cue aligned with source chapter
                                                     {/if}
                                                 </div>
                                             </div>
@@ -739,7 +739,7 @@
         <!-- Include Unaligned Timestamps Options -->
         {#if existingCueSources.length > 0}
             <div class="unaligned-options" style:background={isDarkMode ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.03)'}>
-                <p class="unaligned-label">Include unaligned cues from:</p>
+                <p class="unaligned-label">Include unaligned chapters from:</p>
                 <div class="unaligned-checkboxes">
                     {#each existingCueSources as source}
                         {@const unalignedCount = source.cues.filter(

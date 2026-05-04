@@ -128,6 +128,22 @@ async def get_app_status():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/complete-welcome")
+async def complete_welcome():
+    """Dismiss the welcome screen and transition to ABS setup"""
+    try:
+        app_state: AppState = get_app_state()
+
+        app_state._welcome_dismissed = True
+        await app_state.broadcast_step_change(Step.ABS_SETUP)
+
+        return {"message": "Welcome dismissed", "step": Step.ABS_SETUP.value}
+
+    except Exception as e:
+        logger.error(f"Failed to complete welcome: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/goto-abs-setup")
 async def goto_abs_setup():
     """Transition to ABS setup step"""

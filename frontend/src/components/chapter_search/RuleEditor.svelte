@@ -342,8 +342,8 @@
                 <label
                     class="enable-toggle"
                     title={ruleset.enabled
-                        ? "Disable rule set"
-                        : "Enable rule set"}
+                        ? "Disable ruleset"
+                        : "Enable ruleset"}
                 >
                     <input
                         type="checkbox"
@@ -365,7 +365,7 @@
             <button
                 class="edit-btn"
                 onclick={() => openEditRuleSet(ruleset)}
-                aria-label="Edit rule set"
+                aria-label="Edit ruleset"
             >
                 <Pencil size="14" />
             </button>
@@ -453,7 +453,7 @@
                 <Plus size="13" /> Add Rule
             </button>
             <button class="add-btn" onclick={addRuleSet} type="button">
-                <FolderPlus size="13" /> Add Rule Set
+                <FolderPlus size="13" /> Add Ruleset
             </button>
         </div>
     </div>

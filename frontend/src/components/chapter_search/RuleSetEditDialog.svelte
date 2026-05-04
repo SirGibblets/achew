@@ -72,14 +72,14 @@
 <dialog bind:this={dialog} on:click={handleBackdropClick} on:close={close}>
     <div class="dialog-container">
         <div class="dialog-header">
-            <h3>{ruleset ? 'Edit Rule Set' : 'Add Rule Set'}</h3>
+            <h3>{ruleset ? 'Edit Ruleset' : 'Add Ruleset'}</h3>
             <button class="close-btn" on:click={close} aria-label="Close"><X size="18"/></button>
         </div>
 
         <div class="dialog-body">
             <div class="field">
-                <label for="rs-name">Name <span class="hint">(leave blank for "Rule Set")</span></label>
-                <input id="rs-name" type="text" bind:value={name} placeholder="Rule Set" />
+                <label for="rs-name">Name <span class="hint">(leave blank for "Ruleset")</span></label>
+                <input id="rs-name" type="text" bind:value={name} placeholder="Ruleset" />
             </div>
 
             <div class="field">
@@ -104,12 +104,12 @@
 
             {#if isRoot && showDeleteConfirm}
                 <div class="warning-box">
-                    <strong>Warning:</strong> Deleting the main rule set will permanently delete all rules
+                    <strong>Warning:</strong> This will will permanently delete all rules
                     and replace them with the default starting rules.
                 </div>
             {:else if showDeleteConfirm}
                 <div class="warning-box">
-                    <strong>Warning:</strong> This will permanently delete this rule set and all rules
+                    <strong>Warning:</strong> This will permanently delete this ruleset and all rules
                     and nested sets inside it.
                 </div>
             {/if}
@@ -121,7 +121,11 @@
                     class="btn btn-danger"
                     on:click={handleDelete}
                 >
-                    {showDeleteConfirm ? 'Confirm Delete' : 'Delete'}
+                    {#if isRoot}
+                        {showDeleteConfirm ? 'Confirm Reset' : 'Reset All Rules'}
+                    {:else}
+                        {showDeleteConfirm ? 'Confirm Delete' : 'Delete'}
+                    {/if}
                 </button>
             {/if}
             {#if ruleset && !isRoot}

@@ -39,7 +39,7 @@
                             {#if cueSources.length > 0}
                                 The following chapter sources include timestamps and can be used for comparison:
                             {:else}
-                                No sources are currently available for cue comparison. Use the button below to add a source.
+                                No sources are currently available for comparison. Use the button below to add a source.
                             {/if}
                         </p>
                         {#if cueSources.length > 0}

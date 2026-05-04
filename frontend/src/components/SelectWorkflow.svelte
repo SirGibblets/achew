@@ -237,7 +237,7 @@
     {#if loading}
         <div class="text-center p-4">
             <div class="spinner"></div>
-            <p class="mt-2">Loading cue sources…</p>
+            <p class="mt-2">Loading chapter sources…</p>
         </div>
     {:else}
         <div class="mode-selector">

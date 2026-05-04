@@ -111,7 +111,7 @@ class Rule(BaseModel):
 
 class RuleSet(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
-    name: str = ""              # custom display name; empty = "Rule Set"
+    name: str = ""              # custom display name; empty = "Ruleset"
     match_any: bool = True      # True = ANY, False = ALL
     enabled: bool = True
     items: list[Union[Rule, RuleSet]] = Field(default_factory=list)
@@ -119,7 +119,7 @@ class RuleSet(BaseModel):
     model_config = {"arbitrary_types_allowed": True}
 
     def display_name(self) -> str:
-        return self.name or "Rule Set"
+        return self.name or "Ruleset"
 
 
 # ---------------------------------------------------------------------------
@@ -198,7 +198,7 @@ def _auto_name(rule: Rule) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Default rule set
+# Default ruleset
 # ---------------------------------------------------------------------------
 
 def create_default_ruleset() -> RuleSet:

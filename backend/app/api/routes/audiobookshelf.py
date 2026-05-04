@@ -194,7 +194,7 @@ class BookSearchResultWithChapters(BookSearchResult):
 @router.get("/search/books", response_model=List[BookSearchResultWithChapters])
 async def search_books(
     provider: str = Query(..., description="Audible provider identifier"),
-    title: str = Query("", description="Book title or ASIN to search for"),
+    title: str = Query("", description="Book title to search for"),
     author: str = Query("", description="Author name"),
     id: Optional[str] = Query(None, description="Book ID"),
 ):

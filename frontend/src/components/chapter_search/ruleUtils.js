@@ -86,7 +86,7 @@ export function autoRuleName(rule) {
 }
 
 export function autoRuleSetName(rs) {
-    return rs.name || 'Rule Set';
+    return rs.name || 'Ruleset';
 }
 
 /** Create a new blank rule with one empty text predicate */
@@ -107,7 +107,7 @@ export function createBlankPredicate(subject) {
     return {kind: 'text', op: 'is', part2: 'text', value: '', ignore_case: true};
 }
 
-/** Create a new rule set */
+/** Create a new ruleset */
 export function createBlankRuleSet() {
     return {
         id: crypto.randomUUID(),

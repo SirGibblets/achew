@@ -321,7 +321,6 @@
             {#if chimeEnabled}
                 <div transition:slide={{ duration: 300 }}>
                     <div class="chime-details">
-                        <p class="chime-title">Chime will play when processing has finished</p>
                         <div class="chime-dots">
                             {#each Array(12) as _, i}
                                 <button 
@@ -331,6 +330,7 @@
                                 ></button>
                             {/each}
                         </div>
+                        <p class="chime-title">Chime will play when processing has finished</p>
                     </div>
                 </div>
             {/if}
@@ -504,7 +504,7 @@
         display: grid;
         grid-template-columns: repeat(12, auto);
         gap: 0.75rem;
-        margin: 0.5rem 0;
+        margin: 0 0 1rem;
     }
 
     .chime-dot {

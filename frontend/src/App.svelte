@@ -18,6 +18,7 @@
     import LLMSetup from "./components/LLMSetup.svelte";
     import ProgressDisplay from "./components/ProgressDisplay.svelte";
     import SelectWorkflow from "./components/SelectWorkflow.svelte";
+    import Welcome from "./components/Welcome.svelte";
 
     // Icons
     import ChevronLeft from "@lucide/svelte/icons/chevron-left";
@@ -89,6 +90,8 @@
         switch ($session.step) {
             case "migration_failed":
                 return MigrationFailed;
+            case "welcome":
+                return Welcome;
             case "abs_setup":
                 return ABSSetup;
             case "llm_setup":
@@ -279,7 +282,7 @@
 
     // Check if restart button should be shown
     function shouldShowRestartButton(restartOptions) {
-        return !["migration_failed", "abs_setup", "llm_setup", "asr_setup", "idle"].includes($session.step);
+        return !["migration_failed", "welcome", "abs_setup", "llm_setup", "asr_setup", "idle"].includes($session.step);
     }
 
     // Check if restart button should be disabled
@@ -374,7 +377,7 @@
     // Check if settings button should be shown (hide during setup steps and while connecting)
     $: isConnectingView = currentComponent === Connecting;
     $: shouldShowSettings =
-        !["migration_failed", "abs_setup", "llm_setup", "asr_setup"].includes($session.step) && !isConnectingView;
+        !["migration_failed", "welcome", "abs_setup", "llm_setup", "asr_setup"].includes($session.step) && !isConnectingView;
 
     $: updateAvailable = isNewerVersion($session.version, latestVersion);
 </script>
@@ -530,6 +533,7 @@
                         on:llm-setup-complete={handleLLMSetupComplete}
                         on:asr-setup-complete={() => session.loadActiveSession()}
                         on:migration-reset={() => session.loadActiveSession()}
+                        on:welcome-dismissed={() => session.loadActiveSession()}
                 />
             {/if}
         {:else}
