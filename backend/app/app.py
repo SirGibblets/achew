@@ -326,7 +326,7 @@ class AppState:
         """Process transcription requests from the queue"""
         import tempfile
         import os
-        from .services.audio_service import AudioProcessingService
+        from .services.audio_service import AudioProcessingService, pick_segment_extension
         from .models.chapter_operation import TranscribeOperation, BatchChapterOperation
         from .core.config import get_app_config
 
@@ -381,14 +381,10 @@ class AppState:
 
                         # Extract audio segment to temp file
                         temp_dir = tempfile.mkdtemp(dir=self.pipeline.temp_dir)
-                        ext = "aac"
-                        if self.pipeline.audio_file_path:
-                            from pathlib import Path as PPath
-                            src_ext = PPath(self.pipeline.audio_file_path).suffix.lstrip(".")
-                            if src_ext in ["m4b", "m4a", "mp4"]:
-                                ext = "aac"
-                            elif src_ext:
-                                ext = src_ext
+                        ext = (
+                            self.pipeline.segment_extension
+                            or pick_segment_extension(self.pipeline.audio_file_path)
+                        )
 
                         output_path = os.path.join(temp_dir, f"segment_{chapter_id}.{ext}")
                         audio_service = AudioProcessingService(
