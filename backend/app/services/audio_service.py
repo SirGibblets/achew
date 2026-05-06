@@ -83,6 +83,11 @@ _REMUX_CONTAINER_EXTS = {"m4b", "m4a", "mp4"}
 # headers at trailer-write time and would fail against a non-seekable sink.
 _NULL_SINK_SAFE_EXTS = {"aac", "mp3", "ac3", "eac3"}
 
+# Candidates probed (in order) when the source is an mp4-family container.
+# `aac` is cheapest (raw ADTS, no per-segment moov, null-sink-safe). `m4a`
+# is the safety net but loses the null-sink optimization.
+_PROBE_CANDIDATES = ["aac", "m4a"]
+
 # Map of audio codec (from ffprobe) to a compatible raw/container extension.
 _CODEC_EXT_MAP = {
     "mp3": "mp3",
@@ -111,6 +116,48 @@ def pick_segment_extension(audio_file: str, fallback_ext: Optional[str] = None) 
         return _CODEC_EXT_MAP[codec]
     # Default: AAC is the canonical codec for these containers.
     return "aac"
+
+
+def _probe_extension(audio_file: str, ext: str, temp_dir: str) -> bool:
+    """Validate a candidate output extension by running a short segmented
+    extraction with the same flags real extraction will use.
+    """
+    import tempfile
+    with tempfile.TemporaryDirectory(dir=temp_dir) as tmp_dir_path:
+        output_pattern = os.path.join(tmp_dir_path, f"probe_%03d.{ext}")
+        cmd = [
+            "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+            "-ss", "0",
+            "-t", "2.0",
+            "-i", audio_file,
+            "-map", "0:a:0",
+            "-acodec", "copy",
+            "-f", "segment",
+            "-segment_times", "1.0",
+            output_pattern,
+        ]
+        try:
+            result = subprocess.run(cmd, capture_output=True, timeout=15)
+            return result.returncode == 0
+        except (subprocess.TimeoutExpired, OSError):
+            return False
+
+
+def probe_segment_extension(audio_file: str, temp_dir: str) -> str:
+    """Determine which output extension supports `-c copy` extraction for this file."""
+    src_ext = Path(audio_file).suffix.lstrip(".").lower()
+    if src_ext not in _REMUX_CONTAINER_EXTS:
+        return src_ext
+
+    for ext in _PROBE_CANDIDATES:
+        if _probe_extension(audio_file, ext, temp_dir=temp_dir):
+            logger.info(f"Segment extension probe selected '{ext}' for {audio_file}")
+            return ext
+
+    logger.warning(
+        f"All segment-extension probes failed for {audio_file}; falling back to wav"
+    )
+    return "wav"
 
 
 def _compute_virtual_segments(
@@ -559,6 +606,7 @@ class AudioProcessingService:
         output_dir: str,
         use_wav: bool = False,
         allow_retry: bool = True,
+        segment_extension: Optional[str] = None,
     ) -> Optional[List[str]]:
         """Extract audio segments based on timestamps from single or multiple files"""
 
@@ -576,6 +624,7 @@ class AudioProcessingService:
             output_dir,
             use_wav,
             allow_retry,
+            segment_extension,
         )
 
         
@@ -613,6 +662,7 @@ class AudioProcessingService:
             str(duration),
             "-i",
             audio_file,
+            "-map", "0:a:0",
         ]
 
         if use_copy:
@@ -705,6 +755,7 @@ class AudioProcessingService:
         use_wav: bool,
         allow_retry: bool,
         name_timestamps: Optional[List[float]] = None,
+        segment_extension: Optional[str] = None,
     ) -> List[str]:
         """Extract a list of [start, end) ranges in parallel.
 
@@ -752,7 +803,10 @@ class AudioProcessingService:
                 block_names.append(sorted_names[pos:pos + size])
             pos += size
 
-        extension = "wav" if use_wav else pick_segment_extension(audio_file)
+        extension = (
+            "wav" if use_wav
+            else (segment_extension or pick_segment_extension(audio_file))
+        )
         cancelled = threading.Event()
         completed = [0]
         progress_lock = threading.Lock()
@@ -887,9 +941,13 @@ class AudioProcessingService:
             "-ss", f"{b_start:.6f}",
             "-t", f"{b_end - b_start:.6f}",
             "-i", audio_file,
+            "-map", "0:a:0",
         ]
         if use_copy:
             cmd.extend(["-acodec", "copy"])
+        else:
+            # Use 16 kHz mono for WAV fallback
+            cmd.extend(["-ac", "1", "-ar", "16000"])
         cmd.extend([
             "-f", "segment",
             "-segment_times", segment_times_str,
@@ -908,7 +966,12 @@ class AudioProcessingService:
                 + re.escape(extension) + r"' for writing"
             )
             block_opens = 0
+            # Keep a rolling tail of stderr so a failed exit code captures
+            # real output instead of just 'CalledProcessError'.
+            from collections import deque
+            stderr_tail: deque[str] = deque(maxlen=80)
             for line in process.stderr or []:
+                stderr_tail.append(line.rstrip())
                 if cancelled.is_set():
                     process.terminate()
                     break
@@ -934,6 +997,11 @@ class AudioProcessingService:
             if cancelled.is_set() or process.returncode in [254, 255]:
                 return None
             if process.returncode != 0:
+                logger.error(
+                    f"Range block {block_idx} ffmpeg failed "
+                    f"(exit {process.returncode}). Last stderr:\n"
+                    + "\n".join(stderr_tail)
+                )
                 raise subprocess.CalledProcessError(process.returncode, cmd)
         finally:
             with self._process_lock:
@@ -987,6 +1055,7 @@ class AudioProcessingService:
         output_dir: str,
         use_wav: bool = False,
         allow_retry: bool = True,
+        segment_extension: Optional[str] = None,
     ) -> List[str]:
         """Run segment extraction in a separate thread.
 
@@ -1003,6 +1072,7 @@ class AudioProcessingService:
             return self._run_parallel_range_extraction(
                 audio_file, timestamps, output_dir,  # type: ignore[arg-type]
                 use_wav, allow_retry,
+                segment_extension=segment_extension,
             )
 
         # Float cue timestamps: derive (start, end) ranges using the ASR
@@ -1022,6 +1092,7 @@ class AudioProcessingService:
         return self._run_parallel_range_extraction(
             audio_file, ranges, output_dir, use_wav, allow_retry,
             name_timestamps=cue_timestamps,
+            segment_extension=segment_extension,
         )
 
     async def trim_segments(
@@ -1339,7 +1410,7 @@ class AudioProcessingService:
                 "-i",
                 filelist_path,
                 "-map",
-                "0:a",
+                "0:a:0",
                 "-c",
                 "copy",
                 output_file,

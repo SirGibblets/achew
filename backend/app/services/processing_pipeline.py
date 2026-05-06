@@ -14,7 +14,7 @@ from app.app import get_app_state
 from app.models.abs import AudioFile, Book
 from pydantic import BaseModel, Field
 from .abs_service import ABSService
-from .audio_service import AudioProcessingService, audio_uses_xhe_aac, pick_segment_extension
+from .audio_service import AudioProcessingService, audio_uses_xhe_aac, pick_segment_extension, probe_segment_extension
 from .vad_detection_service import VadDetectionService
 from ..core.config import get_app_config
 from ..core.constants import CHAPTER_START_PADDING, BOOK_END_IGNORE_WINDOW
@@ -88,6 +88,7 @@ class ProcessingPipeline:
         self.book: Optional[Book] = None
         self.audio_file_path: str = ""
         self.audio_unsupported_codec: bool = False
+        self.segment_extension: Optional[str] = None
         self.file_starts: Optional[List[float]] = None
         self.existing_cue_sources: List[ExistingCueSource] = []
         self.existing_title_sources: List[ExistingTitleSource] = []
@@ -829,6 +830,12 @@ class ProcessingPipeline:
                     )
                     self.audio_unsupported_codec = True
 
+                if self.audio_file_path:
+                    # Probe once for a compatible segment extension
+                    self.segment_extension = await asyncio.get_event_loop().run_in_executor(
+                        None, probe_segment_extension, self.audio_file_path, self.temp_dir
+                    )
+
                 self.step = Step.SELECT_WORKFLOW
 
             return {
@@ -1077,7 +1084,7 @@ class ProcessingPipeline:
 
             # Create VAD task for proper cancellation handling
             self._vad_task = asyncio.create_task(
-                service.get_vad_silence_boundaries(self.audio_file_path, self.book.duration)
+                service.get_vad_silence_boundaries(self.audio_file_path, self.book.duration, self.segment_extension)
             )
             silences = await self._vad_task
             self._vad_task = None
@@ -1210,7 +1217,12 @@ class ProcessingPipeline:
 
         audio_service = AudioProcessingService(self._scoped_progress_callback(), self._running_processes, asr_buffer=get_asr_buffer(), process_lock=self._process_lock)
 
-        self.segment_files = await audio_service.extract_segments(self.audio_file_path, self.cues, self.temp_dir)
+        self.segment_files = await audio_service.extract_segments(
+            audio_file = self.audio_file_path,
+            timestamps = self.cues,
+            output_dir = self.temp_dir,
+            segment_extension=self.segment_extension,
+        )
 
         # Check if extraction was cancelled (None return indicates cancellation)
         # If the step was changed during processing, we should not continue
@@ -1233,6 +1245,7 @@ class ProcessingPipeline:
             audio_file=self.audio_file_path,
             timestamps=segment_times,
             output_dir=self.temp_dir,
+            segment_extension=self.segment_extension,
         )
 
         if self.segment_files is None or self.step != Step.AUDIO_EXTRACTION:
@@ -1896,6 +1909,7 @@ class ProcessingPipeline:
             "-ss", str(seg_start),
             "-to", str(seg_end),
             "-i", self.audio_file_path,
+            "-map", "0:a:0",
             "-c", "copy",
             output_path,
         ]
@@ -1941,6 +1955,7 @@ class ProcessingPipeline:
             "-ss", str(seg_start),
             "-to", str(seg_end),
             "-i", self.audio_file_path,
+            "-map", "0:a:0",
             "-c", "copy",
             "-f", "segment",
             "-segment_times", segment_times_str,
@@ -2082,7 +2097,7 @@ class ProcessingPipeline:
                 # ── Step 5: Extract audio (PARTIAL_SCAN_PREP) ──────────────────
                 self._notify_progress(Step.PARTIAL_SCAN_PREP, 0, "Extracting audio…")
 
-                ext = pick_segment_extension(self.audio_file_path)
+                ext = self.segment_extension or pick_segment_extension(self.audio_file_path)
 
                 if use_original_file:
                     logger.info("Using original audio file for partial scan (coverage >= 80%)")
@@ -2151,7 +2166,7 @@ class ProcessingPipeline:
                             running_processes=self._running_processes,
                             tmp_dir=self.temp_dir,
                         )
-                        file_silences = await vad_service.get_vad_silence_boundaries(file_path, file_duration)
+                        file_silences = await vad_service.get_vad_silence_boundaries(file_path, file_duration, self.segment_extension)
 
                         if file_silences is None or self.step not in [Step.PARTIAL_VAD_ANALYSIS, Step.PARTIAL_SCAN_PREP]:
                             logger.info("Partial VAD scan was cancelled")

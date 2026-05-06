@@ -56,7 +56,7 @@ class ParakeetMLXASRService(ASRService):
         self.model = None
         pass
 
-    def _transcribe_file(self, audio_file: str) -> str:
+    def _transcribe_file(self, audio_file: str, retry_on_empty: bool = True) -> str:
         """Transcribe a single audio file using Parakeet MLX"""
         try:
             result = self.model.transcribe(audio_file)

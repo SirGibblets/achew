@@ -55,7 +55,7 @@ class VadDetectionService:
         """Get path to the permanent VAD worker script"""
         return self.vad_worker_path
 
-    def _split_audio_into_chunks(self, audio_file: str, duration: float, temp_dir: str) -> List[str]:
+    def _split_audio_into_chunks(self, audio_file: str, duration: float, temp_dir: str, segment_extension: Optional[str] = None) -> List[str]:
         """Split audio file into 10-minute chunks using efficient ffmpeg segmentation with progress monitoring"""
         logger.info(f"Splitting audio into chunks using ffmpeg segment…")
 
@@ -65,7 +65,7 @@ class VadDetectionService:
 
         from .audio_service import pick_segment_extension
 
-        ext = pick_segment_extension(audio_file)
+        ext = segment_extension or pick_segment_extension(audio_file)
         output_pattern = os.path.join(temp_dir, f"vad_chunk_%03d.{ext}")
 
         # Use ffmpeg segment to efficiently split the file
@@ -75,7 +75,7 @@ class VadDetectionService:
             "-i",
             audio_file,
             "-map",
-            "0:a",  # Audio stream only — skip cover art/video/data streams
+            "0:a:0",  # Audio stream only — skip cover art/video/data streams
             "-f",
             "segment",  # Use segment muxer
             "-segment_time",
@@ -506,6 +506,7 @@ class VadDetectionService:
         self,
         audio_file: str,
         duration: float,
+        segment_extension: Optional[str] = None,
     ) -> Optional[List[Tuple[float, float]]]:
         """
         Detect silence boundaries using VAD processing on audio segments.
@@ -527,7 +528,7 @@ class VadDetectionService:
             vad_worker_path = self._get_vad_worker_path()
 
             # Run VAD processing with direct async coordination (no executor needed)
-            final_gaps = await self._run_vad_processing_async(audio_file, duration, temp_dir, vad_worker_path)
+            final_gaps = await self._run_vad_processing_async(audio_file, duration, temp_dir, vad_worker_path, segment_extension)
 
             # Check if processing was cancelled
             if final_gaps is None:
@@ -564,6 +565,7 @@ class VadDetectionService:
         duration: float,
         temp_dir: str,
         vad_worker_path: str,
+        segment_extension: Optional[str] = None,
     ) -> Optional[List[Tuple[float, float]]]:
         """Run VAD processing using subprocess-based parallel processing"""
         try:
@@ -571,7 +573,7 @@ class VadDetectionService:
 
             # Step 1: Split audio into chunks using efficient ffmpeg segmentation
             self._notify_progress(Step.VAD_PREP, 0, "Preparing…")
-            chunk_files = await self._split_audio_into_chunks_async(audio_file, duration, temp_dir)
+            chunk_files = await self._split_audio_into_chunks_async(audio_file, duration, temp_dir, segment_extension)
 
             self._check_cancellation()
 
@@ -601,14 +603,14 @@ class VadDetectionService:
             await self.cancel_vad_processes()
             return None
 
-    async def _split_audio_into_chunks_async(self, audio_file: str, duration: float, temp_dir: str) -> List[str]:
+    async def _split_audio_into_chunks_async(self, audio_file: str, duration: float, temp_dir: str, segment_extension: Optional[str] = None) -> List[str]:
         """Async wrapper for splitting audio into chunks with progress monitoring"""
         loop = asyncio.get_event_loop()
 
         self._check_cancellation()
 
         # Run the splitting in executor but with periodic progress checks
-        future = loop.run_in_executor(None, self._split_audio_into_chunks, audio_file, duration, temp_dir)
+        future = loop.run_in_executor(None, self._split_audio_into_chunks, audio_file, duration, temp_dir, segment_extension)
 
         # Monitor progress while waiting
         while not future.done():
