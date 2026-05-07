@@ -3,6 +3,7 @@
     import {session} from "../stores/session.js";
     import {api} from "../utils/api.js";
     import AudiobookCard from "./AudiobookCard.svelte";
+    import DocLink from "./DocLink.svelte";
     import Icon from "./Icon.svelte";
     import ChapterSearch from "./chapter_search/ChapterSearch.svelte";
 
@@ -535,6 +536,12 @@
             {:else if inputMode === "chapterSearch"}
                 <ChapterSearch />
             {/if}
+
+            <div class="start-docs">
+                <DocLink path="/getting-started/" text="Getting Started" featureName="Getting Started"/>
+                &nbsp;·&nbsp;
+                <DocLink path="/getting-started/finding-a-book/" text="Finding a Book" featureName="Finding a Book"/>
+            </div>
         </div>
     {/if}
 </div>
@@ -580,6 +587,12 @@
         margin-right: auto;
     }
 
+    .start-docs {
+        margin-top: 1.5rem;
+        font-size: 0.85rem;
+        text-align: center;
+    }
+
     .success-card .card-body {
         padding: 3rem;
     }
@@ -588,11 +601,6 @@
         width: 100%;
         max-width: 600px;
         text-align: center;
-        margin-bottom: 2rem;
-    }
-
-    .form-group {
-        margin-bottom: 0.5rem;
     }
 
     .input-container {
@@ -789,7 +797,6 @@
         width: 100%;
         max-width: 600px;
         text-align: center;
-        margin-bottom: 2rem;
     }
 
     .search-input-container {
@@ -850,6 +857,7 @@
         display: flex;
         flex-direction: column;
         gap: 1rem;
+        margin-top: 2rem;
     }
 
     .search-result-actions {

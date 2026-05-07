@@ -1,5 +1,6 @@
 <script>
     import {createEventDispatcher} from "svelte";
+    import DocLink from "./DocLink.svelte";
 
     // Icons
     import Check from "@lucide/svelte/icons/check";
@@ -172,7 +173,7 @@
                 <Headphones size="48"/>
             </div>
         </div>
-        <h1>Audiobookshelf Setup</h1>
+        <h1>Audiobookshelf Setup <DocLink path="/installation/first-run/#audiobookshelf-setup" featureName="Audiobookshelf Setup" size="16"/></h1>
         <p class="required-label">REQUIRED</p>
     </div>
 

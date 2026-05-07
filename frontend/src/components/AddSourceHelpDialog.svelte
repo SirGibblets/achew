@@ -1,4 +1,5 @@
 <script>
+    import DocLink from "./DocLink.svelte";
     import X from "@lucide/svelte/icons/x";
 
     let { isOpen = $bindable(false) } = $props();
@@ -39,7 +40,7 @@
             onkeydown={(e) => { if (e.key === 'Escape') close(); }}
         >
             <div class="help-header">
-                <h3>About Chapter Sources</h3>
+                <h3>About Chapter Sources <DocLink path="/getting-started/chapter-sources/" /></h3>
                 <button class="close-btn" onclick={close} aria-label="Close">
                     <X size="20"/>
                 </button>

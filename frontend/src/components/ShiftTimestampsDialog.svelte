@@ -3,6 +3,7 @@
     import {api, handleApiError} from "../utils/api.js";
     import {audio, currentSegmentId, isPlaying} from "../stores/audio.js";
     import {chapters, session} from "../stores/session.js";
+    import DocLink from "./DocLink.svelte";
 
     // Icons
     import CircleHelp from "@lucide/svelte/icons/circle-help";
@@ -324,7 +325,7 @@
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h3>Shift Timestamps</h3>
+                    <h3>Shift Timestamps &nbsp;<DocLink path="/editor/shift-timestamps/" featureName="Shifting Timestamps" size="14" /></h3>
                     <button class="close-button" onclick={handleCancel} aria-label="Close">
                         <X size="20"/>
                     </button>

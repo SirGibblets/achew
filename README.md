@@ -48,11 +48,11 @@
 
 | Platform | Guide |
 | --- | --- |
-| Docker | [Install with Docker](https://achew.readthedocs.io/latest/getting-started/installation-docker/) |
-| Linux / macOS | [Install on Linux or macOS](https://achew.readthedocs.io/latest/getting-started/installation-linux-macos/) |
-| Windows | [Install on Windows](https://achew.readthedocs.io/latest/getting-started/installation-windows/) |
+| Docker | [Install with Docker](https://achew.readthedocs.io/latest/installation/installation-docker/) |
+| Linux / macOS | [Install on Linux or macOS](https://achew.readthedocs.io/latest/installation/installation-linux-macos/) |
+| Windows | [Install on Windows](https://achew.readthedocs.io/latest/installation/installation-windows/) |
 
-After installation, follow the [first-run walkthrough](https://achew.readthedocs.io/latest/getting-started/first-run/) to connect Audiobookshelf.
+After installation, follow the [first-run walkthrough](https://achew.readthedocs.io/latest/installation/first-run/) to connect Audiobookshelf.
 
 ## Links
 

@@ -2,6 +2,7 @@
     import {createEventDispatcher} from "svelte";
     import {session, transcriptionStatuses} from "../stores/session.js";
     import ASRSettings from "./ASRSettings.svelte";
+    import DocLink from "./DocLink.svelte";
 
     import Mic from "@lucide/svelte/icons/mic";
 
@@ -56,7 +57,7 @@
         <div class="header-icon">
             <Mic size="32"/>
         </div>
-        <h2>Transcription Settings</h2>
+        <h2>Transcription Settings <DocLink path="/reference/transcription/" featureName="Transcription Settings" size="16"/></h2>
         <p>Configure the Automatic Speech Recognition service used for transcribing chapter titles.</p>
     </div>
 

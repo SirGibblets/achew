@@ -2,6 +2,7 @@
     import {onMount} from "svelte";
     import {session} from "../stores/session.js";
     import {api} from "../utils/api.js";
+    import DocLink from "./DocLink.svelte";
 
     // Icons
     import BookDashed from "@lucide/svelte/icons/book-dashed";
@@ -371,7 +372,7 @@
     {/if}
 
     <div class="header">
-        <h2>Select Initial Chapters</h2>
+        <h2>Select Initial Chapters <DocLink path="/workflows/smart-detect/#initial-chapter-selection" featureName="Initial Chapter Selection" size="16"/></h2>
         <p>
             We've detected <strong>{cuesCapped ? `${MAX_CUES}+` : allCues.length}</strong> potential chapter cues.
             Use the slider below to select how many chapters to start with.

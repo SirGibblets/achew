@@ -3,6 +3,7 @@
     import {get} from "svelte/store";
     import { slide } from "svelte/transition";
     import {audio, currentSegmentId, isPlaying} from "../stores/audio.js";
+    import DocLink from "./DocLink.svelte";
     import {
         canRedo,
         canUndo,
@@ -825,7 +826,7 @@
 
     <!-- Page Header -->
     <div class="page-header">
-        <h2>Edit Chapters</h2>
+        <h2>Edit Chapters <DocLink path="/editor/overview/" featureName="the Chapter Editor" size="16"/></h2>
         <p>Review and edit your audiobook chapters</p>
     </div>
 

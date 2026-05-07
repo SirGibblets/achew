@@ -1,6 +1,7 @@
 <script>
     import {createEventDispatcher, onMount} from "svelte";
     import {llm} from "../utils/api.js";
+    import DocLink from "./DocLink.svelte";
     import Icon from "./Icon.svelte";
 
     // Icons
@@ -451,7 +452,7 @@
                     color="linear-gradient(135deg, var(--accent-gradient-start) 0%, var(--accent-gradient-end) 100%)"
             />
         </div>
-        <h1>LLM Setup</h1>
+        <h1>LLM Setup <DocLink path="/getting-started/setup-llm-providers/" featureName="LLM Setup" size="16"/></h1>
         <p class="optional-label">OPTIONAL</p>
         <p>
             Configure access to LLM services for enhanced cleanup and processing of
