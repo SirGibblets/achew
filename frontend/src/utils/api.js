@@ -252,6 +252,13 @@ export const chapters = {
         };
     },
 
+    async exportAsSnapshot() {
+        return apiRequest('/chapters/export/snapshot', {
+            method: 'POST',
+            body: {},
+        });
+    },
+
     async getAddOptions(chapterId) {
         return apiRequest(`/chapters/add-options/${chapterId}`);
     },

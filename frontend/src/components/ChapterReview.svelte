@@ -6,6 +6,8 @@
 
     // Icons
     import BookMarked from "@lucide/svelte/icons/book-marked";
+    import BookmarkPlus from "@lucide/svelte/icons/bookmark-plus";
+    import Check from "@lucide/svelte/icons/check";
     import ChevronDown from "@lucide/svelte/icons/chevron-down";
     import ChevronLeft from "@lucide/svelte/icons/chevron-left";
     import Code from "@lucide/svelte/icons/code";
@@ -13,6 +15,7 @@
     import ListMusic from "@lucide/svelte/icons/list-music";
     import TriangleAlert from "@lucide/svelte/icons/triangle-alert";
     import Upload from "@lucide/svelte/icons/upload";
+    import X from "@lucide/svelte/icons/x";
 
     let loading = false;
     let error = null;
@@ -127,9 +130,16 @@
     // Export functionality
     let exportExpanded = false;
     let exportLoading = false;
+    let sourceExportInfo = null;
+    let exportSection;
 
     function toggleExportSection() {
         exportExpanded = !exportExpanded;
+        if (exportExpanded) {
+            requestAnimationFrame(() => {
+                exportSection?.scrollIntoView({behavior: "smooth", block: "end"});
+            });
+        }
     }
 
     async function exportFormat(format) {
@@ -152,6 +162,22 @@
         } catch (err) {
             error = handleApiError(err);
             console.error(`Error exporting ${format}:`, err);
+        } finally {
+            exportLoading = false;
+        }
+    }
+
+    async function exportAsSnapshot() {
+        if (selectedChapters.length === 0) return;
+
+        exportLoading = true;
+        sourceExportInfo = null;
+        try {
+            const newSource = await api.chapters.exportAsSnapshot();
+            sourceExportInfo = `Created chapter source "${newSource.name}" with ${selectedChapters.length} chapter${selectedChapters.length === 1 ? '' : 's'}`;
+        } catch (err) {
+            error = handleApiError(err);
+            console.error("Error exporting as snapshot:", err);
         } finally {
             exportLoading = false;
         }
@@ -324,48 +350,84 @@
 
     <!-- Export Section -->
     {#if selectedChapters.length > 0}
-        <div class="export-section">
-            <button
-                    class="export-toggle"
-                    on:click={toggleExportSection}
-                    aria-expanded={exportExpanded}
-            >
-                Export
-                <div class="chevron {exportExpanded ? 'expanded' : ''}">
-                    <ChevronDown size="16"/>
-                </div>
-            </button>
+        <div class="export-section" bind:this={exportSection}>
+            <div class="export-toggle-row">
+                <button
+                        class="export-toggle"
+                        on:click={toggleExportSection}
+                        aria-expanded={exportExpanded}
+                >
+                    Export
+                    <div class="chevron {exportExpanded ? 'expanded' : ''}">
+                        <ChevronDown size="16"/>
+                    </div>
+                </button>
+            </div>
 
             {#if exportExpanded}
                 <div class="export-content">
-                    <div class="export-buttons">
-                        <button
-                                class="btn btn-cancel export-button"
-                                on:click={() => exportFormat("csv")}
-                                disabled={exportLoading}
-                        >
-                            <FileSpreadsheet size="16"/>
-                            CSV
-                        </button>
+                    <div class="export-group">
+                        <p class="export-group-label">Download to file &nbsp;<DocLink path="/editor/review-submit-export/#export" featureName="File Export"/></p>
+                        <div class="export-buttons">
+                            <button
+                                    class="btn btn-cancel export-button"
+                                    on:click={() => exportFormat("csv")}
+                                    disabled={exportLoading}
+                            >
+                                <FileSpreadsheet size="16"/>
+                                CSV
+                            </button>
 
-                        <button
-                                class="btn btn-cancel export-button"
-                                on:click={() => exportFormat("json")}
-                                disabled={exportLoading}
-                        >
-                            <Code size="16"/>
-                            JSON
-                        </button>
+                            <button
+                                    class="btn btn-cancel export-button"
+                                    on:click={() => exportFormat("json")}
+                                    disabled={exportLoading}
+                            >
+                                <Code size="16"/>
+                                JSON
+                            </button>
 
-                        <button
-                                class="btn btn-cancel export-button"
-                                on:click={() => exportFormat("cue")}
-                                disabled={exportLoading}
-                        >
-                            <ListMusic size="16"/>
-                            CUE Sheet
-                        </button>
+                            <button
+                                    class="btn btn-cancel export-button"
+                                    on:click={() => exportFormat("cue")}
+                                    disabled={exportLoading}
+                            >
+                                <ListMusic size="16"/>
+                                CUE Sheet
+                            </button>
+                        </div>
                     </div>
+
+                    <div class="export-group">
+                        <p class="export-group-label">
+                            Save as Chapter Source &nbsp;<DocLink path="/editor/review-submit-export/#snapshot" featureName="Snapshot"/>
+                        </p>
+                        <div class="export-buttons">
+                            <button
+                                    class="btn btn-cancel export-button"
+                                    on:click={exportAsSnapshot}
+                                    disabled={exportLoading}
+                                    title="Save a snapshot of these chapters as an in-session chapter source"
+                            >
+                                <BookmarkPlus size="16"/>
+                                Create Snapshot
+                            </button>
+                        </div>
+                    </div>
+
+                    {#if sourceExportInfo}
+                        <div class="export-info">
+                            <Check size="16"/>
+                            <span>{sourceExportInfo}</span>
+                            <button
+                                    class="dismiss-btn"
+                                    on:click={() => (sourceExportInfo = null)}
+                                    aria-label="Dismiss"
+                            >
+                                <X size="14"/>
+                            </button>
+                        </div>
+                    {/if}
 
                     {#if exportLoading}
                         <div class="export-loading">
@@ -587,7 +649,14 @@
     }
 
     .export-section {
-        margin-top: 0.5rem;
+        margin-top: 1rem;
+    }
+
+    .export-toggle-row {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.4rem;
     }
 
     .export-toggle {
@@ -625,6 +694,18 @@
         padding: 0.5rem 1.5rem 1.5rem 1.5rem;
     }
 
+    .export-group {
+        margin-top: 0.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .export-group-label {
+        margin: 0 0 0.8rem 0;
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+        text-align: center;
+    }
+
     .export-button {
         padding: 0.5rem 1rem;
         display: inline-flex;
@@ -638,6 +719,46 @@
         gap: 1rem;
         flex-wrap: wrap;
         justify-content: center;
+    }
+
+    .export-info {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5rem;
+        margin-top: 1rem;
+        padding: 0.75rem 1rem;
+        border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent);
+        background: color-mix(in srgb, var(--primary-color) 8%, transparent);
+        border-radius: 8px;
+        color: var(--text-primary);
+        font-size: 0.85rem;
+        line-height: 1.4;
+    }
+
+    .export-info > :global(svg) {
+        flex-shrink: 0;
+        margin-top: 0.1rem;
+        color: var(--primary-color);
+    }
+
+    .export-info span {
+        flex: 1;
+    }
+
+    .dismiss-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: var(--text-secondary);
+        padding: 0;
+        display: flex;
+        margin-top: 0.15rem;
+        flex-shrink: 0;
+        opacity: 0.7;
+    }
+
+    .dismiss-btn:hover {
+        opacity: 1;
     }
 
     .export-loading {

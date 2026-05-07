@@ -91,6 +91,13 @@ Auto-added from **Library Files**[^2] named `*.cue`.
 Can also be uploaded via the **Add Chapter Source** dialog.
 </div>
 
+### :lucide-bookmark-plus: Snapshot
+A snapshot of the chapters you've produced inside Achew, usable only during the current session.
+
+<div class="muted-section" markdown>
+Added using the **Create Snapshot** button on the [Review and Submit](../editor/review-submit-export.md#snapshot) screen.
+</div>
+
 ## Title-only sources
 
 ### :material-file-document-outline: Text File
