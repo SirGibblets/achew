@@ -138,6 +138,7 @@ default = "latest"
   { "Fill in a few missing chapters" = "examples/fill-missing-chapters.md" },
   { "Realign chapters for a different revision" = "examples/realign-chapters-for-a-different-revision.md" },
   { "Improve titles with AI Cleanup" = "examples/improve-titles-with-ai-cleanup.md" },
+  { "Working with snapshots" = "examples/working-with-snapshots.md" },
   { "Audit your library with Chapter Search" = "examples/audit-library-with-chapter-search.md" },
 ]
 

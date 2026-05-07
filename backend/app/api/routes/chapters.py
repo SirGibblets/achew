@@ -110,7 +110,11 @@ class DetectedCue(BaseModel):
         )
 
 
-from ...models.sources import ExistingCue  # noqa: E402 — placed here to avoid import-order churn
+from ...models.sources import (  # noqa: E402 — placed here to avoid import-order churn
+    CueSourceType,
+    ExistingCue,
+    ExistingCueSource,
+)
 
 class DeletedChapter(BaseModel):
     timestamp: float
@@ -750,6 +754,61 @@ async def export_chapters_cue():
         raise
     except Exception as e:
         logger.error(f"Failed to export CUE: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/chapters/export/snapshot", response_model=ExistingCueSource)
+async def export_chapters_as_snapshot():
+    """Save selected chapters as a new in-session chapter source snapshot."""
+    try:
+        app_state = get_app_state()
+
+        if not app_state.pipeline or not app_state.pipeline.chapters:
+            raise HTTPException(status_code=404, detail="No chapters found")
+
+        selected_chapters = [ch for ch in app_state.pipeline.chapters if ch.selected]
+        if not selected_chapters:
+            raise HTTPException(status_code=400, detail="No chapters selected for export")
+
+        existing_names = {
+            s.name for s in app_state.pipeline.existing_cue_sources if s.type == CueSourceType.SNAPSHOT
+        }
+        base_name = "Snapshot"
+        name = base_name
+        suffix = 2
+        while name in existing_names:
+            name = f"{base_name} {suffix}"
+            suffix += 1
+        short_name = name
+
+        sorted_chapters = sorted(selected_chapters, key=lambda ch: ch.timestamp)
+        cues = [
+            ExistingCue(timestamp=ch.timestamp, title=ch.current_title or "")
+            for ch in sorted_chapters
+        ]
+        duration = float(app_state.pipeline.book.duration) if app_state.pipeline.book else 0.0
+
+        new_source = ExistingCueSource(
+            type=CueSourceType.SNAPSHOT,
+            name=name,
+            short_name=short_name,
+            description="Snapshot of the chapter list, saved from the Review screen",
+            metadata={
+                "Chapters": str(len(cues)),
+                "Saved": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            },
+            cues=cues,
+            duration=duration,
+        )
+        app_state.pipeline.existing_cue_sources.append(new_source)
+
+        await app_state.broadcast_sources_update()
+        return new_source
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to export chapters as snapshot: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

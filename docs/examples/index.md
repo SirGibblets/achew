@@ -7,4 +7,5 @@ Task-focused walkthroughs for common scenarios. For feature-by-feature reference
 - [Fill in a few missing chapters](fill-missing-chapters.md): Your list is mostly right, you just need to insert one or two.
 - [Realign chapters for a different revision](realign-chapters-for-a-different-revision.md): Titles are correct but timestamps don't quite match.
 - [Improve titles with AI Cleanup](improve-titles-with-ai-cleanup.md): Tidy up your titles and create reusable formatting rules.
+- [Working with snapshots](working-with-snapshots.md): A few examples of different ways to use snapshots.
 - [Audit your library with Chapter Search](audit-library-with-chapter-search.md): Find every book that needs chapter work.

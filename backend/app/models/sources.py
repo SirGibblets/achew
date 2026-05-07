@@ -13,6 +13,7 @@ class CueSourceType(str, Enum):
     JSON = "json"
     CSV = "csv"
     CUE = "cue"
+    SNAPSHOT = "snapshot"
 
 
 class TitleSourceType(str, Enum):
