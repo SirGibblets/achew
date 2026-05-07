@@ -35,28 +35,20 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
     let biasWordsDebounceTimer = null;
 
     function findMatchingLanguage(availableLanguages, bookLang) {
-        if (!bookLang || !availableLanguages || availableLanguages.length === 0) {
-            return null;
-        }
+        if (!bookLang || !availableLanguages?.length) return null;
+        const needle = bookLang.trim().toLowerCase();
 
-        const normalizedBookLang = bookLang.trim().toLowerCase();
-
+        let substringMatch = null;
         for (const [code, englishName, nativeName] of availableLanguages) {
-            if (code.toLowerCase() === normalizedBookLang) return code;
-        }
-        for (const [code, englishName, nativeName] of availableLanguages) {
-            if (englishName.toLowerCase() === normalizedBookLang) return code;
-        }
-        for (const [code, englishName, nativeName] of availableLanguages) {
-            if (nativeName && nativeName.toLowerCase() === normalizedBookLang) return code;
-        }
-        for (const [code, englishName, nativeName] of availableLanguages) {
-            if (englishName.toLowerCase().includes(normalizedBookLang) ||
-                normalizedBookLang.includes(englishName.toLowerCase())) {
+            const en = englishName.toLowerCase();
+            if (code.toLowerCase() === needle || en === needle || nativeName?.toLowerCase() === needle) {
                 return code;
             }
+            if (!substringMatch && (en.includes(needle) || needle.includes(en))) {
+                substringMatch = code;
+            }
         }
-        return null;
+        return substringMatch;
     }
 
     function selectLanguageForVariant(variant, bookLang) {
@@ -65,6 +57,23 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
         }
         const matchedLanguage = findMatchingLanguage(variant.languages, bookLang);
         return matchedLanguage || variant.languages[0][0] || "";
+    }
+
+    function selectVariantForLanguage(variants, bookLang) {
+        if (!variants || variants.length === 0) return null;
+        if (!bookLang) return variants[0];
+
+        let supportsLanguage = null;
+        let autoMultilingual = null;
+
+        for (const v of variants) {
+            const langs = v.languages || [];
+            const matched = findMatchingLanguage(langs, bookLang);
+            if (matched === "en" && langs.length === 1) return v;
+            if (!supportsLanguage && matched !== null) supportsLanguage = v;
+            if (!autoMultilingual && langs.some(([code]) => code === "auto")) autoMultilingual = v;
+        }
+        return supportsLanguage || autoMultilingual || variants[0];
     }
 
     // Load ASR preferences
@@ -80,10 +89,10 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
 
             if (!currentASRVariant && currentASRService) {
                 const service = asrServices.find(s => s.service_id === currentASRService);
-                const firstVariant = service?.variants?.[0]?.model_id;
-                if (firstVariant) {
-                    currentASRVariant = firstVariant;
-                    await updateASRPreference(currentASRService, firstVariant, currentASRLanguage);
+                const variant = selectVariantForLanguage(service?.variants, bookLanguage);
+                if (variant) {
+                    currentASRVariant = variant.model_id;
+                    await updateASRPreference(currentASRService, variant.model_id, currentASRLanguage);
                 }
             }
 
@@ -126,10 +135,10 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
 
     function selectASRService(serviceId) {
         const newService = asrServices.find(s => s.service_id === serviceId);
-        const firstVariant = newService?.variants?.[0];
-        const firstVariantId = firstVariant?.model_id || "";
-        const selectedLanguage = selectLanguageForVariant(firstVariant, bookLanguage);
-        updateASRPreference(serviceId, firstVariantId, selectedLanguage);
+        const variant = selectVariantForLanguage(newService?.variants, bookLanguage);
+        const variantId = variant?.model_id || "";
+        const selectedLanguage = selectLanguageForVariant(variant, bookLanguage);
+        updateASRPreference(serviceId, variantId, selectedLanguage);
         serviceDropdownOpen = false;
     }
 
