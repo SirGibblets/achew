@@ -529,6 +529,11 @@
                             <input
                                     id="{provider.id}-{field.name}"
                                     type={field.type === "password" ? "password" : "text"}
+                                    autocomplete="off"
+                                    data-1p-ignore
+                                    data-lpignore="true"
+                                    data-bwignore
+                                    data-form-type="other"
                                     bind:value={providerConfigs[provider.id][field.name]}
                                     placeholder={field.placeholder || field.label}
                                     disabled={loading || !provider.is_enabled}
