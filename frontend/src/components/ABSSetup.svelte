@@ -217,6 +217,11 @@
                     <input
                             id="abs-url"
                             type="url"
+                            autocomplete="off"
+                            data-1p-ignore
+                            data-lpignore="true"
+                            data-bwignore
+                            data-form-type="other"
                             bind:value={absUrl}
                             placeholder="Include the http/https scheme, e.g. https://abs.your-server.com"
                             disabled={loading}
@@ -230,6 +235,11 @@
                     <input
                             id="abs-api-key"
                             type="text"
+                            autocomplete="off"
+                            data-1p-ignore
+                            data-lpignore="true"
+                            data-bwignore
+                            data-form-type="other"
                             bind:value={absApiKey}
                             placeholder="*******"
                             disabled={loading}
