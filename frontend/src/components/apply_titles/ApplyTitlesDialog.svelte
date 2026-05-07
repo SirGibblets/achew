@@ -3,6 +3,7 @@
     import {api, handleApiError} from "../../utils/api.js";
     import {audio} from "../../stores/audio.js";
     import AlignmentTab from "./AlignmentTab.svelte";
+    import DocLink from "../DocLink.svelte";
     import SelectionTab from "./SelectionTab.svelte";
 
     import X from "@lucide/svelte/icons/x";
@@ -178,7 +179,7 @@
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h3>Apply Titles</h3>
+                    <h3>Apply Titles &nbsp;<DocLink path="/editor/apply-titles/" featureName="Applying Titles" size="14" /></h3>
                     <button class="close-button" onclick={handleCancel} aria-label="Close">
                         <X size="20"/>
                     </button>

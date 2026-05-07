@@ -21,10 +21,13 @@
     import Welcome from "./components/Welcome.svelte";
 
     // Icons
+    import BookOpen from "@lucide/svelte/icons/book-open";
+    import Bug from "@lucide/svelte/icons/bug";
     import ChevronLeft from "@lucide/svelte/icons/chevron-left";
     import CircleQuestionMark from "@lucide/svelte/icons/circle-question-mark";
     import Download from "@lucide/svelte/icons/download";
     import Headphones from "@lucide/svelte/icons/headphones";
+    import Lightbulb from "@lucide/svelte/icons/lightbulb";
     import Mic from "@lucide/svelte/icons/mic";
     import Moon from "@lucide/svelte/icons/moon";
     import Pencil from "@lucide/svelte/icons/pencil";
@@ -460,25 +463,25 @@
                     {/if}
                 </button>
 
-                {#if shouldShowSettings}
-                    <div class="settings-container">
-                        <button
-                                class="settings-toggle"
-                                on:click={toggleSettingsMenu}
-                                title="Settings"
-                        >
-                            <Settings size="18"/>
-                        </button>
+                <div class="settings-container">
+                    <button
+                            class="settings-toggle"
+                            on:click={toggleSettingsMenu}
+                            title="Settings"
+                    >
+                        <Settings size="18"/>
+                    </button>
 
-                        {#if showSettingsMenu}
-                            <div class="settings-dropdown">
-                                <div class="settings-options">
+                    {#if showSettingsMenu}
+                        <div class="settings-dropdown">
+                            <div class="settings-options">
+                                {#if shouldShowSettings}
                                     <button
                                             class="settings-option"
                                             on:click={gotoABSSetup}
                                             disabled={$session.loading}
                                     >
-                                        <Headphones size="16"/>
+                                        <Headphones size="16" color="var(--primary)" />
                                         Audiobookshelf Setup
                                     </button>
                                     <button
@@ -486,7 +489,7 @@
                                             on:click={gotoASRSetup}
                                             disabled={$session.loading}
                                     >
-                                        <Mic size="16"/>
+                                        <Mic size="16" color="var(--primary)" />
                                         Transcription Settings
                                     </button>
                                     <button
@@ -494,14 +497,42 @@
                                             on:click={gotoLLMSetup}
                                             disabled={$session.loading}
                                     >
-                                        <Icon name="ai" size="16"/>
+                                        <Icon name="ai" size="16" color="var(--primary)" />
                                         LLM Setup
                                     </button>
-                                </div>
+                                    <div class="settings-divider"></div>
+                                {/if}
+                                <a
+                                        class="settings-option"
+                                        href="https://achew.readthedocs.io/stable/"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                >
+                                    <BookOpen size="16" color="var(--text-secondary)" />
+                                    View Documentation
+                                </a>
+                                <a
+                                        class="settings-option"
+                                        href="https://achew.readthedocs.io/stable/troubleshooting/logs-and-support/#filing-a-bug-report"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                >
+                                    <Bug size="16" color="var(--text-secondary)" />
+                                    Report a Bug
+                                </a>
+                                <a
+                                        class="settings-option"
+                                        href="https://github.com/SirGibblets/achew/discussions/categories/ideas"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                >
+                                    <Lightbulb size="16" color="var(--text-secondary)" />
+                                    Request a Feature
+                                </a>
                             </div>
-                        {/if}
-                    </div>
-                {/if}
+                        </div>
+                    {/if}
+                </div>
             </div>
         </div>
     </header>
@@ -753,6 +784,7 @@
         cursor: pointer;
         transition: all 0.2s ease;
         text-align: left;
+        text-decoration: none;
     }
 
     .settings-option:hover:not(:disabled) {
@@ -767,6 +799,12 @@
 
     .settings-option:not(:last-child) {
         border-bottom: 1px solid var(--border-color);
+    }
+
+    .settings-divider {
+        height: 1px;
+        background: var(--border-color);
+        margin-top: 0.15rem;
     }
 
     .app-content {

@@ -4,6 +4,7 @@
     import {api} from "../utils/api.js";
     import ChapterModal from "./ChapterModal.svelte";
     import CustomInstructionsList from "./CustomInstructionsList.svelte";
+    import DocLink from "./DocLink.svelte";
     import Icon from "./Icon.svelte";
     import AddSourceDialog from "./AddSourceDialog.svelte";
     import CustomTitlesDialog from "./CustomTitlesDialog.svelte";
@@ -377,7 +378,7 @@
                     <div class="ai-modal-icon">
                         <Icon name="ai" size="32" color="var(--ai-accent)"/>
                     </div>
-                    <h3>AI Chapter Cleanup</h3>
+                    <h3>AI Chapter Cleanup &nbsp;<DocLink path="/editor/ai-cleanup/" featureName="AI Cleanup" size="14"/></h3>
                 </div>
 
                 <div

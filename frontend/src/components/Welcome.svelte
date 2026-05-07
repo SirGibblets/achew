@@ -1,5 +1,6 @@
 <script>
     import {createEventDispatcher} from "svelte";
+    import DocLink from "./DocLink.svelte";
     import Icon from "./Icon.svelte";
     import ArrowRight from "@lucide/svelte/icons/arrow-right";
 
@@ -44,6 +45,10 @@
             Get Started
             <ArrowRight size="18"/>
         </button>
+    </div>
+
+    <div class="welcome-docs">
+        <DocLink path="/getting-started/achew-basics/" text="Read the docs" inlineIcon />
     </div>
 </div>
 
@@ -97,6 +102,11 @@
     .welcome-actions {
         display: flex;
         justify-content: center;
+    }
+
+    .welcome-docs {
+        margin-top: 1.25rem;
+        font-size: 0.85rem;
     }
 
     @media (max-width: 768px) {

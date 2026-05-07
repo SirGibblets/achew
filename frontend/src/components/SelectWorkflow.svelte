@@ -5,6 +5,7 @@
     import AudiobookCard from "./AudiobookCard.svelte";
     import ChapterModal from "./ChapterModal.svelte";
     import AddSourceDialog from "./AddSourceDialog.svelte";
+    import DocLink from "./DocLink.svelte";
     import SourceFooter from "./SourceFooter.svelte";
 
     // Icons
@@ -220,7 +221,7 @@
         <div class="codec-warning-card">
             <TriangleAlert size="20" color="var(--warning)" />
             <div class="codec-warning-content">
-                <p class="codec-warning-title">Unsupported Audio Codec (xHE-AAC)</p>
+                <p class="codec-warning-title">Unsupported Audio Codec (xHE-AAC) <DocLink path="/reference/supported-formats/#audio" featureName="Supported Formats" /></p>
                 <p class="codec-warning-text">
                     This audiobook uses a codec that is not currently supported by Achew. Features like
                     Smart Detect, chapter realignment, transcription, audio playback, etc. may not work
@@ -231,7 +232,7 @@
     {/if}
 
     <div class="header">
-        <h2>Select a Workflow</h2>
+        <h2>Select a Workflow <DocLink path="/getting-started/workflows-overview/" featureName="Workflow Selection" size="16" /></h2>
     </div>
 
     {#if loading}
@@ -276,6 +277,7 @@
                 <p class="tab-description">
                     The <b>Smart Detect</b> workflow uses audio analysis to locate potential chapter cues within
                     the audiobook. After detection, you'll choose which cues to use as your initial chapters.
+                    <DocLink path="/workflows/smart-detect/" featureName="Smart Detect" />
                 </p>
 
                 <SourceFooter {cueSources} {titleSources} showCueSources onAddSource={() => showAddSource = true} />
@@ -315,6 +317,7 @@
             {:else if activeTab === 'realign'}
                 <p class="tab-description">
                     The <b>Realign Chapters</b> workflow attempts to realign the timestamps of an existing chapter source to better match the book's audio, preserving the chapter titles. This is useful for cases where a source has correct titles, but the timestamps are off by a few seconds.
+                    <DocLink path="/workflows/realign-chapters/" featureName="Chapter Realignment"/>
                 </p>
 
                 {#if existingCueSources.length > 0}
@@ -399,6 +402,7 @@
             {:else if activeTab === 'regenerate_titles'}
                 <p class="tab-description">
                     The <b>Regenerate Titles</b> workflow transcribes new titles at the timestamps of an existing chapter source. This is useful for cases where a source has correct timestamps, but the titles are missing or incorrect.
+                    <DocLink path="/workflows/regenerate-titles/" featureName="Title Regeneration" />
                 </p>
 
                 {#if existingCueSources.length > 0}
@@ -482,6 +486,7 @@
             {:else if activeTab === 'quick_edit'}
                 <p class="tab-description">
                     The <b>Quick Edit</b> workflow skips audio analysis and loads chapters from an existing source directly into the editor. Use this when you only need to make quick changes, like using AI Cleanup or adding a missing chapter.
+                    <DocLink path="/workflows/quick-edit/" featureName="Quick Edit" />
                 </p>
 
                 {#if existingCueSources.length > 0}

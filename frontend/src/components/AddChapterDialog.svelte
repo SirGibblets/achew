@@ -2,6 +2,7 @@
     import {createEventDispatcher} from "svelte";
     import {api, handleApiError} from "../utils/api.js";
     import {audio, currentSegmentId, isPlaying} from "../stores/audio.js";
+    import DocLink from "./DocLink.svelte";
     
     // Icons
     import ArrowDown from "@lucide/svelte/icons/arrow-down";
@@ -352,7 +353,7 @@
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h3>Add Chapter from…</h3>
+                    <h3>Add Chapter from… &nbsp;&nbsp;<DocLink path="/editor/add-chapter-dialog/" featureName="Adding Chapters" size="14" /></h3>
                     <button class="close-button" onclick={handleCancel} aria-label="Close">
                         <X size="20"/>
                     </button>

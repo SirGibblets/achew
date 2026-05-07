@@ -3,6 +3,7 @@
     import {session} from "../stores/session.js";
     import {api} from "../utils/api.js";
     import ASRSettings from "./ASRSettings.svelte";
+    import DocLink from "./DocLink.svelte";
 
     let loading = false;
     let segmentCount = 0;
@@ -54,7 +55,7 @@
 
 <div class="configure-asr">
     <div class="header">
-        <h2>Transcribe Titles</h2>
+        <h2>Transcribe Titles <DocLink path="/reference/transcription/" featureName="Transcription Settings" size="16"/></h2>
         <p>
             Titles will be generated for <strong>{segmentCount}</strong>
             chapter{segmentCount !== 1 ? "s" : ""} using a local ASR model.<br/>

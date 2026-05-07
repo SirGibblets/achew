@@ -2,6 +2,7 @@
     import {onMount} from "svelte";
     import {chapters, session} from "../stores/session.js";
     import {api, handleApiError} from "../utils/api.js";
+    import DocLink from "./DocLink.svelte";
 
     // Icons
     import BookMarked from "@lucide/svelte/icons/book-marked";
@@ -175,7 +176,7 @@
 
 <div class="chapter-review">
     <div class="header">
-        <h2>Review Final Chapters</h2>
+        <h2>Review Final Chapters <DocLink path="/editor/review-submit-export/" featureName="Review & Submit" size="16"/></h2>
         <p>Review your final chapter list before submitting to Audiobookshelf</p>
     </div>
 
