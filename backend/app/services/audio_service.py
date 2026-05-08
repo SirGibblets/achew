@@ -52,7 +52,8 @@ def _ffmpeg_probe_stderr(audio_file: str) -> str:
     try:
         result = subprocess.run(
             ["ffmpeg", "-hide_banner", "-i", audio_file],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True, timeout=30,
+            encoding="utf-8", errors="replace",
         )
         return result.stderr
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
