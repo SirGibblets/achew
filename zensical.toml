@@ -74,6 +74,7 @@ emoji_index = "zensical.extensions.emoji.twemoji"
 emoji_generator = "zensical.extensions.emoji.to_svg"
 
 [project.markdown_extensions.zensical.extensions.glightbox]
+auto_themed = true
 
 [project.extra]
 generator = false

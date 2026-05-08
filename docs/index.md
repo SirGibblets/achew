@@ -6,8 +6,8 @@
 
 # Introduction { display:none }
 
-![Achew overview](img/hero-light.webp#only-light){ width="600"; .center }
-![Achew overview](img/hero-dark.webp#only-dark){ width="600"; .center }
+![Achew overview](img/hero-light.webp#only-light){ width="600"; .center .off-glb }
+![Achew overview](img/hero-dark.webp#only-dark){ width="600"; .center .off-glb }
 
 **Achew** is an Audiobook Chapter Extraction Wizard. It pairs with [Audiobookshelf](https://www.audiobookshelf.org/){:target="_blank"} to help you find chapters, align them to the audio, transcribe titles, and clean up the results. Changes can then be saved back to your library or exported for use elsewhere.
 
