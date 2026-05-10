@@ -40,35 +40,39 @@ def region_for_provider(provider: Optional[str]) -> Optional[str]:
     return _PROVIDER_TO_REGION.get(provider)
 
 
-def region_for_language(language: Optional[str]) -> Optional[str]:
-    """Map freeform language input (code, English name, native name) to a region."""
+def normalize_language(language: Optional[str]) -> Optional[str]:
+    """Normalize freeform language input (code, English name, native name) to ISO 639-1."""
     if not language:
         return None
     text = language.strip()
     if not text:
         return None
 
-    code: Optional[str] = None
-
     # Try as a language code first (handles "en", "de", "fr-FR", etc.).
     try:
         lang = langcodes.Language.get(text)
-        if lang.is_valid():
-            code = lang.language
+        if lang.is_valid() and lang.language:
+            return lang.language.lower()
     except Exception:
         pass
 
     # Fall back to name lookup (handles "English", "Deutsch", "Japanese", etc.).
-    if not code:
-        try:
-            lang = langcodes.find(text)
-            code = lang.language if lang else None
-        except LookupError:
-            code = None
+    try:
+        lang = langcodes.find(text)
+        if lang and lang.language:
+            return lang.language.lower()
+    except LookupError:
+        pass
 
+    return None
+
+
+def region_for_language(language: Optional[str]) -> Optional[str]:
+    """Map freeform language input (code, English name, native name) to a region."""
+    code = normalize_language(language)
     if not code:
         return None
-    return LANGUAGE_REGION_MAP.get(code.lower())
+    return LANGUAGE_REGION_MAP.get(code)
 
 
 def all_regions() -> List[str]:

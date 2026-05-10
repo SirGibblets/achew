@@ -60,8 +60,8 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
     }
 
     function selectVariantForLanguage(variants, bookLang) {
-        if (!variants || variants.length === 0) return null;
-        if (!bookLang) return variants[0];
+        if (!variants || variants.length === 0) return {variant: null, matched: false};
+        if (!bookLang) return {variant: variants[0], matched: false};
 
         let supportsLanguage = null;
         let autoMultilingual = null;
@@ -69,11 +69,13 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
         for (const v of variants) {
             const langs = v.languages || [];
             const matched = findMatchingLanguage(langs, bookLang);
-            if (matched === "en" && langs.length === 1) return v;
+            if (matched === "en" && langs.length === 1) return {variant: v, matched: true};
             if (!supportsLanguage && matched !== null) supportsLanguage = v;
             if (!autoMultilingual && langs.some(([code]) => code === "auto")) autoMultilingual = v;
         }
-        return supportsLanguage || autoMultilingual || variants[0];
+        if (supportsLanguage) return {variant: supportsLanguage, matched: true};
+        if (autoMultilingual) return {variant: autoMultilingual, matched: true};
+        return {variant: variants[0], matched: false};
     }
 
     // Load ASR preferences
@@ -87,10 +89,15 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
             currentASRLanguage = response.current_language;
             bookLanguage = response.book_language;
 
-            if (!currentASRVariant && currentASRService) {
+            if (currentASRService) {
                 const service = asrServices.find(s => s.service_id === currentASRService);
-                const variant = selectVariantForLanguage(service?.variants, bookLanguage);
-                if (variant) {
+                const {variant, matched} = selectVariantForLanguage(service?.variants, bookLanguage);
+                // Prefer a variant that supports the book's language.
+                // Otherwise fall back to last-selected variant.
+                if (matched && variant && variant.model_id !== currentASRVariant) {
+                    currentASRVariant = variant.model_id;
+                    await updateASRPreference(currentASRService, variant.model_id, currentASRLanguage);
+                } else if (!currentASRVariant && variant) {
                     currentASRVariant = variant.model_id;
                     await updateASRPreference(currentASRService, variant.model_id, currentASRLanguage);
                 }
@@ -135,7 +142,7 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
 
     function selectASRService(serviceId) {
         const newService = asrServices.find(s => s.service_id === serviceId);
-        const variant = selectVariantForLanguage(newService?.variants, bookLanguage);
+        const {variant} = selectVariantForLanguage(newService?.variants, bookLanguage);
         const variantId = variant?.model_id || "";
         const selectedLanguage = selectLanguageForVariant(variant, bookLanguage);
         updateASRPreference(serviceId, variantId, selectedLanguage);
