@@ -9,10 +9,16 @@ import aiohttp
 
 from ..core.config import get_app_config
 from ..models.abs import Book, AudnexusChapterList
+from .audible_providers import (
+    all_regions,
+    region_for_language,
+    region_for_provider,
+)
 
 logger = logging.getLogger(__name__)
 
 _library_cache: Dict[str, Dict] = {}
+_library_provider_cache: Dict[str, Optional[str]] = {}
 
 
 class ABSService:
@@ -75,6 +81,12 @@ class ABSService:
             async with self.session.get(url, headers=self._get_headers(), params=params) as resp:
                 if resp.status == 200:
                     data = await resp.json()
+                    if data.get("stringKey") == "MessageChaptersNotFound":
+                        logger.info(f"No chapters found for ASIN:{asin} in {region} region")
+                        return None
+                    if "error" in data:
+                        logger.error(f"Failed to fetch Audnexus chapters: {data.get('error')}")
+                        return None
                     return AudnexusChapterList(**data)
                 else:
                     logger.error(f"Failed to fetch Audnexus chapters: {resp.status}")
@@ -82,6 +94,71 @@ class ABSService:
         except Exception as e:
             logger.error(f"Error fetching Audnexus chapters: {e}")
             return None
+
+    async def get_library_provider(self, library_id: str) -> Optional[str]:
+        global _library_provider_cache
+        if library_id in _library_provider_cache:
+            return _library_provider_cache[library_id]
+
+        provider: Optional[str] = None
+        try:
+            url = f"{self.config.url}/api/libraries/{library_id}"
+            async with self.session.get(url, headers=self._get_headers()) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    raw = data.get("provider")
+                    if isinstance(raw, str) and raw:
+                        provider = raw
+                else:
+                    logger.warning(f"Failed to fetch library {library_id}: {resp.status}")
+        except Exception as e:
+            logger.warning(f"Error fetching library {library_id}: {e}")
+
+        _library_provider_cache[library_id] = provider
+        return provider
+
+    async def find_audnexus_chapters(self, book: Book) -> Optional[AudnexusChapterList]:
+        """
+        Try Audnexus across multiple regions in priority order:
+        1. The library's audible provider (if any).
+        2. The audible region matching the book's metadata language (if any).
+        3. All remaining regions; pick the result with the closest duration.
+        """
+        asin = book.media.metadata.asin
+        if not asin:
+            return None
+
+        tried: set[str] = set()
+
+        if book.libraryId:
+            lib_provider = await self.get_library_provider(book.libraryId)
+            region = region_for_provider(lib_provider)
+            if region:
+                result = await self.get_audnexus_chapters(asin, region=region)
+                tried.add(region)
+                if result:
+                    return result
+
+        lang_region = region_for_language(book.media.metadata.language)
+        if lang_region and lang_region not in tried:
+            result = await self.get_audnexus_chapters(asin, region=lang_region)
+            tried.add(lang_region)
+            if result:
+                return result
+
+        remaining = [r for r in all_regions() if r not in tried]
+        if not remaining:
+            return None
+
+        results = await asyncio.gather(
+            *(self.get_audnexus_chapters(asin, region=r) for r in remaining)
+        )
+        candidates = [r for r in results if r is not None]
+        if not candidates:
+            return None
+
+        book_ms = (book.duration or 0) * 1000
+        return min(candidates, key=lambda c: abs(c.runtimeLengthMs - book_ms))
 
     async def download_audio_file(
         self,
@@ -342,12 +419,14 @@ class ABSService:
     @staticmethod
     def clear_library_cache(library_id: str = None):
         """Clear cache for a specific library or all libraries"""
-        global _library_cache
+        global _library_cache, _library_provider_cache
 
         if library_id:
             if library_id in _library_cache:
                 del _library_cache[library_id]
-                logger.info(f"Cleared cache for library {library_id}")
+            _library_provider_cache.pop(library_id, None)
+            logger.info(f"Cleared cache for library {library_id}")
         else:
             _library_cache.clear()
+            _library_provider_cache.clear()
             logger.info("Cleared all library cache")

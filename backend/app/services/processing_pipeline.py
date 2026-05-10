@@ -661,7 +661,7 @@ class ProcessingPipeline:
                         f"Book must have at least one supported audio file. Found {len(audio_files)} supported files. Available MIME types: {available_types}"
                     )
 
-                self._notify_progress(Step.VALIDATING, 0, "Checking existing cues…")
+                self._notify_progress(Step.VALIDATING, 0, "Checking chapter sources…")
 
                 # Check for existing Audiobookshelf cues
                 if book.media.chapters:
@@ -712,7 +712,7 @@ class ProcessingPipeline:
                 # Check for existing Audnexus cues
                 audnexus_chapter_data = None
                 if book.media.metadata.asin:
-                    audnexus_chapter_data = await abs_service.get_audnexus_chapters(book.media.metadata.asin)
+                    audnexus_chapter_data = await abs_service.find_audnexus_chapters(book)
                 if audnexus_chapter_data:
                     audnexus_cues: List[ExistingCue] = []
                     for chapter in audnexus_chapter_data.chapters:
@@ -1523,7 +1523,7 @@ class ProcessingPipeline:
         for source_id in include_unaligned:
             cue_source = self._get_existing_cue_source(source_id)
             if not cue_source:
-                logger.warning(f"No existing cue source found for include_unaligned: {source_id}")
+                logger.warning(f"No existing source found for include_unaligned: {source_id}")
                 continue
 
             existing_timestamps = [c.timestamp for c in cue_source.cues]
