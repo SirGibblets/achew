@@ -25,6 +25,7 @@ from ...services.llm_providers.registry import (
     get_provider_models,
 )
 from ...services.llm_providers.base import ProviderInfo, ModelInfo
+from ...services.audible_providers import normalize_language
 import logging
 
 logger = logging.getLogger(__name__)
@@ -429,7 +430,8 @@ async def get_asr_preferences():
         book_language = None
         app_state = get_app_state()
         if app_state.pipeline and app_state.pipeline.book:
-            book_language = app_state.pipeline.book.media.metadata.language
+            raw_language = app_state.pipeline.book.media.metadata.language
+            book_language = normalize_language(raw_language) or raw_language
 
         return ASRPreferencesResponse(
             available_services=available_services,
