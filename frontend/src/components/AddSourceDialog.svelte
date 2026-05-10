@@ -21,18 +21,18 @@
         onSourceAdded = null,
     } = $props();
 
-    const PROVIDERS = [
-        {value: 'audible',    label: 'Audible.com'},
-        {value: 'audible.ca', label: 'Audible.ca'},
-        {value: 'audible.uk', label: 'Audible.co.uk'},
-        {value: 'audible.au', label: 'Audible.com.au'},
-        {value: 'audible.fr', label: 'Audible.fr'},
-        {value: 'audible.de', label: 'Audible.de'},
-        {value: 'audible.jp', label: 'Audible.co.jp'},
-        {value: 'audible.it', label: 'Audible.it'},
-        {value: 'audible.in', label: 'Audible.in'},
-        {value: 'audible.es', label: 'Audible.es'},
-    ];
+    let providers = $state([]);
+
+    async function loadProviders() {
+        try {
+            providers = await api.abs.getProviders();
+        } catch (e) {
+            console.error('Failed to load providers', e);
+            providers = [];
+        }
+    }
+
+    loadProviders();
 
     const CUE_EXTS    = '.json, .csv, .cue';
     const TITLE_EXTS  = '.txt, .epub';
@@ -349,7 +349,7 @@
                             <div class="field-col provider-col">
                                 <label class="field-label" for="search-provider">Provider</label>
                                 <select id="search-provider" class="field-input" bind:value={provider}>
-                                    {#each PROVIDERS as p}
+                                    {#each providers as p}
                                         <option value={p.value}>{p.label}</option>
                                     {/each}
                                 </select>

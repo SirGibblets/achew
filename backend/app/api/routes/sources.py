@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from ...app import get_app_state
 from ...services.abs_service import ABSService
+from ...services.audible_providers import region_for_provider
 from ...models.sources import (
     CueSourceType,
     ExistingCue,
@@ -143,7 +144,7 @@ async def add_audnexus_source(request: AddAudnexusRequest):
     pipeline = _get_pipeline()
     app_state = get_app_state()
 
-    region = request.provider.split(".")[-1].upper() if request.provider and "." in request.provider else "US"
+    region = region_for_provider(request.provider) or "US"
 
     async with ABSService() as abs_service:
         chapter_data = await abs_service.get_audnexus_chapters(request.asin, region=region)

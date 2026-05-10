@@ -541,6 +541,10 @@ export const sources = {
 };
 
 export const abs = {
+    async getProviders() {
+        return apiRequest('/audiobookshelf/providers');
+    },
+
     async searchBooks({provider, title = '', author = '', id = ''}) {
         const params = new URLSearchParams({provider});
         if (title) params.append('title', title);

@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from ...core.config import is_abs_configured
 from ...models.abs import Book, BookSearchResult
 from ...services.abs_service import ABSService
+from ...services.audible_providers import provider_dropdown, region_for_provider
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,19 @@ class LibraryResponse(BaseModel):
     id: str
     name: str
     mediaType: str
+
+
+class ProviderOption(BaseModel):
+    """Audible provider option for the Audnexus search UI"""
+
+    value: str
+    label: str
+
+
+@router.get("/providers", response_model=List[ProviderOption])
+async def get_providers():
+    """Return the list of supported Audible providers."""
+    return provider_dropdown()
 
 
 @router.get("/libraries", response_model=List[LibraryResponse])
@@ -227,8 +241,7 @@ async def search_books(
         results.sort(key=lambda r: r.matchConfidence or 0.0, reverse=True)
         results = results[:10]
 
-        # Determine region from provider (e.g. "audible.uk" -> "UK", "audible" -> "US")
-        region = provider.split(".")[-1].upper() if "." in provider else "US"
+        region = region_for_provider(provider) or "US"
 
         # Fetch Audnexus chapter data for each result concurrently
         async def _enrich(result: BookSearchResult) -> Optional[BookSearchResultWithChapters]:

@@ -104,6 +104,7 @@ class LibraryFile(BaseModel):
 
 class Book(BaseModel):
     id: str
+    libraryId: Optional[str] = None
     addedAt: int
     updatedAt: int
     media: BookMedia
