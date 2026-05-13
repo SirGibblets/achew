@@ -19,7 +19,7 @@ jobs:
           args: "format --check"
 
   pyright:
-    runs-on: ubuntu-22.04
+    runs-on: macos-latest
     defaults:
       run:
         working-directory: backend
