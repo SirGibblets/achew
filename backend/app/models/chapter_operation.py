@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Sequence
 
 from ..models.chapter import ChapterData, RealignmentData
 
@@ -23,7 +23,7 @@ class ChapterOperation(BaseModel):
 
 
 class BatchChapterOperation(ChapterOperation):
-    operations: list[ChapterOperation]
+    operations: Sequence[ChapterOperation]
 
     def apply(self, pipeline: "ProcessingPipeline"):
         for op in self.operations:

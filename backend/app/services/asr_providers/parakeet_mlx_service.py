@@ -58,6 +58,8 @@ class ParakeetMLXASRService(ASRService):
 
     def _transcribe_file(self, audio_file: str, retry_on_empty: bool = True) -> str:
         """Transcribe a single audio file using Parakeet MLX"""
+        if self.model is None:
+            raise RuntimeError("Parakeet MLX model is not loaded")
         try:
             result = self.model.transcribe(audio_file)
             return result.text.strip()

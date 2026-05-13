@@ -190,6 +190,7 @@ class ChapterSearchState:
     async def _run_sync_and_search(self, library_id: str, library_name: str) -> None:
         ruleset = load_ruleset()
         cancel = self._cancel_event
+        assert cancel is not None  # set by the caller before this task is created
 
         def progress_cb(task: str, current: int, total: int) -> None:
             self.current_task = task
@@ -240,6 +241,7 @@ class ChapterSearchState:
 
     async def _run_sync_and_stats(self, library_id: str) -> None:
         cancel = self._cancel_event
+        assert cancel is not None  # set by the caller before this task is created
 
         def progress_cb(task: str, current: int, total: int) -> None:
             self.current_task = task
@@ -300,6 +302,9 @@ class ChapterSearchState:
     async def _run_refresh(self, book_ids: list[str]) -> None:
         ruleset = load_ruleset()
         cancel = self._cancel_event
+        assert cancel is not None  # set by the caller before this task is created
+        library_id = self.selected_library_id
+        assert library_id is not None  # a library is always selected before a refresh
 
         def progress_cb(task: str, current: int, total: int) -> None:
             self.current_task = task
@@ -307,7 +312,7 @@ class ChapterSearchState:
             asyncio.create_task(self.broadcast_state())
 
         try:
-            await sync_specific_books(self.selected_library_id, book_ids, progress_cb, cancel)
+            await sync_specific_books(library_id, book_ids, progress_cb, cancel)
             if cancel.is_set():
                 await self._back_to_landing()
                 return
@@ -316,7 +321,7 @@ class ChapterSearchState:
             self.progress = {"current": 0, "total": 0}
             await self.broadcast_state()
 
-            results = await run_search(self.selected_library_id, ruleset, progress_cb, cancel)
+            results = await run_search(library_id, ruleset, progress_cb, cancel)
             if cancel.is_set():
                 await self._back_to_landing()
                 return

@@ -358,6 +358,9 @@ async def shift_timestamps(request: ShiftTimestampsRequest):
         if not request.shifts:
             raise HTTPException(status_code=400, detail="No shifts provided")
 
+        if not app_state.pipeline.book:
+            raise HTTPException(status_code=404, detail="Book not found")
+
         book_duration = app_state.pipeline.book.duration
 
         operations = []
@@ -825,6 +828,9 @@ async def get_add_options(chapter_id: str):
         if not current_chapter:
             raise HTTPException(status_code=404, detail="Chapter not found")
 
+        if not app_state.pipeline.book:
+            raise HTTPException(status_code=404, detail="Book not found")
+
         next_chapter = None
         current_found = False
         for chapter in sorted(chapters, key=lambda ch: ch.timestamp):
@@ -942,24 +948,27 @@ async def add_chapter(request: AddChapterRequest):
                 existing_deleted = chapter
                 break
 
-        operation: ChapterOperation = None
+        operation: ChapterOperation
+        new_chapter_id: str
 
         if existing_deleted:
-            operation = RestoreChapterOperation(chapter_id=existing_deleted.id)
+            restore_op = RestoreChapterOperation(chapter_id=existing_deleted.id)
             if request.title:
-                operation.new_title = request.title
+                restore_op.new_title = request.title
+            operation = restore_op
+            new_chapter_id = existing_deleted.id
 
         else:
             from ...models.chapter import ChapterData
 
-            operation = AddChapterOperation(
-                chapter=ChapterData(
-                    timestamp=request.timestamp,
-                    asr_title="",
-                    current_title=request.title or "",
-                    selected=True,
-                )
+            new_chapter = ChapterData(
+                timestamp=request.timestamp,
+                asr_title="",
+                current_title=request.title or "",
             )
+            new_chapter.selected = True
+            operation = AddChapterOperation(chapter=new_chapter)
+            new_chapter_id = new_chapter.id
 
         operation.apply(app_state.pipeline)
         app_state.pipeline.add_to_history(operation)
@@ -969,8 +978,7 @@ async def add_chapter(request: AddChapterRequest):
 
         # Enqueue transcription if requested
         if request.transcribe:
-            chapter_id = existing_deleted.id if existing_deleted else operation.chapter.id
-            await app_state.enqueue_transcription([chapter_id], is_batch=False)
+            await app_state.enqueue_transcription([new_chapter_id], is_batch=False)
 
         return {"message": "Chapter added successfully"}
 

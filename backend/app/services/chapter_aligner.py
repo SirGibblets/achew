@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -128,7 +128,7 @@ class ChapterAligner:
         INF = float("inf")
         dp = [[INF] * (n_cues + 1) for _ in range(n_chapters + 1)]
 
-        traceback = [[None] * (n_cues + 1) for _ in range(n_chapters + 1)]
+        traceback: List[List[Optional[Tuple[int, int, int]]]] = [[None] * (n_cues + 1) for _ in range(n_chapters + 1)]
 
         dp[0][0] = 0.0
         traceback[0][0] = (0, 0, -1)
@@ -167,9 +167,10 @@ class ChapterAligner:
         best_j = n_cues
         i, j = n_chapters, best_j
         while i > 0:
-            if traceback[i][j] is None:
+            entry = traceback[i][j]
+            if entry is None:
                 break
-            prev_i, prev_j, matched_cue = traceback[i][j]
+            prev_i, prev_j, matched_cue = entry
 
             if prev_i == i - 1 and matched_cue >= 0:
                 matches[i - 1] = matched_cue

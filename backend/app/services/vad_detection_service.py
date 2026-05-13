@@ -7,7 +7,7 @@ import subprocess
 import sys
 import tempfile
 import threading
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from app.core.constants import MIN_SILENCE_DURATION
 from app.core.system_info import get_worker_count
@@ -47,7 +47,7 @@ class VadDetectionService:
             raise RuntimeError(f"VAD worker script not found at {self.vad_worker_path}")
         logger.info(f"VAD worker script located at: {self.vad_worker_path}")
 
-    def _notify_progress(self, step: Step, percent: float, message: str = "", details: dict = None):
+    def _notify_progress(self, step: Step, percent: float, message: str = "", details: Optional[Dict[str, Any]] = None):
         """Notify progress via callback"""
         self.progress_callback(step, percent, message, details or {})
 
@@ -99,7 +99,7 @@ class VadDetectionService:
             expected_segments = int(duration // self.segment_duration) + 1
             stderr_lines = []
 
-            for line in process.stderr:
+            for line in process.stderr or []:
                 # Check for cancellation during processing
                 if self._is_cancelled:
                     logger.info("VAD audio splitting was cancelled, terminating ffmpeg process")
@@ -155,7 +155,7 @@ class VadDetectionService:
         chunk_batch: List[Tuple[int, str]],
         vad_worker_path: str,
         progress_tracker: dict,
-        segment_duration: float = None,
+        segment_duration: Optional[float] = None,
     ) -> List[Tuple[int, List[Tuple[float, float]]]]:
         """Process a batch of audio chunks with VAD using a single subprocess for efficiency"""
         chunk_indices = [chunk_index for chunk_index, _ in chunk_batch]
@@ -200,7 +200,8 @@ class VadDetectionService:
 
                 def drain_stderr():
                     try:
-                        stderr_chunks.append(process.stderr.read())
+                        if process is not None and process.stderr is not None:
+                            stderr_chunks.append(process.stderr.read())
                     except Exception:
                         pass
 
@@ -208,8 +209,10 @@ class VadDetectionService:
                 stderr_thread.start()
 
                 results = []
-                for raw_line in process.stdout:
-                    line_text = raw_line.decode().strip()
+                for raw_line in process.stdout or []:
+                    line_text = (
+                        raw_line.decode().strip() if isinstance(raw_line, (bytes, bytearray)) else raw_line.strip()
+                    )
 
                     if line_text.startswith("PROGRESS:"):
                         try:
@@ -336,12 +339,12 @@ class VadDetectionService:
 
             # Process results from all workers
             for worker_result in worker_results:
-                if isinstance(worker_result, Exception):
+                if isinstance(worker_result, BaseException):
                     logger.error(f"Worker processing failed: {worker_result}")
                     continue
 
                 # worker_result is a list of (chunk_index, gaps) tuples
-                for chunk_index, gaps in worker_result:
+                for _, gaps in worker_result:
                     all_gaps.extend(gaps)
 
             # Final progress update
@@ -400,7 +403,7 @@ class VadDetectionService:
 
                         # Include gap count as feed_text
                         gaps_found = progress_tracker.get("_gaps_found", 0)
-                        details = {"chunk": int(completed_chunks), "total_chunks": total_chunks}
+                        details: Dict[str, Any] = {"chunk": int(completed_chunks), "total_chunks": total_chunks}
                         if gaps_found > 0:
                             details["feed_text"] = (
                                 f"Found {gaps_found} potential chapter cue{'s' if gaps_found != 1 else ''}"
@@ -689,7 +692,7 @@ class VadDetectionService:
 
             all_gaps = []
             for result in worker_results_list:
-                if isinstance(result, Exception):
+                if isinstance(result, BaseException):
                     logger.error(f"Worker failed: {result}")
                     continue
 

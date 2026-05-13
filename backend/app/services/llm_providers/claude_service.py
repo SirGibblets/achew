@@ -258,11 +258,11 @@ class ClaudeService(AIService):
         self,
         transcriptions: List[str],
         model_id: str,
-        additional_instructions: List[str] = None,
+        additional_instructions: Optional[List[str]] = None,
         deselect_non_chapters: bool = True,
         infer_opening_credits: bool = True,
         infer_end_credits: bool = True,
-        preferred_titles: List[str] = None,
+        preferred_titles: Optional[List[str]] = None,
         book: Optional[Book] = None,
     ) -> List[Optional[str]]:
         """Process transcriptions into chapter titles using Claude"""
@@ -393,7 +393,7 @@ class ClaudeService(AIService):
             self._notify_progress(0, error_msg)
             raise
         except anthropic.APIError as e:
-            error_msg = f"Claude API error ({e.status_code if hasattr(e, 'status_code') else 'unknown'}): {str(e)}"
+            error_msg = f"Claude API error ({getattr(e, 'status_code', 'unknown')}): {str(e)}"
             logger.error(f"Claude API error: {e}")
             self._notify_progress(0, error_msg)
             raise

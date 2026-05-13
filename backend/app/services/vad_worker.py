@@ -16,6 +16,7 @@ Returns:
 import json
 import subprocess
 import sys
+from typing import cast
 
 
 def find_gaps_in_speech(speech_timestamps, segment_start, segment_end, min_silence_duration):
@@ -65,12 +66,13 @@ def process_multiple_chunks(chunk_files_with_indices, segment_duration, min_sile
         import numpy as np
         import onnx_asr
         import onnxruntime as ort
+        from onnx_asr.models.silero import SileroVad
 
         sess_opts = ort.SessionOptions()
         sess_opts.intra_op_num_threads = 1
         sess_opts.inter_op_num_threads = 1
 
-        model = onnx_asr.load_vad("silero", sess_options=sess_opts)
+        model = cast(SileroVad, onnx_asr.load_vad("silero", sess_options=sess_opts))
 
         if enable_progress:
             print(
@@ -160,7 +162,7 @@ def process_multiple_chunks(chunk_files_with_indices, segment_duration, min_sile
                 )
                 emit_progress(100)
             else:
-                seg_results = list(model.segment_batch(waveforms, waveforms_len, speech_pad_ms=30))
+                seg_results = list(model.segment_batch(waveforms, waveforms_len, 16000, speech_pad_ms=30))
                 segments = list(seg_results[0]) if seg_results else []
 
             speech_timestamps = [{"start": s / sr, "end": e / sr} for s, e in segments]

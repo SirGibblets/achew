@@ -5,3 +5,14 @@ repos:
       - id: ruff-check
         args: [--fix]
       - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: pyright
+        name: pyright (backend)
+        entry: bash -c 'cd backend && uv run pyright'
+        language: system
+        types: [python]
+        files: ^backend/.*\.py$
+        pass_filenames: false
+        require_serial: true

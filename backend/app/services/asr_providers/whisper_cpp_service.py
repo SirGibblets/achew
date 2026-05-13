@@ -12,7 +12,7 @@ import re
 import sys
 import tempfile
 import threading
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 from pywhispercpp.model import Model
 
@@ -112,7 +112,7 @@ class WhisperCppASRService(ASRService):
         language: str = "",
     ):
         super().__init__(progress_callback, model_path, language)
-        self.model: Model = None
+        self.model: Optional[Model] = None
 
     @property
     def service_name(self) -> str:
@@ -137,7 +137,7 @@ class WhisperCppASRService(ASRService):
                         sys.stdout.flush()
                         sys.stderr.flush()
 
-                        model = Model(self.model_path, models_dir=model_cache_dir, redirect_whispercpp_logs_to=log_file)
+                        model = Model(self.model_path, models_dir=model_cache_dir, redirect_whispercpp_logs_to=log_file)  # type: ignore[arg-type]
 
                         log_file.flush()
                         return model
@@ -161,6 +161,9 @@ class WhisperCppASRService(ASRService):
     def _transcribe_file(self, audio_file: str, retry_on_empty: bool = True) -> str:
         """Transcribe a single audio file, retrying with lower no_speech_thold if blank"""
         no_speech_thresholds = [0.6, 0.5, 0.4] if retry_on_empty else [0.6]
+
+        if self.model is None:
+            raise RuntimeError("Whisper model is not loaded")
 
         try:
             for threshold in no_speech_thresholds:

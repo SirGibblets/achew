@@ -33,6 +33,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _noop_progress(step: Step, percent: float, message: str = "", details: Optional[Dict[str, Any]] = None) -> None:
+    """No-op progress callback for transient provider instances created to read saved config."""
+
+
 class ABSConfigRequest(BaseModel):
     url: str
     api_key: str
@@ -687,7 +691,7 @@ async def get_llm_provider_config(provider_id: str):
             raise HTTPException(status_code=404, detail=f"Provider '{provider_id}' not found")
 
         # Create instance and load saved config
-        provider = provider_class(lambda *args: None)
+        provider = provider_class(_noop_progress)
         config = await provider.load_saved_config()
 
         return {"success": True, "config": config}

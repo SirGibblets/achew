@@ -1,6 +1,7 @@
 import importlib.metadata
 import logging
 import os
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -40,11 +41,11 @@ class ValidateItemRequest(BaseModel):
 
 class ValidateItemResponse(BaseModel):
     valid: bool
-    book_title: str = None
-    book_duration: float = None
-    cover_url: str = None
-    file_count: int = None
-    error_message: str = None
+    book_title: Optional[str] = None
+    book_duration: Optional[float] = None
+    cover_url: Optional[str] = None
+    file_count: Optional[int] = None
+    error_message: Optional[str] = None
 
 
 @router.post("/validate-item", response_model=ValidateItemResponse)

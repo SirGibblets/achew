@@ -285,11 +285,11 @@ class OllamaService(AIService):
         self,
         transcriptions: List[str],
         model_id: str,
-        additional_instructions: List[str] = None,
+        additional_instructions: Optional[List[str]] = None,
         deselect_non_chapters: bool = True,
         infer_opening_credits: bool = True,
         infer_end_credits: bool = True,
-        preferred_titles: List[str] = None,
+        preferred_titles: Optional[List[str]] = None,
         book: Optional[Book] = None,
     ) -> List[Optional[str]]:
         """Process transcriptions into chapter titles using Ollama"""
@@ -337,7 +337,7 @@ class OllamaService(AIService):
             try:
                 # Check if model is gpt-oss
                 show_response = await processing_client.show(model=model_id)
-                is_oss_gpt = show_response.details.family == "gptoss"
+                is_oss_gpt = bool(show_response.details and show_response.details.family == "gptoss")
             except Exception:
                 pass
 

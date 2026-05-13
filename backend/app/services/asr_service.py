@@ -3,7 +3,7 @@ import logging
 import os
 import random
 from abc import ABC, abstractmethod
-from typing import List
+from typing import Any, Dict, List, Optional
 
 from app.models.enums import Step
 from app.models.progress import ProgressCallback
@@ -51,7 +51,7 @@ class ASRService(ABC):
         self.model_path: str = model_path
         self.language: str = language
 
-    def _notify_progress(self, step: Step, percent: float, message: str = "", details: dict = None):
+    def _notify_progress(self, step: Step, percent: float, message: str = "", details: Optional[Dict[str, Any]] = None):
         """Notify progress via callback"""
         self.progress_callback(step, percent, message, details or {})
 

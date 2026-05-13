@@ -79,12 +79,10 @@ class WhisperMLXASRService(ASRService):
                     **kwargs,
                 )
 
-                if isinstance(result, dict) and "text" in result:
-                    text = result["text"].strip()
-                elif hasattr(result, "text"):
-                    text = result.text.strip()
+                if isinstance(result, dict):
+                    text = str(result.get("text", "")).strip()
                 else:
-                    text = str(result).strip()
+                    text = str(getattr(result, "text", result)).strip()
 
                 if text:
                     return text

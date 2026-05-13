@@ -62,6 +62,8 @@ class ParakeetASRService(ASRService):
 
     def _transcribe_file(self, audio_file: str, retry_on_empty: bool = True) -> str:
         """Transcribe a single audio file"""
+        if self.model is None:
+            raise RuntimeError("Parakeet model is not loaded")
         try:
             audio_array = self._convert_audio_to_array(audio_file)
             result = self.model.recognize(audio_array)

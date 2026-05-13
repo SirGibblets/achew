@@ -227,6 +227,9 @@ class GeminiService(AIService):
             for model in models_response:
                 logger.debug(f"Gemini Processing model: {model.name}")
 
+                if not model.name:
+                    continue
+
                 # Strip any trailing "-preview" or "-latest" suffix for the base name check
                 base_name = model.name
                 for suffix in ("-preview", "-latest"):
@@ -272,11 +275,11 @@ class GeminiService(AIService):
         self,
         transcriptions: List[str],
         model_id: str,
-        additional_instructions: List[str] = None,
+        additional_instructions: Optional[List[str]] = None,
         deselect_non_chapters: bool = True,
         infer_opening_credits: bool = True,
         infer_end_credits: bool = True,
-        preferred_titles: List[str] = None,
+        preferred_titles: Optional[List[str]] = None,
         book: Optional[Book] = None,
     ) -> List[Optional[str]]:
         """Process transcriptions into chapter titles using Gemini"""
@@ -349,7 +352,12 @@ class GeminiService(AIService):
                     stream_count += 1
                     logger.debug(f"Gemini Received chunk {stream_count}: {chunk}")
 
-                    for part in chunk.candidates[0].content.parts:
+                    if not chunk.candidates:
+                        continue
+                    candidate_content = chunk.candidates[0].content
+                    if candidate_content is None or candidate_content.parts is None:
+                        continue
+                    for part in candidate_content.parts:
                         if not part.text:
                             continue
 
@@ -425,3 +433,5 @@ class GeminiService(AIService):
                 logger.error(f"Gemini unexpected error: {e}", exc_info=True)
                 self._notify_progress(0, error_msg)
                 raise
+
+        raise RuntimeError("Gemini processing exhausted retries without producing a response")

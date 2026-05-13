@@ -130,7 +130,7 @@ def _windows_available_memory() -> Optional[int]:
 
         status = MemoryStatusEx()
         status.dwLength = ctypes.sizeof(MemoryStatusEx)
-        if not ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
+        if not ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):  # type: ignore[attr-defined]
             return None
         return int(status.ullAvailPhys)
     except (OSError, AttributeError, ImportError):

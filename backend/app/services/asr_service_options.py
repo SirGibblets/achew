@@ -29,13 +29,13 @@ class ASRModelVariant:
         name: str,
         desc: str,
         path: str,
-        languages: List[Tuple[str, str]],
+        languages: List[Tuple[str, str, str]],
     ):
         self.model_id: str = model_id
         self.name: str = name
         self.desc: str = desc
         self.path: str = path
-        self.languages: List[Tuple[str, str]] = languages
+        self.languages: List[Tuple[str, str, str]] = languages
 
 
 class ASRServiceOption:
@@ -48,7 +48,7 @@ class ASRServiceOption:
         desc: str,
         uses_gpu: bool = False,
         supports_bias_words: bool = False,
-        variants: List[ASRModelVariant] = None,
+        variants: Optional[List[ASRModelVariant]] = None,
         priority: int = 0,
         asr_buffer: float = 0.1,
     ):
@@ -152,7 +152,7 @@ class ASRServiceRegistry:
 
         # Create the service instance with appropriate arguments
         return service_class(
-            model_path=model_variant.path,
+            model_path=model_variant.path if model_variant else None,
             language=prefs.preferred_asr_language,
             **kwargs,
         )
@@ -177,7 +177,7 @@ class ASRServiceRegistry:
     def set_preferred_service(
         self,
         service_id: str,
-        variant_model_id: str = None,
+        variant_model_id: Optional[str] = None,
         language: str = "",
     ):
         """Set the user's preferred ASR service"""
@@ -224,7 +224,7 @@ class ASRServiceRegistry:
                 providers_path = os.path.join(os.path.dirname(__file__), "asr_providers")
                 if os.path.exists(providers_path):
                     # Import all provider modules
-                    for finder, name, ispkg in pkgutil.iter_modules([providers_path]):
+                    for _, name, _ in pkgutil.iter_modules([providers_path]):
                         if name.endswith("_service"):
                             try:
                                 module_name = f"app.services.asr_providers.{name}"
@@ -251,7 +251,7 @@ def register_asr_service(
     desc: str,
     uses_gpu: bool = False,
     supports_bias_words: bool = False,
-    variants: List[ASRModelVariant] = None,
+    variants: Optional[List[ASRModelVariant]] = None,
     priority: int = 0,
     asr_buffer: float = 0.1,
 ):
@@ -291,12 +291,12 @@ def get_preferred_service() -> Optional[ASRServiceOption]:
     return _registry.get_preferred_service()
 
 
-def set_preferred_service(service_id: str, variant_model_id: str = None, language: str = ""):
+def set_preferred_service(service_id: str, variant_model_id: Optional[str] = None, language: str = ""):
     """Set the user's preferred ASR service"""
     _registry.set_preferred_service(service_id, variant_model_id, language)
 
 
-def create_asr_service(progress_callback: ProgressCallback = None):
+def create_asr_service(progress_callback: Optional[ProgressCallback] = None):
     """Factory function to create an appropriate ASR service"""
     return _registry.create_service(progress_callback=progress_callback)
 

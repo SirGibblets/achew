@@ -9,7 +9,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed, wait
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 from app.core.config import get_app_config
 from app.core.constants import (
@@ -244,14 +244,14 @@ class AudioProcessingService:
         progress_callback: ProgressCallback,
         running_processes=None,
         asr_buffer: float = 0.1,
-        process_lock: threading.Lock = None,
+        process_lock: Optional[threading.Lock] = None,
     ):
         self.progress_callback: ProgressCallback = progress_callback
         self._running_processes = running_processes if running_processes is not None else []
         self._process_lock = process_lock or threading.Lock()
         self.asr_buffer = asr_buffer
 
-    def _notify_progress(self, step: Step, percent: float, message: str = "", details: dict = None):
+    def _notify_progress(self, step: Step, percent: float, message: str = "", details: Optional[Dict[str, Any]] = None):
         """Notify progress via callback"""
         self.progress_callback(step, percent, message, details or {})
 
@@ -296,6 +296,7 @@ class AudioProcessingService:
         loop = asyncio.get_event_loop()
 
         if use_parallel:
+            assert duration is not None  # implied by use_parallel
             executor_task = loop.run_in_executor(
                 None,
                 self._run_parallel_silence_detection,
@@ -356,7 +357,7 @@ class AudioProcessingService:
             last_progress = 0.0
             last_feed_time = 0.0
 
-            for line in process.stderr:
+            for line in process.stderr or []:
                 if "silence_start" in line:
                     match = pattern_start.search(line)
                     if match:
@@ -465,7 +466,7 @@ class AudioProcessingService:
             # slot from bouncing backwards.
             max_progress_ts = 0.0
 
-            for line in process.stderr:
+            for line in process.stderr or []:
                 if cancelled.is_set():
                     process.terminate()
                     process.wait()
@@ -625,7 +626,7 @@ class AudioProcessingService:
     async def extract_segments(
         self,
         audio_file: str,
-        timestamps: List[float],
+        timestamps: List[float] | List[Tuple[float, float]],
         output_dir: str,
         use_wav: bool = False,
         allow_retry: bool = True,
@@ -667,7 +668,7 @@ class AudioProcessingService:
         start_time: float,
         duration: float,
         output_path: str,
-    ) -> str:
+    ) -> Optional[str]:
         """Extract a single audio segment using ffmpeg -ss/-t for direct seeking.
 
         This is more efficient than the segment-split approach for small numbers of chapters.
@@ -1107,8 +1108,8 @@ class AudioProcessingService:
         if isinstance(timestamps[0], tuple):
             return self._run_parallel_range_extraction(
                 audio_file,
-                timestamps,
-                output_dir,  # type: ignore[arg-type]
+                cast(List[Tuple[float, float]], timestamps),
+                output_dir,
                 use_wav,
                 allow_retry,
                 segment_extension=segment_extension,
@@ -1350,7 +1351,7 @@ class AudioProcessingService:
             pattern_start = re.compile(r"silence_start:\s*([\d\.]+)")
             pattern_end = re.compile(r"silence_end:\s*([\d\.]+)")
 
-            for line in process.stderr:
+            for line in process.stderr or []:
                 if "silence_start" in line:
                     match = pattern_start.search(line)
                     if match:
@@ -1468,7 +1469,7 @@ class AudioProcessingService:
             current_time = 0.0
             last_progress_update = 0.0
 
-            for line in process.stderr:
+            for line in process.stderr or []:
                 line = line.strip()
                 stderr_output.append(line)
 
