@@ -83,13 +83,19 @@ def _macos_available_memory() -> Optional[int]:
     try:
         page_size_out = subprocess.run(
             ["sysctl", "-n", "hw.pagesize"],
-            capture_output=True, text=True, timeout=5, check=True,
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=True,
         ).stdout.strip()
         page_size = int(page_size_out)
 
         vm_out = subprocess.run(
             ["vm_stat"],
-            capture_output=True, text=True, timeout=5, check=True,
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=True,
         ).stdout
 
         free_pages = 0
@@ -153,14 +159,10 @@ def _read_worker_override() -> Optional[int]:
     try:
         value = int(raw.strip())
     except ValueError:
-        logger.warning(
-            f"{WORKER_COUNT_ENV_VAR}={raw!r} is not a valid integer; ignoring override"
-        )
+        logger.warning(f"{WORKER_COUNT_ENV_VAR}={raw!r} is not a valid integer; ignoring override")
         return None
     if value < 1:
-        logger.warning(
-            f"{WORKER_COUNT_ENV_VAR}={value} must be at least 1; ignoring override"
-        )
+        logger.warning(f"{WORKER_COUNT_ENV_VAR}={value} must be at least 1; ignoring override")
         return None
     return value
 
@@ -178,17 +180,12 @@ def get_worker_count() -> int:
 
     override = _read_worker_override()
     if override is not None:
-        logger.info(
-            f"Worker count: {override} (from {WORKER_COUNT_ENV_VAR}; "
-            f"CPU cap would have been {cpu_cap})"
-        )
+        logger.info(f"Worker count: {override} (from {WORKER_COUNT_ENV_VAR}; CPU cap would have been {cpu_cap})")
         return override
 
     available = get_available_memory_bytes()
     if available is None:
-        logger.info(
-            f"Worker count: {cpu_cap} (memory probe unavailable on this platform)"
-        )
+        logger.info(f"Worker count: {cpu_cap} (memory probe unavailable on this platform)")
         return cpu_cap
 
     memory_cap = max(1, available // MIN_MEMORY_PER_WORKER)

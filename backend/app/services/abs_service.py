@@ -3,12 +3,12 @@ import logging
 import os
 import time
 from datetime import datetime
-from typing import Optional, List, Dict, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import aiohttp
 
 from ..core.config import get_app_config
-from ..models.abs import Book, AudnexusChapterList
+from ..models.abs import AudnexusChapterList, Book
 from .audible_providers import (
     all_regions,
     region_for_language,
@@ -26,15 +26,21 @@ class ABSService:
 
     def __init__(self):
         self.config = get_app_config().abs
-        self.session = None
+        self._session: Optional[aiohttp.ClientSession] = None
+
+    @property
+    def session(self) -> aiohttp.ClientSession:
+        if self._session is None:
+            raise RuntimeError("ABSService must be used as an async context manager")
+        return self._session
 
     async def __aenter__(self):
-        self.session = aiohttp.ClientSession()
+        self._session = aiohttp.ClientSession()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        if self.session:
-            await self.session.close()
+        if self._session:
+            await self._session.close()
 
     def _get_headers(self) -> Dict[str, str]:
         return {"Authorization": f"Bearer {self.config.api_key}"}
@@ -73,7 +79,7 @@ class ABSService:
             logger.error(f"Error fetching book details for {book_id}: {e}")
             return None
 
-    async def get_audnexus_chapters(self, asin: str, region: str="US") -> Optional[AudnexusChapterList]:
+    async def get_audnexus_chapters(self, asin: str, region: str = "US") -> Optional[AudnexusChapterList]:
         """Fetch chapters from Audnexus for a given ASIN"""
         try:
             url = f"{self.config.url}/api/search/chapters"
@@ -150,9 +156,7 @@ class ABSService:
         if not remaining:
             return None
 
-        results = await asyncio.gather(
-            *(self.get_audnexus_chapters(asin, region=r) for r in remaining)
-        )
+        results = await asyncio.gather(*(self.get_audnexus_chapters(asin, region=r) for r in remaining))
         candidates = [r for r in results if r is not None]
         if not candidates:
             return None
@@ -417,7 +421,7 @@ class ABSService:
             return []
 
     @staticmethod
-    def clear_library_cache(library_id: str = None):
+    def clear_library_cache(library_id: Optional[str] = None):
         """Clear cache for a specific library or all libraries"""
         global _library_cache, _library_provider_cache
 

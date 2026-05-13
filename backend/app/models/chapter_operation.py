@@ -1,5 +1,6 @@
-from ..models.chapter import ChapterData, RealignmentData
 from typing import TYPE_CHECKING, Optional
+
+from ..models.chapter import ChapterData, RealignmentData
 
 if TYPE_CHECKING:
     from ..services.processing_pipeline import ProcessingPipeline
@@ -8,7 +9,6 @@ from pydantic import BaseModel
 
 
 class ChapterOperation(BaseModel):
-
     def apply(self, pipeline: "ProcessingPipeline"):
         pass
 
@@ -151,9 +151,7 @@ class EditTimestampOperation(ChapterOperation):
         self.old_realignment = chapter.realignment
         if chapter.realignment:
             new_realignment = RealignmentData(
-                original_timestamp=chapter.realignment.original_timestamp,
-                confidence=1.0,
-                is_guess=False
+                original_timestamp=chapter.realignment.original_timestamp, confidence=1.0, is_guess=False
             )
             chapter.realignment = new_realignment
 

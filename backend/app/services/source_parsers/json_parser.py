@@ -69,11 +69,7 @@ def _score_array(items: list[dict]) -> tuple[float, Optional[str], Optional[str]
     if best_ts_field is None or best_title_field is None:
         return -float("inf"), None, None
 
-    has_valid_ts = any(
-        parse_timestamp(item[best_ts_field]) is not None
-        for item in items
-        if best_ts_field in item
-    )
+    has_valid_ts = any(parse_timestamp(item[best_ts_field]) is not None for item in items if best_ts_field in item)
     if not has_valid_ts:
         return -float("inf"), None, None
 
@@ -145,7 +141,7 @@ class JsonParser(BaseCueParser):
             type=CueSourceType.JSON,
             name=f"JSON File ({name})",
             short_name=self.short_name,
-            description=f"Chapter data parsed from JSON file \"{name}\"",
+            description=f'Chapter data parsed from JSON file "{name}"',
             metadata={"File": source_name},
             cues=[ExistingCue(timestamp=ts, title=t) for ts, t in cues],
             duration=duration,

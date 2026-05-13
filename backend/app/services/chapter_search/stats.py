@@ -49,14 +49,71 @@ def _format_full_time_job(total_seconds: float) -> dict:
 _WORD_SPLIT_RE = re.compile(r"[^a-zA-Z]+")
 _NUMBER_RE = re.compile(r"^\d+$")
 _EXCLUDED_WORDS = {
-    "chapter", "part", "credits", "opening", "end",
-    "the", "a", "an", "of", "and", "in", "to", "for", "is", "it", "on", "at", "from", "with",
-    "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
-    "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
-    "seventeen", "eighteen", "nineteen", "twenty", "thirty", "forty", "fourty",
-    "fifty", "sixty", "seventy", "eighty", "ninety", "hundred",
-    "i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x", 
-    "s", "t", "m", "re", "ve", "ll", "d"
+    "chapter",
+    "part",
+    "credits",
+    "opening",
+    "end",
+    "the",
+    "a",
+    "an",
+    "of",
+    "and",
+    "in",
+    "to",
+    "for",
+    "is",
+    "it",
+    "on",
+    "at",
+    "from",
+    "with",
+    "one",
+    "two",
+    "three",
+    "four",
+    "five",
+    "six",
+    "seven",
+    "eight",
+    "nine",
+    "ten",
+    "eleven",
+    "twelve",
+    "thirteen",
+    "fourteen",
+    "fifteen",
+    "sixteen",
+    "seventeen",
+    "eighteen",
+    "nineteen",
+    "twenty",
+    "thirty",
+    "forty",
+    "fourty",
+    "fifty",
+    "sixty",
+    "seventy",
+    "eighty",
+    "ninety",
+    "hundred",
+    "i",
+    "ii",
+    "iii",
+    "iv",
+    "v",
+    "vi",
+    "vii",
+    "viii",
+    "ix",
+    "x",
+    "s",
+    "t",
+    "m",
+    "re",
+    "ve",
+    "ll",
+    "d",
 }
 
 
@@ -107,10 +164,7 @@ async def compute_library_stats(library_id: str) -> dict:
     total_chapters = len(all_chapters)
     avg_chapters = round(total_chapters / total_books, 1)
 
-    most_common_words = [
-        {"word": word, "count": count}
-        for word, count in word_counter.most_common(15)
-    ]
+    most_common_words = [{"word": word, "count": count} for word, count in word_counter.most_common(15)]
 
     # Book with highest chapter count
     most_chapters_book_data, most_chapters_count = max(book_chapter_counts, key=lambda x: x[1])

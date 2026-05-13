@@ -219,6 +219,7 @@ async def search_books(
     # If book ID is not specified, attempt to obtain it from the active pipeline
     if not id:
         from ...app import get_app_state
+
         app_state = get_app_state()
         if app_state.pipeline and app_state.pipeline.book and app_state.pipeline.book.id:
             id = app_state.pipeline.book.id
@@ -236,7 +237,7 @@ async def search_books(
 
         if not results:
             return []
-        
+
         # Sort by confidence and cap at 10
         results.sort(key=lambda r: r.matchConfidence or 0.0, reverse=True)
         results = results[:10]
@@ -252,12 +253,11 @@ async def search_books(
                     chapter_data = await svc.get_audnexus_chapters(result.asin, region=region)
                 if not chapter_data or not chapter_data.chapters:
                     return None
-                    
+
                 enriched = BookSearchResultWithChapters(**result.model_dump())
                 enriched.chapter_count = len(chapter_data.chapters)
                 enriched.chapters = [
-                    {"timestamp": ch.startOffsetMs / 1000, "title": ch.title}
-                    for ch in chapter_data.chapters
+                    {"timestamp": ch.startOffsetMs / 1000, "title": ch.title} for ch in chapter_data.chapters
                 ]
                 return enriched
             except Exception as e:

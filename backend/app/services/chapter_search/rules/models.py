@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from enum import Enum
 from typing import Annotated, Literal, Optional, Union
 from uuid import uuid4
@@ -58,12 +57,12 @@ class TextOp(str, Enum):
 
 
 class Part2(str, Enum):
-    TEXT = "text"                         # [T] — exact/case-insensitive text
-    TEXT_SIMILAR = "text_similar"         # [T] — fuzzy Jaro-Winkler
-    NUMBER = "number"                     # is a number (numeric)
+    TEXT = "text"  # [T] — exact/case-insensitive text
+    TEXT_SIMILAR = "text_similar"  # [T] — fuzzy Jaro-Winkler
+    NUMBER = "number"  # is a number (numeric)
     BOOK_TITLE_EXACT = "book_title_exact"
     BOOK_TITLE_SIMILAR = "book_title_similar"  # fuzzy
-    REGEX = "regex"                       # [R]
+    REGEX = "regex"  # [R]
 
 
 # Part2 values that use a text variable
@@ -78,6 +77,7 @@ HAS_IGNORE_CASE = {Part2.TEXT, Part2.REGEX}
 
 class CountPredicate(BaseModel):
     """Predicate for chapter_count subject."""
+
     kind: Literal["count"] = "count"
     op: CountOp
     value: int
@@ -85,11 +85,12 @@ class CountPredicate(BaseModel):
 
 class TextPredicate(BaseModel):
     """Predicate for per-chapter subjects."""
+
     kind: Literal["text"] = "text"
     op: TextOp
     part2: Part2
-    value: Optional[str] = None     # T or R; None for number/book_title predicates
-    ignore_case: bool = True        # only meaningful for TEXT and REGEX part2
+    value: Optional[str] = None  # T or R; None for number/book_title predicates
+    ignore_case: bool = True  # only meaningful for TEXT and REGEX part2
 
 
 Predicate = Annotated[Union[CountPredicate, TextPredicate], Field(discriminator="kind")]
@@ -97,7 +98,7 @@ Predicate = Annotated[Union[CountPredicate, TextPredicate], Field(discriminator=
 
 class Rule(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
-    name: str = ""              # custom display name; empty = auto-generate
+    name: str = ""  # custom display name; empty = auto-generate
     subject: Subject
     predicates: list[Predicate]  # at least 1
     enabled: bool = True
@@ -111,8 +112,8 @@ class Rule(BaseModel):
 
 class RuleSet(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
-    name: str = ""              # custom display name; empty = "Ruleset"
-    match_any: bool = True      # True = ANY, False = ALL
+    name: str = ""  # custom display name; empty = "Ruleset"
+    match_any: bool = True  # True = ANY, False = ALL
     enabled: bool = True
     items: list[Union[Rule, RuleSet]] = Field(default_factory=list)
 
@@ -125,6 +126,7 @@ class RuleSet(BaseModel):
 # ---------------------------------------------------------------------------
 # Auto-name generation
 # ---------------------------------------------------------------------------
+
 
 def _subject_label(subject: Subject) -> str:
     return {
@@ -162,10 +164,7 @@ def _text_pred_label(pred: TextPredicate) -> str:
         TextOp.ENDS_WITH: ("ends with", "does not end with"),
         TextOp.DOES_NOT_END_WITH: ("ends with", "does not end with"),
     }
-    negated = pred.op in {
-        TextOp.IS_NOT, TextOp.DOES_NOT_CONTAIN,
-        TextOp.DOES_NOT_START_WITH, TextOp.DOES_NOT_END_WITH
-    }
+    negated = pred.op in {TextOp.IS_NOT, TextOp.DOES_NOT_CONTAIN, TextOp.DOES_NOT_START_WITH, TextOp.DOES_NOT_END_WITH}
     _, neg_label = op_map[pred.op]
     pos_label, _ = op_map[pred.op]
     verb = neg_label if negated else pos_label
@@ -201,6 +200,7 @@ def _auto_name(rule: Rule) -> str:
 # Default ruleset
 # ---------------------------------------------------------------------------
 
+
 def create_default_ruleset() -> RuleSet:
     return RuleSet(
         name="Chapter Search Rules",
@@ -233,15 +233,21 @@ def create_default_ruleset() -> RuleSet:
                         name="First chapter doesn't include 'intro' or 'credit'",
                         subject=Subject.FIRST_CHAPTER,
                         predicates=[
-                            TextPredicate(op=TextOp.DOES_NOT_CONTAIN, part2=Part2.TEXT, value="intro", ignore_case=True),
-                            TextPredicate(op=TextOp.DOES_NOT_CONTAIN, part2=Part2.TEXT, value="credit", ignore_case=True)
-                            ],
+                            TextPredicate(
+                                op=TextOp.DOES_NOT_CONTAIN, part2=Part2.TEXT, value="intro", ignore_case=True
+                            ),
+                            TextPredicate(
+                                op=TextOp.DOES_NOT_CONTAIN, part2=Part2.TEXT, value="credit", ignore_case=True
+                            ),
+                        ],
                         enabled=True,
                     ),
                     Rule(
                         name="First chapter includes 'chapter'",
                         subject=Subject.FIRST_CHAPTER,
-                        predicates=[TextPredicate(op=TextOp.CONTAINS, part2=Part2.TEXT, value="chapter", ignore_case=True)],
+                        predicates=[
+                            TextPredicate(op=TextOp.CONTAINS, part2=Part2.TEXT, value="chapter", ignore_case=True)
+                        ],
                         enabled=True,
                     ),
                 ],

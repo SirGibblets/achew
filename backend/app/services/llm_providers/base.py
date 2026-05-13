@@ -2,7 +2,8 @@ import json
 import logging
 import re
 from abc import ABC, abstractmethod
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel
 
 from app.models.abs import Book
@@ -175,7 +176,7 @@ You will output the same array, but with processed titles. You must respond with
         elif book_title:
             base_prompt += f'\n\nThe book is titled "{book_title}".'
         elif book_author:
-            base_prompt += f'\n\nThe book is by {book_author}.'
+            base_prompt += f"\n\nThe book is by {book_author}."
 
         base_prompt += """
 

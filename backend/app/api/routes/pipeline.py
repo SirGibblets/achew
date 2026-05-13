@@ -1,17 +1,17 @@
 import logging
 import traceback
-from typing import List, Optional, Dict
+from typing import Dict, List, Optional
+
+from fastapi import APIRouter, BackgroundTasks, HTTPException
+from pydantic import BaseModel
 
 from app.models.sources import ExistingCueSource, ExistingTitleSource
 from app.services.processing_pipeline import PipelineProgress
-from fastapi import APIRouter, HTTPException, BackgroundTasks
-from pydantic import BaseModel
 
+from ...app import get_app_state
 from ...core.config import is_abs_configured
-from ...core.constants import CHAPTER_START_PADDING
 from ...models.abs import Book
 from ...models.enums import RestartStep, Step
-from ...app import get_app_state
 
 logger = logging.getLogger(__name__)
 
@@ -277,7 +277,8 @@ async def get_detected_cues():
 
         if app_state.step != Step.INITIAL_CHAPTER_SELECTION:
             raise HTTPException(
-                status_code=400, detail=f"Pipeline not in initial chapter selection step. Current step: {app_state.step.value}"
+                status_code=400,
+                detail=f"Pipeline not in initial chapter selection step. Current step: {app_state.step.value}",
             )
 
         if not app_state.pipeline.detected_cues:
@@ -530,8 +531,6 @@ async def cancel_step():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-
-
 @router.put("/pipeline/asr-options")
 async def update_asr_options(request: ASROptionsRequest):
     """Update ASR options for the pipeline"""
@@ -581,8 +580,6 @@ async def get_asr_options():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-
-
 @router.post("/pipeline/realign")
 async def realign_chapter(request: RealignChapterRequest, background_tasks: BackgroundTasks):
     """Realign chapter cues (Stub)"""
@@ -591,7 +588,7 @@ async def realign_chapter(request: RealignChapterRequest, background_tasks: Back
 
         if not app_state.pipeline:
             raise HTTPException(status_code=404, detail="Pipeline not found")
-        
+
         if app_state.step != Step.SELECT_WORKFLOW:
             raise HTTPException(
                 status_code=400,
@@ -609,7 +606,7 @@ async def realign_chapter(request: RealignChapterRequest, background_tasks: Back
         return {
             "message": f"Realignment started for source '{request.source_id}'",
             "source_id": request.source_id,
-            "dramatized": request.dramatized
+            "dramatized": request.dramatized,
         }
 
     except HTTPException:

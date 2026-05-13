@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 def _get_ruleset_json_path() -> Path:
     from ....core.config import get_config_json_path
+
     return get_config_json_path().parent / "chapter_search_ruleset.json"
 
 

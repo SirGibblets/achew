@@ -68,10 +68,7 @@ async def sync_library(
         skipped = len(all_items) - len(items_to_fetch)
         total = len(items_to_fetch)
 
-        logger.info(
-            f"Library {library_id}: {len(all_items)} total, "
-            f"{total} to fetch, {skipped} already cached"
-        )
+        logger.info(f"Library {library_id}: {len(all_items)} total, {total} to fetch, {skipped} already cached")
 
         if total == 0:
             progress_cb("sync", len(all_items), len(all_items))
@@ -135,12 +132,14 @@ async def _fetch_all_library_items(
         for item in results:
             # Only include audiobooks (must have audio files)
             if item.get("media", {}).get("numAudioFiles", 0) > 0:
-                all_items.append({
-                    "id": item["id"],
-                    "name": item.get("media", {}).get("metadata", {}).get("title", ""),
-                    "author": _extract_author(item.get("media", {}).get("metadata", {})),
-                    "series": _extract_series(item),
-                })
+                all_items.append(
+                    {
+                        "id": item["id"],
+                        "name": item.get("media", {}).get("metadata", {}).get("title", ""),
+                        "author": _extract_author(item.get("media", {}).get("metadata", {})),
+                        "series": _extract_series(item),
+                    }
+                )
 
         total_items = data.get("total", 0)
         fetched_so_far = (page + 1) * PAGE_SIZE
@@ -210,6 +209,7 @@ async def sync_specific_books(
     semaphore = asyncio.Semaphore(FETCH_CONCURRENCY)
 
     async with aiohttp.ClientSession() as session:
+
         async def fetch_and_store(book_id: str) -> None:
             nonlocal completed
             if cancel_event.is_set():

@@ -2,13 +2,13 @@ import json
 import logging
 from typing import List, Optional
 
-from app.models.abs import Book
 from google import genai
 from google.genai import types
-from google.genai.errors import ClientError, ServerError, APIError
+from google.genai.errors import APIError, ClientError, ServerError
 
+from app.models.abs import Book
 
-from .base import AIService, ProviderInfo, ModelInfo, IncrementalJSONParser, ChapterList
+from .base import AIService, ChapterList, IncrementalJSONParser, ModelInfo, ProviderInfo
 
 logger = logging.getLogger(__name__)
 
@@ -63,8 +63,9 @@ class GeminiService(AIService):
 
     async def save_config(self, **config) -> tuple[bool, str]:
         """Save configuration after successful validation"""
-        from ...core.config import save_llm_provider_config, LLMProviderConfig
         from datetime import datetime, timezone
+
+        from ...core.config import LLMProviderConfig, save_llm_provider_config
 
         try:
             # Get and validate API key
@@ -286,7 +287,7 @@ class GeminiService(AIService):
 
         additional_instructions = additional_instructions or []
 
-        self._notify_progress(0, f"Sending request to Gemini…")
+        self._notify_progress(0, "Sending request to Gemini…")
 
         # Build system prompt dynamically based on options
         system_prompt = self._build_system_prompt(
@@ -331,7 +332,7 @@ class GeminiService(AIService):
                 thinking_budget = 0
                 if not any(v in model_id for v in ("gemini-1.5", "gemini-2.0")):
                     thinking_budget = 1024
-                
+
                 # Stream the response for progress updates
                 async for chunk in await processing_client.aio.models.generate_content_stream(
                     model=model_id,
@@ -386,7 +387,6 @@ class GeminiService(AIService):
                         continue
                     else:
                         raise
-                    
 
                 # Convert to title list
                 chapters = [

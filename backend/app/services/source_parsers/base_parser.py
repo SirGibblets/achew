@@ -19,11 +19,9 @@ class BaseParser(ABC):
 
 class BaseCueParser(BaseParser):
     @abstractmethod
-    def parse(self, file_path: str, source_name: str, duration: float = 0.0) -> "ExistingCueSource":
-        ...
+    def parse(self, file_path: str, source_name: str, duration: float = 0.0) -> "ExistingCueSource": ...
 
 
 class BaseTitleParser(BaseParser):
     @abstractmethod
-    def parse(self, file_path: str, source_name: str) -> "ExistingTitleSource":
-        ...
+    def parse(self, file_path: str, source_name: str) -> "ExistingTitleSource": ...

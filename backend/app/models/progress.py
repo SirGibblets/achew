@@ -1,4 +1,5 @@
-from typing import Protocol, Optional, Dict, Any
+from typing import Any, Dict, Optional, Protocol
+
 from .enums import Step
 
 

@@ -1,9 +1,9 @@
-from .base import AIService, ProviderInfo, ModelInfo
-from .openai_service import OpenAIService
-from .ollama_service import OllamaService
-from .openrouter_service import OpenRouterService
+from .base import AIService, ModelInfo, ProviderInfo
 from .copilot_service import CopilotService
-from .registry import get_registry, register_provider, get_all_providers, create_provider
+from .ollama_service import OllamaService
+from .openai_service import OpenAIService
+from .openrouter_service import OpenRouterService
+from .registry import create_provider, get_all_providers, get_registry, register_provider
 
 __all__ = [
     "AIService",

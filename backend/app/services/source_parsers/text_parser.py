@@ -41,7 +41,7 @@ class TextParser(BaseTitleParser):
             type=TitleSourceType.TEXT,
             name=f"Text File ({name})",
             short_name=self.short_name,
-            description=f"Chapter titles parsed from text file \"{name}\"",
+            description=f'Chapter titles parsed from text file "{name}"',
             metadata={"File": source_name},
             titles=titles,
         )

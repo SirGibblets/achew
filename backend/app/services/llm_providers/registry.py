@@ -1,12 +1,13 @@
 import logging
 from typing import Dict, List, Optional, Type
-from .base import AIService, ProviderInfo, ModelInfo
-from .openai_service import OpenAIService
-from .ollama_service import OllamaService
-from .gemini_service import GeminiService
-from .copilot_service import CopilotService
+
+from .base import AIService, ModelInfo, ProviderInfo
 from .claude_service import ClaudeService
+from .copilot_service import CopilotService
+from .gemini_service import GeminiService
 from .lm_studio_service import LMStudioService
+from .ollama_service import OllamaService
+from .openai_service import OpenAIService
 from .openrouter_service import OpenRouterService
 
 logger = logging.getLogger(__name__)

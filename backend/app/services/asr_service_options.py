@@ -10,7 +10,7 @@ import importlib
 import logging
 import os
 import pkgutil
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Type, Any
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type
 
 from app.models.progress import ProgressCallback
 
@@ -187,7 +187,7 @@ class ASRServiceRegistry:
         if service_id in self._services:
             # Save preference to config
             try:
-                from app.core.config import get_user_preferences, update_user_preferences, UserPreferences
+                from app.core.config import get_user_preferences, update_user_preferences
 
                 prefs = get_user_preferences()
                 prefs.preferred_asr_service = service_id
@@ -213,7 +213,7 @@ class ASRServiceRegistry:
         # Import the providers module to trigger auto-registration
         try:
             # Try to import the providers package which will auto-register services
-            import app.services.asr_providers
+            import app.services.asr_providers  # noqa: F401
 
             logger.debug("Imported ASR providers package")
         except ImportError as e:
@@ -271,7 +271,9 @@ def register_asr_service(
     """
 
     def decorator(service_class):
-        option = ASRServiceOption(service_id, name, desc, uses_gpu, supports_bias_words, variants or [], priority, asr_buffer)
+        option = ASRServiceOption(
+            service_id, name, desc, uses_gpu, supports_bias_words, variants or [], priority, asr_buffer
+        )
         _registry.register(service_id, service_class, option)
         return service_class
 
@@ -308,5 +310,6 @@ def get_asr_buffer() -> float:
 def get_asr_config_key() -> tuple:
     """Get the current ASR config key (service_id, variant_id, language) for cache invalidation"""
     from app.core.config import get_user_preferences
+
     prefs = get_user_preferences()
     return (prefs.preferred_asr_service, prefs.preferred_asr_variant, prefs.preferred_asr_language)

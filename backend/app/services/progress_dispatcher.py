@@ -4,7 +4,7 @@ import queue
 import threading
 import time
 from dataclasses import dataclass
-from typing import Optional, Dict, Any, Callable, Awaitable
+from typing import Any, Awaitable, Callable, Dict, Optional
 
 from ..models.enums import Step
 
@@ -72,7 +72,9 @@ class ProgressDispatcher:
         self._sender_task = asyncio.ensure_future(self._sender_loop())
         self._stop.clear()
         self._thread = threading.Thread(
-            target=self._drain_loop, daemon=True, name="progress-dispatcher",
+            target=self._drain_loop,
+            daemon=True,
+            name="progress-dispatcher",
         )
         self._thread.start()
 
@@ -235,9 +237,7 @@ class ProgressDispatcher:
                 if item.is_step_change:
                     await self._broadcast_step_change(item.step)
 
-                await self._broadcast_progress(
-                    item.step, item.percent, item.message, item.details
-                )
+                await self._broadcast_progress(item.step, item.percent, item.message, item.details)
             except asyncio.CancelledError:
                 raise
             except Exception:

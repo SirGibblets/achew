@@ -1,13 +1,13 @@
-import logging
 import asyncio
-import os
-import subprocess
-import tempfile
 import glob
 import json
+import logging
+import os
+import subprocess
 import sys
+import tempfile
 import threading
-from typing import List, Tuple, Dict, Optional
+from typing import Dict, List, Optional, Tuple
 
 from app.core.constants import MIN_SILENCE_DURATION
 from app.core.system_info import get_worker_count
@@ -55,9 +55,11 @@ class VadDetectionService:
         """Get path to the permanent VAD worker script"""
         return self.vad_worker_path
 
-    def _split_audio_into_chunks(self, audio_file: str, duration: float, temp_dir: str, segment_extension: Optional[str] = None) -> List[str]:
+    def _split_audio_into_chunks(
+        self, audio_file: str, duration: float, temp_dir: str, segment_extension: Optional[str] = None
+    ) -> List[str]:
         """Split audio file into 10-minute chunks using efficient ffmpeg segmentation with progress monitoring"""
-        logger.info(f"Splitting audio into chunks using ffmpeg segment…")
+        logger.info("Splitting audio into chunks using ffmpeg segment…")
 
         # Check for cancellation before starting
         if self._is_cancelled:
@@ -157,7 +159,7 @@ class VadDetectionService:
     ) -> List[Tuple[int, List[Tuple[float, float]]]]:
         """Process a batch of audio chunks with VAD using a single subprocess for efficiency"""
         chunk_indices = [chunk_index for chunk_index, _ in chunk_batch]
-        logger.debug(f"Starting subprocess for chunk batch {[i+1 for i in chunk_indices]}")
+        logger.debug(f"Starting subprocess for chunk batch {[i + 1 for i in chunk_indices]}")
 
         worker_chunk_data = [[chunk_file, chunk_index] for chunk_index, chunk_file in chunk_batch]
         chunk_data = json.dumps(worker_chunk_data)
@@ -226,7 +228,9 @@ class VadDetectionService:
                             # Update gap count immediately for feed display
                             result_gaps = result_data.get("gaps", [])
                             if result_gaps:
-                                progress_tracker["_gaps_found"] = progress_tracker.get("_gaps_found", 0) + len(result_gaps)
+                                progress_tracker["_gaps_found"] = progress_tracker.get("_gaps_found", 0) + len(
+                                    result_gaps
+                                )
                         except json.JSONDecodeError as e:
                             logger.error(f"Failed to parse result data: {e}")
 
@@ -398,7 +402,9 @@ class VadDetectionService:
                         gaps_found = progress_tracker.get("_gaps_found", 0)
                         details = {"chunk": int(completed_chunks), "total_chunks": total_chunks}
                         if gaps_found > 0:
-                            details["feed_text"] = f"Found {gaps_found} potential chapter cue{'s' if gaps_found != 1 else ''}"
+                            details["feed_text"] = (
+                                f"Found {gaps_found} potential chapter cue{'s' if gaps_found != 1 else ''}"
+                            )
 
                         if avg_progress < 0.01:
                             self._notify_progress(Step.VAD_ANALYSIS, 0, "Starting analysis, please wait…", details)
@@ -528,7 +534,9 @@ class VadDetectionService:
             vad_worker_path = self._get_vad_worker_path()
 
             # Run VAD processing with direct async coordination (no executor needed)
-            final_gaps = await self._run_vad_processing_async(audio_file, duration, temp_dir, vad_worker_path, segment_extension)
+            final_gaps = await self._run_vad_processing_async(
+                audio_file, duration, temp_dir, vad_worker_path, segment_extension
+            )
 
             # Check if processing was cancelled
             if final_gaps is None:
@@ -580,7 +588,7 @@ class VadDetectionService:
             if not chunk_files:
                 raise RuntimeError("Failed to split audio into VAD chunks")
 
-            self._notify_progress(Step.VAD_ANALYSIS, 0, f"File prep complete, starting smart detection…")
+            self._notify_progress(Step.VAD_ANALYSIS, 0, "File prep complete, starting smart detection…")
 
             self._check_cancellation()
 
@@ -603,14 +611,18 @@ class VadDetectionService:
             await self.cancel_vad_processes()
             return None
 
-    async def _split_audio_into_chunks_async(self, audio_file: str, duration: float, temp_dir: str, segment_extension: Optional[str] = None) -> List[str]:
+    async def _split_audio_into_chunks_async(
+        self, audio_file: str, duration: float, temp_dir: str, segment_extension: Optional[str] = None
+    ) -> List[str]:
         """Async wrapper for splitting audio into chunks with progress monitoring"""
         loop = asyncio.get_event_loop()
 
         self._check_cancellation()
 
         # Run the splitting in executor but with periodic progress checks
-        future = loop.run_in_executor(None, self._split_audio_into_chunks, audio_file, duration, temp_dir, segment_extension)
+        future = loop.run_in_executor(
+            None, self._split_audio_into_chunks, audio_file, duration, temp_dir, segment_extension
+        )
 
         # Monitor progress while waiting
         while not future.done():
@@ -656,9 +668,7 @@ class VadDetectionService:
 
             progress_tracker = {i: 0 for i in range(total_segments)}
 
-            progress_task = asyncio.create_task(
-                self._monitor_segment_progress(progress_tracker, total_segments)
-            )
+            progress_task = asyncio.create_task(self._monitor_segment_progress(progress_tracker, total_segments))
 
             self._notify_progress(Step.VAD_ANALYSIS, 0, "Starting analysis…")
 
@@ -728,7 +738,7 @@ class VadDetectionService:
                         self._notify_progress(
                             Step.VAD_ANALYSIS,
                             progress,
-                            f"Performing focused audio analysis…",
+                            "Performing focused audio analysis…",
                             {"completed": completed_count, "total": total_segments},
                         )
 

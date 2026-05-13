@@ -1,5 +1,5 @@
 # Seconds to pull chapter start back from detected silence end.
-CHAPTER_START_PADDING = 1/3
+CHAPTER_START_PADDING = 1 / 3
 
 # Minimum length in seconds for a trimmed audio segment.
 MIN_TRIMMED_SEGMENT_LENGTH = 1.1

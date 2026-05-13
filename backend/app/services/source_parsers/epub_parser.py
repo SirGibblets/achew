@@ -34,6 +34,7 @@ class EpubParser(BaseTitleParser):
 
         try:
             import warnings
+
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 book = epub.read_epub(file_path)
@@ -60,7 +61,7 @@ class EpubParser(BaseTitleParser):
             type=TitleSourceType.EPUB,
             name=f"EPUB File ({name})",
             short_name=self.short_name,
-            description=f"Chapter titles extracted from EPUB file \"{name}\"",
+            description=f'Chapter titles extracted from EPUB file "{name}"',
             metadata={"File": source_name},
             titles=titles,
         )

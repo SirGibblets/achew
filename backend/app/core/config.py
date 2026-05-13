@@ -2,9 +2,9 @@ import json
 import logging
 import os
 import uuid
-from pathlib import Path
-from typing import Optional, List, Dict, Any
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
@@ -159,9 +159,13 @@ def load_config() -> AppConfig:
             return AppConfig(
                 abs=ABSConfig(**data["abs"]) if data.get("abs") else ABSConfig(),
                 llm=LLMConfig(**data["llm"]) if data.get("llm") else LLMConfig(),
-                user_preferences=UserPreferences(**data["user_preferences"]) if data.get("user_preferences") else UserPreferences(),
+                user_preferences=UserPreferences(**data["user_preferences"])
+                if data.get("user_preferences")
+                else UserPreferences(),
                 asr_options=ASROptions(**data["asr_options"]) if data.get("asr_options") else ASROptions(),
-                custom_instructions=CustomInstructionsConfig(**data["custom_instructions"]) if data.get("custom_instructions") else CustomInstructionsConfig(),
+                custom_instructions=CustomInstructionsConfig(**data["custom_instructions"])
+                if data.get("custom_instructions")
+                else CustomInstructionsConfig(),
             )
         return AppConfig()
     except Exception as e:
@@ -264,9 +268,7 @@ def get_default_custom_instructions() -> List[CustomInstruction]:
 
     default_instructions = []
     for i, text in enumerate(examples):
-        default_instructions.append(
-            CustomInstruction(text=text, checked=False, order=i)
-        )
+        default_instructions.append(CustomInstruction(text=text, checked=False, order=i))
 
     return default_instructions
 
@@ -311,7 +313,9 @@ def get_app_config() -> AppConfig:
         logger.info(f"Loaded app config - OPENAI_API_KEY: {'***' if _app_config.llm.openai.api_key else 'EMPTY'}")
         logger.info(f"Loaded app config - GEMINI_API_KEY: {'***' if _app_config.llm.gemini.api_key else 'EMPTY'}")
         logger.info(f"Loaded app config - CLAUDE_API_KEY: {'***' if _app_config.llm.claude.api_key else 'EMPTY'}")
-        logger.info(f"Loaded app config - OPENROUTER_API_KEY: {'***' if _app_config.llm.openrouter.api_key else 'EMPTY'}")
+        logger.info(
+            f"Loaded app config - OPENROUTER_API_KEY: {'***' if _app_config.llm.openrouter.api_key else 'EMPTY'}"
+        )
     return _app_config
 
 

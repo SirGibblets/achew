@@ -64,7 +64,7 @@ class CueParser(BaseCueParser):
             type=CueSourceType.CUE,
             name=f"Cue Sheet ({name})",
             short_name=self.short_name,
-            description=f"Chapter data parsed from CUE Sheet file \"{name}\"",
+            description=f'Chapter data parsed from CUE Sheet file "{name}"',
             metadata={"File": source_name},
             cues=[ExistingCue(timestamp=ts, title=t) for ts, t in cues],
             duration=duration,

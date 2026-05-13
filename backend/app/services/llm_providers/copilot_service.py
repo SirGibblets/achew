@@ -4,11 +4,12 @@ import logging
 import re
 from typing import List, Optional
 
-from app.models.abs import Book
 from copilot import CopilotClient, SubprocessConfig
 from copilot.session import PermissionHandler
 
-from .base import AIService, ProviderInfo, ModelInfo, IncrementalJSONParser
+from app.models.abs import Book
+
+from .base import AIService, IncrementalJSONParser, ModelInfo, ProviderInfo
 
 logger = logging.getLogger(__name__)
 
@@ -54,8 +55,9 @@ class CopilotService(AIService):
 
     async def save_config(self, **config) -> tuple[bool, str]:
         """Save configuration after successful validation"""
-        from ...core.config import save_llm_provider_config, LLMProviderConfig
         from datetime import datetime, timezone
+
+        from ...core.config import LLMProviderConfig, save_llm_provider_config
 
         try:
             valid, message = await self.validate_config(**config)

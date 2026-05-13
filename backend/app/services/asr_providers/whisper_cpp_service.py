@@ -10,15 +10,16 @@ import logging
 import os
 import re
 import sys
-import threading
 import tempfile
+import threading
 from typing import List, Tuple
+
+from pywhispercpp.model import Model
 
 from app.models.enums import Step
 from app.models.progress import ProgressCallback
 from app.services.asr_service import ASRService
-from app.services.asr_service_options import register_asr_service, ASRModelVariant
-from pywhispercpp.model import Model
+from app.services.asr_service_options import ASRModelVariant, register_asr_service
 
 logger = logging.getLogger(__name__)
 

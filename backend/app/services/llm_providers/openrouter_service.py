@@ -1,11 +1,13 @@
 import json
 import logging
-from typing import List, Optional
-from app.models.abs import Book
-import httpx
 import time
+from typing import List, Optional
 
-from .base import AIService, ProviderInfo, ModelInfo, IncrementalJSONParser
+import httpx
+
+from app.models.abs import Book
+
+from .base import AIService, IncrementalJSONParser, ModelInfo, ProviderInfo
 
 logger = logging.getLogger(__name__)
 
@@ -54,8 +56,9 @@ class OpenRouterService(AIService):
 
     async def save_config(self, **config) -> tuple[bool, str]:
         """Save configuration after successful validation"""
-        from ...core.config import save_llm_provider_config, LLMProviderConfig
         from datetime import datetime, timezone
+
+        from ...core.config import LLMProviderConfig, save_llm_provider_config
 
         try:
             valid, message = await self.validate_config(**config)
@@ -173,18 +176,15 @@ class OpenRouterService(AIService):
         try:
             headers = self._create_headers(api_key)
             async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(
-                    "https://openrouter.ai/api/v1/key",
-                    headers=headers
-                )
-                
+                response = await client.get("https://openrouter.ai/api/v1/key", headers=headers)
+
                 if response.status_code == 200:
                     return True, "Valid"
                 elif response.status_code == 401:
                     return False, "Invalid API key"
                 else:
                     return False, f"API error: HTTP {response.status_code}"
-                    
+
         except httpx.TimeoutException:
             return False, "Connection timeout"
         except httpx.ConnectError:
@@ -202,11 +202,8 @@ class OpenRouterService(AIService):
             headers = self._create_headers(api_key)
 
             async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(
-                    "https://openrouter.ai/api/v1/models",
-                    headers=headers
-                )
-                
+                response = await client.get("https://openrouter.ai/api/v1/models", headers=headers)
+
                 if response.status_code != 200:
                     logger.error(f"Failed to get OpenRouter models: HTTP {response.status_code}")
                     return []
@@ -217,22 +214,21 @@ class OpenRouterService(AIService):
                 for model in models_data.get("data", []):
                     model_id = model.get("id", "")
                     model_name = model.get("name", model_id)
-                    
+
                     # Filter models based on modality requirements
                     architecture = model.get("architecture", {})
                     input_modalities = architecture.get("input_modalities", [])
                     output_modalities = architecture.get("output_modalities", [])
-                    
-                    if ("text" not in input_modalities or
-                        output_modalities != ["text"]):
+
+                    if "text" not in input_modalities or output_modalities != ["text"]:
                         continue
-                    
+
                     if any(skip_term in model_id.lower() for skip_term in ["(free)"]):
                         continue
-                        
+
                     context_length = model.get("context_length")
                     description = model.get("description", "")
-                    
+
                     model_info = ModelInfo(
                         id=model_id,
                         name=model_name,
@@ -267,7 +263,7 @@ class OpenRouterService(AIService):
 
         additional_instructions = additional_instructions or []
 
-        self._notify_progress(0, f"Sending request to OpenRouter…")
+        self._notify_progress(0, "Sending request to OpenRouter…")
 
         system_prompt = self._build_system_prompt(
             deselect_non_chapters=deselect_non_chapters,
@@ -298,16 +294,14 @@ class OpenRouterService(AIService):
                 "model": model_id,
                 "messages": [
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": json.dumps(chapter_data)}
+                    {"role": "user", "content": json.dumps(chapter_data)},
                 ],
                 "stream": True,
-                "response_format": {"type": "json_object"}
+                "response_format": {"type": "json_object"},
             }
 
             if is_thinking_model:
-                payload["reasoning"] = {
-                    "max_tokens": 1024
-                }
+                payload["reasoning"] = {"max_tokens": 1024}
 
             content_received = ""
             last_thinking_update = 0
@@ -328,15 +322,15 @@ class OpenRouterService(AIService):
                     async for line in response.aiter_lines():
                         if not line or not line.strip():
                             continue
-                            
+
                         line = line.strip()
                         if not line.startswith("data: "):
                             continue
-                            
+
                         data_str = line[6:]  # Remove "data: " prefix
                         if data_str == "[DONE]":
                             break
-                            
+
                         try:
                             chunk = json.loads(data_str)
                         except json.JSONDecodeError:
@@ -344,19 +338,19 @@ class OpenRouterService(AIService):
 
                         if "choices" in chunk and len(chunk["choices"]) > 0:
                             choice = chunk["choices"][0]
-                            
+
                             if "delta" in choice and choice["delta"].get("reasoning"):
                                 current_time = time.time()
                                 if current_time - last_thinking_update >= 1.0:
                                     self._notify_progress(0, "Thinking…")
                                     last_thinking_update = current_time
                                 continue
-                                
+
                             if "delta" in choice and "content" in choice["delta"]:
                                 content = choice["delta"]["content"]
                                 if content:
                                     content_received += content
-                                    
+
                                     result = parser.feed(content)
                                     if result["new_chapters"]:
                                         progress_percent = result["total_parsed"] / total_chapters * 100
@@ -369,7 +363,7 @@ class OpenRouterService(AIService):
 
             try:
                 response_data = json.loads(content_received)
-                
+
                 if isinstance(response_data, list):
                     processed_chapters = response_data
                 elif isinstance(response_data, dict) and "chapters" in response_data:
@@ -380,10 +374,10 @@ class OpenRouterService(AIService):
                         if isinstance(value, list):
                             processed_chapters = value
                             break
-                    
+
                 if not processed_chapters:
                     raise ValueError("No chapter array found in response")
-                
+
             except (json.JSONDecodeError, ValueError) as e:
                 logger.error(f"Failed to parse OpenRouter response: {e}")
                 logger.error(f"Raw response: {content_received}")
@@ -406,8 +400,8 @@ class OpenRouterService(AIService):
             return chapters
 
         except httpx.TimeoutException:
-            error_msg = f"OpenRouter request timeout - the model may be taking longer than expected"
-            logger.error(f"OpenRouter timeout error")
+            error_msg = "OpenRouter request timeout - the model may be taking longer than expected"
+            logger.error("OpenRouter timeout error")
             self._notify_progress(0, error_msg)
             raise
         except httpx.HTTPStatusError as e:

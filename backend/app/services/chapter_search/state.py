@@ -11,8 +11,8 @@ from fastapi import WebSocket
 
 from ...services.abs_service import ABSService
 from .database import delete_books_for_library, set_ignore
-from .rules.models import RuleSet
 from .rules.evaluator import evaluate_ruleset
+from .rules.models import RuleSet
 from .rules.persistence import load_ruleset, save_ruleset
 from .search import run_search
 from .sync import sync_library, sync_specific_books
@@ -185,9 +185,7 @@ class ChapterSearchState:
 
         await self.broadcast_state()
 
-        self._active_task = asyncio.create_task(
-            self._run_sync_and_search(library_id, library_name)
-        )
+        self._active_task = asyncio.create_task(self._run_sync_and_search(library_id, library_name))
 
     async def _run_sync_and_search(self, library_id: str, library_name: str) -> None:
         ruleset = load_ruleset()
@@ -238,9 +236,7 @@ class ChapterSearchState:
 
         await self.broadcast_state()
 
-        self._active_task = asyncio.create_task(
-            self._run_sync_and_stats(library_id)
-        )
+        self._active_task = asyncio.create_task(self._run_sync_and_stats(library_id))
 
     async def _run_sync_and_stats(self, library_id: str) -> None:
         cancel = self._cancel_event
@@ -262,6 +258,7 @@ class ChapterSearchState:
             await self.broadcast_state()
 
             from .stats import compute_library_stats
+
             self.stats = await compute_library_stats(library_id)
             self.page = "stats"
             await self.broadcast_state()
@@ -372,6 +369,7 @@ class ChapterSearchState:
     async def clear_cache(self, library_id: Optional[str] = None) -> int:
         """Clear cached book data for a library (or all libraries)."""
         from .database import delete_all_books
+
         if library_id:
             count = await delete_books_for_library(library_id)
         else:
@@ -388,6 +386,7 @@ class ChapterSearchState:
     def reset_ruleset(self) -> RuleSet:
         """Reset the ruleset to factory defaults and persist it."""
         from .rules.models import create_default_ruleset
+
         defaults = create_default_ruleset()
         save_ruleset(defaults)
         return defaults
