@@ -1,0 +1,32 @@
+name: Lint
+
+on:
+  pull_request:
+  push:
+    branches: ["main"]
+
+jobs:
+  ruff:
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/ruff-action@v4.0.0
+      - uses: astral-sh/ruff-action@v4.0.0
+        with:
+          args: "format --check"
+
+  pyright:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+      - run: uv sync --all-extras
+      - run: uv run pyright

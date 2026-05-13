@@ -4,7 +4,7 @@ import queue
 import threading
 import time
 from dataclasses import dataclass
-from typing import Optional, Dict, Any, Callable, Awaitable
+from typing import Any, Awaitable, Callable, Dict, Optional
 
 from ..models.enums import Step
 
@@ -72,7 +72,9 @@ class ProgressDispatcher:
         self._sender_task = asyncio.ensure_future(self._sender_loop())
         self._stop.clear()
         self._thread = threading.Thread(
-            target=self._drain_loop, daemon=True, name="progress-dispatcher",
+            target=self._drain_loop,
+            daemon=True,
+            name="progress-dispatcher",
         )
         self._thread.start()
 
@@ -196,6 +198,7 @@ class ProgressDispatcher:
                         pass
 
                     # If we pulled a step change or stale item, handle it next iteration
+                    assert latest is not None  # the None case returns inside the drain loop above
                     if latest.is_step_change or latest.epoch != self._epoch:
                         self._input_queue.put(latest)
                         continue
@@ -213,7 +216,7 @@ class ProgressDispatcher:
 
     def _schedule_send(self, item: ProgressItem):
         """Push a processed item to the main-loop send queue."""
-        if self._loop and self._loop.is_running():
+        if self._loop and self._loop.is_running() and self._send_queue is not None:
             self._loop.call_soon_threadsafe(self._send_queue.put_nowait, item)
 
     # ------------------------------------------------------------------
@@ -222,6 +225,7 @@ class ProgressDispatcher:
 
     async def _sender_loop(self):
         """Runs on the main event loop. Sends items in strict FIFO order."""
+        assert self._send_queue is not None  # created in start() before this task is scheduled
         while True:
             try:
                 item = await self._send_queue.get()
@@ -235,9 +239,7 @@ class ProgressDispatcher:
                 if item.is_step_change:
                     await self._broadcast_step_change(item.step)
 
-                await self._broadcast_progress(
-                    item.step, item.percent, item.message, item.details
-                )
+                await self._broadcast_progress(item.step, item.percent, item.message, item.details)
             except asyncio.CancelledError:
                 raise
             except Exception:

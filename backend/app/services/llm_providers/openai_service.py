@@ -3,11 +3,12 @@ import logging
 import re
 from typing import List, Optional
 
-from app.models.abs import Book
 import openai
-from openai.types.responses import ParsedResponse, EasyInputMessageParam
+from openai.types.responses import EasyInputMessageParam, ParsedResponse
 
-from .base import AIService, ProviderInfo, ModelInfo, IncrementalJSONParser, ChapterList
+from app.models.abs import Book
+
+from .base import AIService, ChapterList, IncrementalJSONParser, ModelInfo, ProviderInfo
 
 logger = logging.getLogger(__name__)
 
@@ -125,8 +126,9 @@ class OpenAIService(AIService):
 
     async def save_config(self, **config) -> tuple[bool, str]:
         """Save configuration after successful validation"""
-        from ...core.config import save_llm_provider_config, LLMProviderConfig
         from datetime import datetime, timezone
+
+        from ...core.config import LLMProviderConfig, save_llm_provider_config
 
         try:
             # Validate first
@@ -306,11 +308,11 @@ class OpenAIService(AIService):
         self,
         transcriptions: List[str],
         model_id: str,
-        additional_instructions: List[str] = None,
+        additional_instructions: Optional[List[str]] = None,
         deselect_non_chapters: bool = True,
         infer_opening_credits: bool = True,
         infer_end_credits: bool = True,
-        preferred_titles: List[str] = None,
+        preferred_titles: Optional[List[str]] = None,
         book: Optional[Book] = None,
     ) -> List[Optional[str]]:
         """Process transcriptions into chapter titles using OpenAI"""
@@ -320,7 +322,7 @@ class OpenAIService(AIService):
 
         additional_instructions = additional_instructions or []
 
-        self._notify_progress(0, f"Sending request to OpenAI…")
+        self._notify_progress(0, "Sending request to OpenAI…")
 
         # Build system prompt dynamically based on options
         system_prompt = self._build_system_prompt(
@@ -378,6 +380,8 @@ class OpenAIService(AIService):
                             )
 
                 final_response: ParsedResponse[ChapterList] = await stream.get_final_response()
+                if final_response.output_parsed is None:
+                    raise ValueError("OpenAI returned no parsed chapter data")
                 processed_chapters = final_response.output_parsed.chapters
 
             self._notify_progress(100, "Processing AI response…")
@@ -405,7 +409,7 @@ class OpenAIService(AIService):
             self._notify_progress(0, error_msg)
             raise
         except openai.APIError as e:
-            error_msg = f"OpenAI API error ({e.status_code if hasattr(e, 'status_code') else 'unknown'}): {str(e)}"
+            error_msg = f"OpenAI API error ({getattr(e, 'status_code', 'unknown')}): {str(e)}"
             logger.error(f"OpenAI API error: {e}")
             self._notify_progress(0, error_msg)
             raise

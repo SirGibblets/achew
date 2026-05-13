@@ -1,6 +1,6 @@
-import os
 import asyncio
 import logging
+import os
 
 # Configure logging before any other imports
 # noinspection SpellCheckingInspection
@@ -16,14 +16,14 @@ from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from .api.routes import core, chapters, audio, config, audiobookshelf, pipeline, sources
+from .api.routes import audio, audiobookshelf, chapters, config, core, pipeline, sources
 from .api.routes.chapter_search import routes as chapter_search_routes
+from .app import get_app_state
 from .core.config import get_settings
 from .models.websocket import WSMessage, WSMessageType
-from .app import get_app_state
 from .services.chapter_search.state import get_chapter_search_state
 
 logger = logging.getLogger(__name__)
@@ -41,8 +41,8 @@ async def lifespan(achew_app: FastAPI):
     logger.info(f"CORS origins: {settings.cors_origins_list}")
 
     # Migrate legacy shelve config to JSON before any config access
-    from .core.migration import migrate_shelve_to_json
     from .core.config import set_migration_failed
+    from .core.migration import migrate_shelve_to_json
 
     migration_result = migrate_shelve_to_json()
     if migration_result == "ok":
@@ -72,11 +72,13 @@ async def lifespan(achew_app: FastAPI):
 
     # Pre-discover ASR services to improve initial API responsiveness
     from .services.asr_service_options import get_available_services
+
     services = get_available_services()
     logger.info(f"ASR services discovered: {len(services)}")
 
     # Initialize chapter search database
     from .services.chapter_search.database import init_db
+
     await init_db()
     logger.info("Chapter search database initialized")
 
@@ -270,14 +272,14 @@ async def websocket_endpoint(websocket: WebSocket):
         app_state.add_websocket_connection(websocket)
 
         if app_state.pipeline:
-            logger.info(f"WebSocket connected with active pipeline")
+            logger.info("WebSocket connected with active pipeline")
             # Send initial status with pipeline info
             welcome_message = WSMessage(
                 type=WSMessageType.STATUS,
                 data={"message": "Connected to app", "step": app_state.step.value},
             )
         else:
-            logger.info(f"WebSocket connected without active pipeline (configuration mode)")
+            logger.info("WebSocket connected without active pipeline (configuration mode)")
             # Send initial status for configuration mode
             welcome_message = WSMessage(
                 type=WSMessageType.STATUS,
@@ -322,14 +324,13 @@ async def websocket_endpoint(websocket: WebSocket):
                     logger.warning(f"Failed to handle WebSocket message: {e}")
 
         except WebSocketDisconnect:
-            logger.info(f"WebSocket disconnected")
+            logger.info("WebSocket disconnected")
 
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
-        # noinspection PyBroadException
         try:
             await websocket.close(code=1011, reason="Internal server error")
-        except:
+        except Exception:
             pass
 
     finally:

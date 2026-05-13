@@ -1,10 +1,14 @@
-import logging
 import asyncio
-from typing import List, Dict, Any, Optional
 import csv
-import json
 import io
+import json
+import logging
 from datetime import datetime
+from typing import Any, Dict, List, Literal, Optional
+
+from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi.responses import Response
+from pydantic import BaseModel
 
 from app.models.ai_options import AIOptions
 from app.models.chapter import ChapterData
@@ -18,10 +22,6 @@ from app.models.chapter_operation import (
     RestoreChapterOperation,
 )
 from app.models.enums import Step
-from fastapi import APIRouter, BackgroundTasks, HTTPException
-from fastapi.responses import Response
-from pydantic import BaseModel
-from typing import Literal
 
 from ...app import get_app_state
 from ...core.constants import CHAPTER_START_PADDING
@@ -115,6 +115,7 @@ from ...models.sources import (  # noqa: E402 — placed here to avoid import-or
     ExistingCue,
     ExistingCueSource,
 )
+
 
 class DeletedChapter(BaseModel):
     timestamp: float
@@ -357,6 +358,9 @@ async def shift_timestamps(request: ShiftTimestampsRequest):
         if not request.shifts:
             raise HTTPException(status_code=400, detail="No shifts provided")
 
+        if not app_state.pipeline.book:
+            raise HTTPException(status_code=404, detail="Book not found")
+
         book_duration = app_state.pipeline.book.duration
 
         operations = []
@@ -400,10 +404,7 @@ async def apply_titles(request: ApplyTitlesRequest):
         if not request.mappings:
             raise HTTPException(status_code=400, detail="No mappings provided")
 
-        operations = [
-            EditTitleOperation(chapter_id=m.chapter_id, new_title=m.new_title)
-            for m in request.mappings
-        ]
+        operations = [EditTitleOperation(chapter_id=m.chapter_id, new_title=m.new_title) for m in request.mappings]
 
         batch_op = BatchChapterOperation(operations=operations)
         batch_op.apply(app_state.pipeline)
@@ -724,9 +725,9 @@ async def export_chapters_cue():
         cue_lines = []
 
         # CUE file header - we'll use generic values since we don't have audio file info
-        cue_lines.append(f'TITLE "Audiobook Chapters"')
-        cue_lines.append(f'PERFORMER "Unknown"')
-        cue_lines.append(f'FILE "audiobook.mp3" MP3')
+        cue_lines.append('TITLE "Audiobook Chapters"')
+        cue_lines.append('PERFORMER "Unknown"')
+        cue_lines.append('FILE "audiobook.mp3" MP3')
         cue_lines.append("")
 
         # Add tracks
@@ -770,9 +771,7 @@ async def export_chapters_as_snapshot():
         if not selected_chapters:
             raise HTTPException(status_code=400, detail="No chapters selected for export")
 
-        existing_names = {
-            s.name for s in app_state.pipeline.existing_cue_sources if s.type == CueSourceType.SNAPSHOT
-        }
+        existing_names = {s.name for s in app_state.pipeline.existing_cue_sources if s.type == CueSourceType.SNAPSHOT}
         base_name = "Snapshot"
         name = base_name
         suffix = 2
@@ -782,10 +781,7 @@ async def export_chapters_as_snapshot():
         short_name = name
 
         sorted_chapters = sorted(selected_chapters, key=lambda ch: ch.timestamp)
-        cues = [
-            ExistingCue(timestamp=ch.timestamp, title=ch.current_title or "")
-            for ch in sorted_chapters
-        ]
+        cues = [ExistingCue(timestamp=ch.timestamp, title=ch.current_title or "") for ch in sorted_chapters]
         duration = float(app_state.pipeline.book.duration) if app_state.pipeline.book else 0.0
 
         new_source = ExistingCueSource(
@@ -832,6 +828,9 @@ async def get_add_options(chapter_id: str):
         if not current_chapter:
             raise HTTPException(status_code=404, detail="Chapter not found")
 
+        if not app_state.pipeline.book:
+            raise HTTPException(status_code=404, detail="Book not found")
+
         next_chapter = None
         current_found = False
         for chapter in sorted(chapters, key=lambda ch: ch.timestamp):
@@ -847,9 +846,11 @@ async def get_add_options(chapter_id: str):
         min_timestamp = min_timestamp_raw + 1
         max_timestamp = max_timestamp_raw - 1
 
-        detected_cues = [cue for cue in app_state.pipeline.detected_cues if min_timestamp < cue.timestamp < max_timestamp]
+        detected_cues = [
+            cue for cue in app_state.pipeline.detected_cues if min_timestamp < cue.timestamp < max_timestamp
+        ]
         existing_cues = {}
-        
+
         if app_state.pipeline.existing_cue_sources:
             for source in app_state.pipeline.existing_cue_sources:
                 source_cues = []
@@ -911,7 +912,9 @@ async def start_partial_scan(chapter_id: str, request: PartialScanRequest, backg
             raise HTTPException(status_code=404, detail="Pipeline not found")
 
         if app_state.pipeline.step != Step.CHAPTER_EDITING:
-            raise HTTPException(status_code=400, detail="Pipeline must be in chapter_editing step to start a partial scan")
+            raise HTTPException(
+                status_code=400, detail="Pipeline must be in chapter_editing step to start a partial scan"
+            )
 
         if not app_state.pipeline.audio_file_path:
             raise HTTPException(status_code=400, detail="No audio file available for scanning")
@@ -945,24 +948,27 @@ async def add_chapter(request: AddChapterRequest):
                 existing_deleted = chapter
                 break
 
-        operation: ChapterOperation = None
+        operation: ChapterOperation
+        new_chapter_id: str
 
         if existing_deleted:
-            operation = RestoreChapterOperation(chapter_id=existing_deleted.id)
+            restore_op = RestoreChapterOperation(chapter_id=existing_deleted.id)
             if request.title:
-                operation.new_title = request.title
+                restore_op.new_title = request.title
+            operation = restore_op
+            new_chapter_id = existing_deleted.id
 
         else:
             from ...models.chapter import ChapterData
 
-            operation = AddChapterOperation(
-                chapter=ChapterData(
-                    timestamp=request.timestamp,
-                    asr_title="",
-                    current_title=request.title or "",
-                    selected=True,
-                )
+            new_chapter = ChapterData(
+                timestamp=request.timestamp,
+                asr_title="",
+                current_title=request.title or "",
             )
+            new_chapter.selected = True
+            operation = AddChapterOperation(chapter=new_chapter)
+            new_chapter_id = new_chapter.id
 
         operation.apply(app_state.pipeline)
         app_state.pipeline.add_to_history(operation)
@@ -972,11 +978,7 @@ async def add_chapter(request: AddChapterRequest):
 
         # Enqueue transcription if requested
         if request.transcribe:
-            chapter_id = (
-                existing_deleted.id if existing_deleted
-                else operation.chapter.id
-            )
-            await app_state.enqueue_transcription([chapter_id], is_batch=False)
+            await app_state.enqueue_transcription([new_chapter_id], is_batch=False)
 
         return {"message": "Chapter added successfully"}
 
@@ -1025,8 +1027,9 @@ async def get_custom_instructions():
 async def save_custom_instructions(request: CustomInstructionsListRequest):
     """Save custom instructions list"""
     try:
-        from ...core.config import get_app_config, save_custom_instructions, CustomInstruction, CustomInstructionsConfig
         from datetime import datetime
+
+        from ...core.config import CustomInstruction, CustomInstructionsConfig, get_app_config, save_custom_instructions
 
         config = get_app_config()
 
@@ -1116,7 +1119,8 @@ async def transcribe_selected():
             )
 
         chapter_ids = [
-            c.id for c in app_state.pipeline.chapters
+            c.id
+            for c in app_state.pipeline.chapters
             if c.selected and not c.deleted and c.id not in app_state._transcription_statuses
         ]
 

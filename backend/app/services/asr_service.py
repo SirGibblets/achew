@@ -3,7 +3,7 @@ import logging
 import os
 import random
 from abc import ABC, abstractmethod
-from typing import List
+from typing import Any, Dict, List, Optional
 
 from app.models.enums import Step
 from app.models.progress import ProgressCallback
@@ -51,7 +51,7 @@ class ASRService(ABC):
         self.model_path: str = model_path
         self.language: str = language
 
-    def _notify_progress(self, step: Step, percent: float, message: str = "", details: dict = None):
+    def _notify_progress(self, step: Step, percent: float, message: str = "", details: Optional[Dict[str, Any]] = None):
         """Notify progress via callback"""
         self.progress_callback(step, percent, message, details or {})
 
@@ -72,9 +72,7 @@ class ASRService(ABC):
             if jittered_file is None:
                 continue
             try:
-                result = self._clean_transcription(
-                    self._transcribe_file(jittered_file, retry_on_empty=False)
-                )
+                result = self._clean_transcription(self._transcribe_file(jittered_file, retry_on_empty=False))
                 if result:
                     return result
             finally:
@@ -101,6 +99,7 @@ class ASRService(ABC):
         """Get bias words from ASR options"""
         try:
             from app.core.config import get_app_config
+
             config = get_app_config()
             if config.asr_options.use_bias_words:
                 return config.asr_options.bias_words
@@ -163,15 +162,9 @@ class ASRService(ABC):
 
 # Import the service options API - this will trigger plugin discovery
 # noinspection PyUnresolvedReferences
-from app.services.asr_service_options import (
-    get_available_services,
-    get_preferred_service,
-    set_preferred_service,
-    create_asr_service,
-)
 
 # Import providers to ensure auto-registration
 try:
-    import app.services.asr_providers
+    import app.services.asr_providers  # noqa: F401
 except ImportError as e:
     logger.warning(f"Failed to import ASR providers: {e}")

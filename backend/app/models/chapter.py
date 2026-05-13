@@ -1,14 +1,15 @@
+import uuid
 from datetime import datetime
 from typing import Optional
-import uuid
-
 
 from pydantic import BaseModel, Field, computed_field
+
 
 class RealignmentData(BaseModel):
     original_timestamp: float
     confidence: float
     is_guess: bool
+
 
 class ChapterData(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))

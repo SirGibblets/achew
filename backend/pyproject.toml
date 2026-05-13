@@ -60,65 +60,32 @@ dev = [
     "pytest>=8.3.0",
     "pytest-asyncio>=0.24.0",
     "pytest-httpx>=0.32.0",
-    
-    # Code formatting and linting
-    "black>=24.10.0",
-    "isort>=5.13.0",
-    "flake8>=7.1.0",
-    "mypy>=1.13.0",
+
+    # Code formatting, linting, type checking
+    "ruff>=0.15.0",
+    "pyright>=1.1.400",
 ]
 
-[tool.black]
+[tool.ruff]
 line-length = 120
-target-version = ['py312']
-include = '\.pyi?$'
-extend-exclude = '''
-/(
-  # directories
-  \.eggs
-  | \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | build
-  | dist
-)/
-'''
+target-version = "py311"
+extend-exclude = [".venv", "build", "dist"]
 
-[tool.isort]
-profile = "black"
-multi_line_output = 3
-line_length = 88
-include_trailing_comma = true
-force_grid_wrap = 0
-use_parentheses = true
-ensure_newline_before_comments = true
+[tool.ruff.lint]
+extend-select = ["I"]
 
-[tool.mypy]
-python_version = "3.12"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
-check_untyped_defs = true
-disallow_untyped_decorators = true
-no_implicit_optional = true
-warn_redundant_casts = true
-warn_unused_ignores = true
-warn_no_return = true
-warn_unreachable = true
-strict_equality = true
+[tool.ruff.lint.per-file-ignores]
+# Logging must be configured before any module imports a logger, so imports cannot all be at top.
+"app/main.py" = ["E402"]
 
-[[tool.mypy.overrides]]
-module = [
-    "ffmpeg.*",
-    "soundfile.*",
-    "pympler.*",
-    "mlx_whisper.*",
-    "parakeet_mlx.*",
-]
-ignore_missing_imports = true
+[tool.pyright]
+include = ["app"]
+pythonVersion = "3.11"
+typeCheckingMode = "basic"
+venvPath = "."
+venv = ".venv"
+reportUnusedVariable = "error"
+reportUnnecessaryTypeIgnoreComment = "error"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

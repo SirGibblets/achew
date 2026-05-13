@@ -1,15 +1,22 @@
 import logging
-from typing import Dict, List, Optional, Type
-from .base import AIService, ProviderInfo, ModelInfo
-from .openai_service import OpenAIService
-from .ollama_service import OllamaService
-from .gemini_service import GeminiService
-from .copilot_service import CopilotService
+from typing import Any, Dict, List, Optional, Type
+
+from app.models.enums import Step
+
+from .base import AIService, ModelInfo, ProviderInfo
 from .claude_service import ClaudeService
+from .copilot_service import CopilotService
+from .gemini_service import GeminiService
 from .lm_studio_service import LMStudioService
+from .ollama_service import OllamaService
+from .openai_service import OpenAIService
 from .openrouter_service import OpenRouterService
 
 logger = logging.getLogger(__name__)
+
+
+def _noop_progress(step: Step, percent: float, message: str = "", details: Optional[Dict[str, Any]] = None) -> None:
+    """No-op progress callback used for transient provider instances (state/validation queries)."""
 
 
 class ProviderRegistry:
@@ -73,7 +80,7 @@ class ProviderRegistry:
         for provider_class in self._providers.values():
             try:
                 # Create a temporary instance to get state (no config needed now)
-                provider = provider_class(lambda *args: None)
+                provider = provider_class(_noop_progress)
                 state = provider.get_provider_state()
                 states.append(state)
             except Exception as e:
@@ -96,7 +103,7 @@ class ProviderRegistry:
             return False, f"Unknown provider: {provider_id}"
 
         try:
-            provider = provider_class(lambda *args: None, **config)
+            provider = provider_class(_noop_progress, **config)
             valid, message = await provider.validate_config(**config)
 
             # If validation succeeds, automatically save the configuration
@@ -125,7 +132,7 @@ class ProviderRegistry:
             return False, f"Unknown provider: {provider_id}"
 
         try:
-            provider = provider_class(lambda *args: None, **config)
+            provider = provider_class(_noop_progress, **config)
             return await provider.save_config(**config)
         except Exception as e:
             logger.error(f"Failed to save config for provider {provider_id}: {e}")
@@ -138,7 +145,7 @@ class ProviderRegistry:
             return False
 
         try:
-            provider = provider_class(lambda *args: None)
+            provider = provider_class(_noop_progress)
             return await provider.set_enabled(enabled)
         except Exception as e:
             logger.error(f"Failed to set enabled state for provider {provider_id}: {e}")
@@ -147,7 +154,7 @@ class ProviderRegistry:
     async def get_provider_models(self, provider_id: str, **config) -> List[ModelInfo]:
         """Get available models for a provider"""
         try:
-            provider = self.create_provider(provider_id, lambda *args: None, **config)
+            provider = self.create_provider(provider_id, _noop_progress, **config)
             if provider:
                 return await provider.get_available_models()
             return []

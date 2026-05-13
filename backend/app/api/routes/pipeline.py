@@ -1,17 +1,17 @@
 import logging
 import traceback
-from typing import List, Optional, Dict
+from typing import Dict, List, Optional
+
+from fastapi import APIRouter, BackgroundTasks, HTTPException
+from pydantic import BaseModel
 
 from app.models.sources import ExistingCueSource, ExistingTitleSource
 from app.services.processing_pipeline import PipelineProgress
-from fastapi import APIRouter, HTTPException, BackgroundTasks
-from pydantic import BaseModel
 
+from ...app import get_app_state
 from ...core.config import is_abs_configured
-from ...core.constants import CHAPTER_START_PADDING
 from ...models.abs import Book
 from ...models.enums import RestartStep, Step
-from ...app import get_app_state
 
 logger = logging.getLogger(__name__)
 
@@ -246,9 +246,11 @@ async def select_workflow(request: SelectWorkflowRequest, background_tasks: Back
                 detail="Pipeline must be in select_workflow step to select option",
             )
 
+        pipeline = app_state.pipeline
+
         async def create_cues_from_source():
             try:
-                await app_state.pipeline.create_cues_from_source(request.option)
+                await pipeline.create_cues_from_source(request.option)
             except Exception as e:
                 logger.error(f"Failed to create cues from source: {e}")
 
@@ -277,7 +279,8 @@ async def get_detected_cues():
 
         if app_state.step != Step.INITIAL_CHAPTER_SELECTION:
             raise HTTPException(
-                status_code=400, detail=f"Pipeline not in initial chapter selection step. Current step: {app_state.step.value}"
+                status_code=400,
+                detail=f"Pipeline not in initial chapter selection step. Current step: {app_state.step.value}",
             )
 
         if not app_state.pipeline.detected_cues:
@@ -289,7 +292,7 @@ async def get_detected_cues():
 
         return {
             "detected_cues": detected_cues,
-            "book_duration": app_state.pipeline.book.duration,
+            "book_duration": app_state.pipeline.book_duration,
             "existing_cue_sources": app_state.pipeline.existing_cue_sources,
         }
 
@@ -331,9 +334,11 @@ async def select_initial_chapters(request: dict, background_tasks: BackgroundTas
                     detail=f"Invalid include_unaligned option: {option}. Available options: {available_source_ids}",
                 )
 
+        pipeline = app_state.pipeline
+
         async def do_select_initial_chapters():
             try:
-                await app_state.pipeline.select_initial_chapters(timestamps, include_unaligned)
+                await pipeline.select_initial_chapters(timestamps, include_unaligned)
             except Exception as e:
                 logger.error(f"Failed to select initial chapters: {e}")
 
@@ -373,12 +378,14 @@ async def configure_asr(request: ConfigureASRRequest, background_tasks: Backgrou
                 detail="Action must be 'transcribe' or 'skip'",
             )
 
+        pipeline = app_state.pipeline
+
         async def process_asr_action():
             try:
                 if request.action == "transcribe":
-                    await app_state.pipeline.proceed_with_transcription()
+                    await pipeline.proceed_with_transcription()
                 elif request.action == "skip":
-                    await app_state.pipeline.skip_transcription()
+                    await pipeline.skip_transcription()
             except Exception as e:
                 logger.error(f"Failed to process ASR action: {e}")
 
@@ -530,8 +537,6 @@ async def cancel_step():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-
-
 @router.put("/pipeline/asr-options")
 async def update_asr_options(request: ASROptionsRequest):
     """Update ASR options for the pipeline"""
@@ -581,8 +586,6 @@ async def get_asr_options():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-
-
 @router.post("/pipeline/realign")
 async def realign_chapter(request: RealignChapterRequest, background_tasks: BackgroundTasks):
     """Realign chapter cues (Stub)"""
@@ -591,16 +594,18 @@ async def realign_chapter(request: RealignChapterRequest, background_tasks: Back
 
         if not app_state.pipeline:
             raise HTTPException(status_code=404, detail="Pipeline not found")
-        
+
         if app_state.step != Step.SELECT_WORKFLOW:
             raise HTTPException(
                 status_code=400,
                 detail="Pipeline must be in select_workflow step to select option",
             )
 
+        pipeline = app_state.pipeline
+
         async def realign_chapters():
             try:
-                await app_state.pipeline.realign_chapters(request.source_id, request.dramatized)
+                await pipeline.realign_chapters(request.source_id, request.dramatized)
             except Exception as e:
                 logger.error(f"Failed to realign chapters: {e}")
 
@@ -609,7 +614,7 @@ async def realign_chapter(request: RealignChapterRequest, background_tasks: Back
         return {
             "message": f"Realignment started for source '{request.source_id}'",
             "source_id": request.source_id,
-            "dramatized": request.dramatized
+            "dramatized": request.dramatized,
         }
 
     except HTTPException:

@@ -13,7 +13,7 @@ from typing import List, Tuple
 from app.models.enums import Step
 from app.models.progress import ProgressCallback
 from app.services.asr_service import ASRService
-from app.services.asr_service_options import register_asr_service, ASRModelVariant
+from app.services.asr_service_options import ASRModelVariant, register_asr_service
 
 logger = logging.getLogger(__name__)
 
@@ -79,12 +79,10 @@ class WhisperMLXASRService(ASRService):
                     **kwargs,
                 )
 
-                if isinstance(result, dict) and "text" in result:
-                    text = result["text"].strip()
-                elif hasattr(result, "text"):
-                    text = result.text.strip()
+                if isinstance(result, dict):
+                    text = str(result.get("text", "")).strip()
                 else:
-                    text = str(result).strip()
+                    text = str(getattr(result, "text", result)).strip()
 
                 if text:
                     return text
@@ -280,7 +278,7 @@ MLX_WHISPER_VARIANTS = [
 # Register Whisper MLX service (only on macOS with MLX available)
 if sys.platform == "darwin":
     try:
-        import mlx_whisper
+        import mlx_whisper  # noqa: F401
 
         @register_asr_service(
             service_id="whisper_mlx",

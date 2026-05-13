@@ -11,8 +11,8 @@ from fastapi import WebSocket
 
 from ...services.abs_service import ABSService
 from .database import delete_books_for_library, set_ignore
-from .rules.models import RuleSet
 from .rules.evaluator import evaluate_ruleset
+from .rules.models import RuleSet
 from .rules.persistence import load_ruleset, save_ruleset
 from .search import run_search
 from .sync import sync_library, sync_specific_books
@@ -185,13 +185,12 @@ class ChapterSearchState:
 
         await self.broadcast_state()
 
-        self._active_task = asyncio.create_task(
-            self._run_sync_and_search(library_id, library_name)
-        )
+        self._active_task = asyncio.create_task(self._run_sync_and_search(library_id, library_name))
 
     async def _run_sync_and_search(self, library_id: str, library_name: str) -> None:
         ruleset = load_ruleset()
         cancel = self._cancel_event
+        assert cancel is not None  # set by the caller before this task is created
 
         def progress_cb(task: str, current: int, total: int) -> None:
             self.current_task = task
@@ -238,12 +237,11 @@ class ChapterSearchState:
 
         await self.broadcast_state()
 
-        self._active_task = asyncio.create_task(
-            self._run_sync_and_stats(library_id)
-        )
+        self._active_task = asyncio.create_task(self._run_sync_and_stats(library_id))
 
     async def _run_sync_and_stats(self, library_id: str) -> None:
         cancel = self._cancel_event
+        assert cancel is not None  # set by the caller before this task is created
 
         def progress_cb(task: str, current: int, total: int) -> None:
             self.current_task = task
@@ -262,6 +260,7 @@ class ChapterSearchState:
             await self.broadcast_state()
 
             from .stats import compute_library_stats
+
             self.stats = await compute_library_stats(library_id)
             self.page = "stats"
             await self.broadcast_state()
@@ -303,6 +302,9 @@ class ChapterSearchState:
     async def _run_refresh(self, book_ids: list[str]) -> None:
         ruleset = load_ruleset()
         cancel = self._cancel_event
+        assert cancel is not None  # set by the caller before this task is created
+        library_id = self.selected_library_id
+        assert library_id is not None  # a library is always selected before a refresh
 
         def progress_cb(task: str, current: int, total: int) -> None:
             self.current_task = task
@@ -310,7 +312,7 @@ class ChapterSearchState:
             asyncio.create_task(self.broadcast_state())
 
         try:
-            await sync_specific_books(self.selected_library_id, book_ids, progress_cb, cancel)
+            await sync_specific_books(library_id, book_ids, progress_cb, cancel)
             if cancel.is_set():
                 await self._back_to_landing()
                 return
@@ -319,7 +321,7 @@ class ChapterSearchState:
             self.progress = {"current": 0, "total": 0}
             await self.broadcast_state()
 
-            results = await run_search(self.selected_library_id, ruleset, progress_cb, cancel)
+            results = await run_search(library_id, ruleset, progress_cb, cancel)
             if cancel.is_set():
                 await self._back_to_landing()
                 return
@@ -372,6 +374,7 @@ class ChapterSearchState:
     async def clear_cache(self, library_id: Optional[str] = None) -> int:
         """Clear cached book data for a library (or all libraries)."""
         from .database import delete_all_books
+
         if library_id:
             count = await delete_books_for_library(library_id)
         else:
@@ -388,6 +391,7 @@ class ChapterSearchState:
     def reset_ruleset(self) -> RuleSet:
         """Reset the ruleset to factory defaults and persist it."""
         from .rules.models import create_default_ruleset
+
         defaults = create_default_ruleset()
         save_ruleset(defaults)
         return defaults

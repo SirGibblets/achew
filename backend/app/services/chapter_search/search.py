@@ -42,16 +42,18 @@ async def run_search(
         matched, matched_ids = evaluate_ruleset(ruleset, book["name"], chapter_titles)
 
         if matched:
-            results.append({
-                "id": book["id"],
-                "name": book["name"],
-                "author": book.get("author"),
-                "series": book.get("series"),
-                "has_cover": book.get("has_cover", False),
-                "is_ignored": book.get("is_ignored", False),
-                "chapters": book.get("chapters", []),
-                "matched_rule_ids": matched_ids,
-            })
+            results.append(
+                {
+                    "id": book["id"],
+                    "name": book["name"],
+                    "author": book.get("author"),
+                    "series": book.get("series"),
+                    "has_cover": book.get("has_cover", False),
+                    "is_ignored": book.get("is_ignored", False),
+                    "chapters": book.get("chapters", []),
+                    "matched_rule_ids": matched_ids,
+                }
+            )
 
         progress_cb("search", i + 1, total)
 

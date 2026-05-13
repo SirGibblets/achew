@@ -4,12 +4,10 @@ import tempfile
 import uuid
 from typing import List
 
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from ...app import get_app_state
-from ...services.abs_service import ABSService
-from ...services.audible_providers import region_for_provider
 from ...models.sources import (
     CueSourceType,
     ExistingCue,
@@ -17,6 +15,8 @@ from ...models.sources import (
     ExistingTitleSource,
     TitleSourceType,
 )
+from ...services.abs_service import ABSService
+from ...services.audible_providers import region_for_provider
 from ...services.source_parsers import (
     csv_parser,
     cue_parser,
@@ -84,9 +84,7 @@ async def upload_source(file: UploadFile = File(...)):
         )
 
     # Save to a temp file
-    tmp_path = os.path.join(
-        tempfile.gettempdir(), "achew", f"upload_{uuid.uuid4()}{ext}"
-    )
+    tmp_path = os.path.join(tempfile.gettempdir(), "achew", f"upload_{uuid.uuid4()}{ext}")
     os.makedirs(os.path.dirname(tmp_path), exist_ok=True)
     try:
         content = await file.read()
@@ -155,10 +153,7 @@ async def add_audnexus_source(request: AddAudnexusRequest):
             detail=f"No Audnexus chapter data found for ASIN {request.asin}",
         )
 
-    cues = [
-        ExistingCue(timestamp=ch.startOffsetMs / 1000, title=ch.title)
-        for ch in chapter_data.chapters
-    ]
+    cues = [ExistingCue(timestamp=ch.startOffsetMs / 1000, title=ch.title) for ch in chapter_data.chapters]
     duration_sec = float(chapter_data.runtimeLengthMs) / 1000
     new_source = ExistingCueSource(
         type=CueSourceType.AUDNEXUS,

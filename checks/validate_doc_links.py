@@ -51,7 +51,9 @@ def find_doclink_usages() -> list[Usage]:
                 continue
             line = text.count("\n", 0, match.start()) + 1
             path = path_match.group(1)
-            usages.append(Usage(file=svelte, line=line, path=path, source="DocLink", raw=path))
+            usages.append(
+                Usage(file=svelte, line=line, path=path, source="DocLink", raw=path)
+            )
     return usages
 
 
@@ -85,7 +87,9 @@ def find_raw_url_usages() -> list[Usage]:
             url_path = match.group(1) or ""
             doc_path = url_to_doc_path(url_path)
             line = text.count("\n", 0, match.start()) + 1
-            usages.append(Usage(file=path, line=line, path=doc_path, source="raw URL", raw=url))
+            usages.append(
+                Usage(file=path, line=line, path=doc_path, source="raw URL", raw=url)
+            )
     return usages
 
 

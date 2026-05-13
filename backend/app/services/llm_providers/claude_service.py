@@ -1,11 +1,12 @@
-import anthropic
 import json
 import logging
 from typing import List, Optional
 
+import anthropic
+
 from app.models.abs import Book
 
-from .base import AIService, Chapter, ProviderInfo, ModelInfo, IncrementalJSONParser
+from .base import AIService, Chapter, IncrementalJSONParser, ModelInfo, ProviderInfo
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,7 @@ UNSTRUCTURED_OUTPUT_MODELS = {
     "claude-3-5-haiku",
     "claude-3-haiku",
 }
+
 
 class ClaudeService(AIService):
     """Anthropic Claude implementation of AIService"""
@@ -62,8 +64,9 @@ class ClaudeService(AIService):
 
     async def save_config(self, **config) -> tuple[bool, str]:
         """Save configuration after successful validation"""
-        from ...core.config import save_llm_provider_config, LLMProviderConfig
         from datetime import datetime, timezone
+
+        from ...core.config import LLMProviderConfig, save_llm_provider_config
 
         try:
             # Get and validate API key
@@ -255,11 +258,11 @@ class ClaudeService(AIService):
         self,
         transcriptions: List[str],
         model_id: str,
-        additional_instructions: List[str] = None,
+        additional_instructions: Optional[List[str]] = None,
         deselect_non_chapters: bool = True,
         infer_opening_credits: bool = True,
         infer_end_credits: bool = True,
-        preferred_titles: List[str] = None,
+        preferred_titles: Optional[List[str]] = None,
         book: Optional[Book] = None,
     ) -> List[Optional[str]]:
         """Process transcriptions into chapter titles using Claude"""
@@ -270,7 +273,7 @@ class ClaudeService(AIService):
 
         additional_instructions = additional_instructions or []
 
-        self._notify_progress(0, f"Sending request to Claude…")
+        self._notify_progress(0, "Sending request to Claude…")
 
         # Build system prompt dynamically based on options
         system_prompt = self._build_system_prompt(
@@ -305,10 +308,10 @@ class ClaudeService(AIService):
             # Strip the trailing date (e.g. -20250514) and check against known unstructured base models
             model_basename = model_id
             parts = model_id.split("-")
-            
+
             if len(parts) > 1 and len(parts[-1]) == 8 and parts[-1].isdigit():
                 model_basename = "-".join(parts[:-1])
-                
+
             supports_structured_output = model_basename not in UNSTRUCTURED_OUTPUT_MODELS
 
             stream_kwargs = {
@@ -373,7 +376,6 @@ class ClaudeService(AIService):
                 logger.error(f"Claude Raw response: {content_received}")
                 logger.error(f"Parsed response: {processed_chapters}")
                 raise
-            
 
         except anthropic.AuthenticationError as e:
             error_msg = f"Claude authentication failed - please check your API key: {str(e)}"
@@ -391,7 +393,7 @@ class ClaudeService(AIService):
             self._notify_progress(0, error_msg)
             raise
         except anthropic.APIError as e:
-            error_msg = f"Claude API error ({e.status_code if hasattr(e, 'status_code') else 'unknown'}): {str(e)}"
+            error_msg = f"Claude API error ({getattr(e, 'status_code', 'unknown')}): {str(e)}"
             logger.error(f"Claude API error: {e}")
             self._notify_progress(0, error_msg)
             raise

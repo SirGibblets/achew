@@ -1,12 +1,14 @@
+import asyncio
 import json
 import logging
 import time
-import asyncio
 from typing import List, Optional
-from app.models.abs import Book
+
 from lmstudio import AsyncClient
 
-from .base import AIService, ProviderInfo, ModelInfo, IncrementalJSONParser
+from app.models.abs import Book
+
+from .base import AIService, IncrementalJSONParser, ModelInfo, ProviderInfo
 
 logger = logging.getLogger(__name__)
 
@@ -72,8 +74,9 @@ class LMStudioService(AIService):
 
     async def save_config(self, **config) -> tuple[bool, str]:
         """Save configuration after successful validation"""
-        from ...core.config import save_llm_provider_config, LLMProviderConfig
         from datetime import datetime, timezone
+
+        from ...core.config import LLMProviderConfig, save_llm_provider_config
 
         try:
             # Get and validate host
@@ -285,11 +288,11 @@ class LMStudioService(AIService):
         self,
         transcriptions: List[str],
         model_id: str,
-        additional_instructions: List[str] = None,
+        additional_instructions: Optional[List[str]] = None,
         deselect_non_chapters: bool = True,
         infer_opening_credits: bool = True,
         infer_end_credits: bool = True,
-        preferred_titles: List[str] = None,
+        preferred_titles: Optional[List[str]] = None,
         book: Optional[Book] = None,
     ) -> List[Optional[str]]:
         """Process transcriptions into chapter titles using LM Studio"""

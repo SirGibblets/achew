@@ -1,5 +1,6 @@
 import csv
 import logging
+
 from ...models.sources import CueSourceType, ExistingCue, ExistingCueSource
 from .base_parser import BaseCueParser
 from .timestamp_utils import normalize_timestamps, parse_timestamp, score_timestamp
@@ -111,7 +112,7 @@ class CsvParser(BaseCueParser):
             type=CueSourceType.CSV,
             name=f"CSV File ({name})",
             short_name=self.short_name,
-            description=f"Chapter data parsed from CSV file \"{name}\"",
+            description=f'Chapter data parsed from CSV file "{name}"',
             metadata={"File": source_name},
             cues=[ExistingCue(timestamp=ts, title=t) for ts, t in cues],
             duration=duration,

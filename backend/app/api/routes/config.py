@@ -1,36 +1,40 @@
-from typing import Dict, Any, Optional, List
+import logging
 from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
 import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from ...app import get_app_state
 from ...core.config import (
-    get_app_config,
-    save_abs_config,
-    save_llm_provider_config,
-    get_user_preferences,
-    update_user_preferences,
-    refresh_app_config,
     ABSConfig,
     LLMProviderConfig,
+    get_app_config,
+    get_user_preferences,
+    refresh_app_config,
+    save_abs_config,
+    save_llm_provider_config,
+    update_user_preferences,
 )
 from ...models.enums import Step
-from ...app import get_app_state
+from ...services.audible_providers import normalize_language
+from ...services.llm_providers.base import ModelInfo, ProviderInfo
 from ...services.llm_providers.registry import (
     get_all_provider_states,
-    validate_provider_config,
+    get_provider_models,
     save_provider_config,
     set_provider_enabled,
-    get_provider_models,
+    validate_provider_config,
 )
-from ...services.llm_providers.base import ProviderInfo, ModelInfo
-from ...services.audible_providers import normalize_language
-import logging
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _noop_progress(step: Step, percent: float, message: str = "", details: Optional[Dict[str, Any]] = None) -> None:
+    """No-op progress callback for transient provider instances created to read saved config."""
 
 
 class ABSConfigRequest(BaseModel):
@@ -687,7 +691,7 @@ async def get_llm_provider_config(provider_id: str):
             raise HTTPException(status_code=404, detail=f"Provider '{provider_id}' not found")
 
         # Create instance and load saved config
-        provider = provider_class(lambda *args: None)
+        provider = provider_class(_noop_progress)
         config = await provider.load_saved_config()
 
         return {"success": True, "config": config}
@@ -744,8 +748,8 @@ async def update_editor_settings(request: EditorSettingsRequest):
 @router.post("/config/migration/reset")
 async def reset_migration():
     """Reset settings after migration failure — deletes unreadable legacy files and starts fresh"""
+    from ...core.config import refresh_app_config, set_migration_failed
     from ...core.migration import reset_after_migration_failure
-    from ...core.config import set_migration_failed, refresh_app_config
 
     try:
         reset_after_migration_failure()

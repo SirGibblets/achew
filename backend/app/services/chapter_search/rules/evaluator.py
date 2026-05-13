@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import math
 import re
-from typing import Union
 
 from rapidfuzz.distance import JaroWinkler
 
@@ -166,9 +165,6 @@ def _eval_text_pred(pred: TextPredicate, title: str, book_name: str) -> bool:
     # Determine what we're comparing against
     if part2 == Part2.NUMBER:
         target_is_number = _is_number(title)
-        # "is a number" → positive when it IS a number
-        # "is not a number" → positive when it's NOT a number
-        positive = op in {TextOp.IS, TextOp.IS_NOT}
         if op == TextOp.IS:
             return target_is_number
         if op == TextOp.IS_NOT:

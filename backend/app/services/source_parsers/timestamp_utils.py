@@ -12,7 +12,7 @@ _MM_SS = re.compile(r"^(\d+):(\d{2})(?:[.,](\d+))?$")
 
 def score_timestamp(value) -> int:
     """Score the likelihood of a value being a timestamp.
-    
+
     Higher positive values indicate it's a good timestamp candidate.
     Negative values indicate it is likely text or unparseable.
     """

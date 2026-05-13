@@ -27,9 +27,7 @@ def _get_shelve_files() -> list[Path]:
     for path in config_dir.iterdir():
         if not path.is_file():
             continue
-        if path.name == "app_config" or (
-            path.name.startswith("app_config.") and path.suffix not in (".json", ".tmp")
-        ):
+        if path.name == "app_config" or (path.name.startswith("app_config.") and path.suffix not in (".json", ".tmp")):
             shelve_files.append(path)
     return shelve_files
 
@@ -53,7 +51,15 @@ def migrate_shelve_to_json() -> str:
         "skipped" — no migration needed (fresh install or already migrated)
         "failed"  — shelve exists but could not be read
     """
-    from .config import get_config_json_path, AppConfig, ABSConfig, LLMConfig, UserPreferences, ASROptions, CustomInstructionsConfig
+    from .config import (
+        ABSConfig,
+        AppConfig,
+        ASROptions,
+        CustomInstructionsConfig,
+        LLMConfig,
+        UserPreferences,
+        get_config_json_path,
+    )
 
     config_dir = _get_config_dir()
     json_path = get_config_json_path()
@@ -87,7 +93,9 @@ def migrate_shelve_to_json() -> str:
             llm=LLMConfig(**llm_data) if llm_data else LLMConfig(),
             user_preferences=UserPreferences(**user_prefs_data) if user_prefs_data else UserPreferences(),
             asr_options=ASROptions(**asr_options_data) if asr_options_data else ASROptions(),
-            custom_instructions=CustomInstructionsConfig(**custom_instructions_data) if custom_instructions_data else CustomInstructionsConfig(),
+            custom_instructions=CustomInstructionsConfig(**custom_instructions_data)
+            if custom_instructions_data
+            else CustomInstructionsConfig(),
         )
 
         config_data = {
@@ -108,6 +116,7 @@ def migrate_shelve_to_json() -> str:
         # Migrate chapter search ruleset to its own JSON file
         if ruleset_data:
             from ..services.chapter_search.rules.models import RuleSet
+
             ruleset = RuleSet.model_validate(ruleset_data)
             ruleset_path = config_dir / "chapter_search_ruleset.json"
             tmp_ruleset_path = ruleset_path.with_suffix(".tmp")

@@ -9,7 +9,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed, wait
 from pathlib import Path
-from typing import List, Tuple, Optional
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 from app.core.config import get_app_config
 from app.core.constants import (
@@ -38,7 +38,7 @@ PARALLEL_SILENCE_OVERLAP = 20
 
 
 # Minimum duration (in seconds) to warrant parallel detection
-MIN_DURATION_FOR_PARALLEL = 30 * 60 # 30 minutes
+MIN_DURATION_FOR_PARALLEL = 30 * 60  # 30 minutes
 
 
 # Matches the first audio stream line ffmpeg prints to stderr
@@ -52,8 +52,10 @@ def _ffmpeg_probe_stderr(audio_file: str) -> str:
     try:
         result = subprocess.run(
             ["ffmpeg", "-hide_banner", "-i", audio_file],
-            capture_output=True, timeout=30,
-            encoding="utf-8", errors="replace",
+            capture_output=True,
+            timeout=30,
+            encoding="utf-8",
+            errors="replace",
         )
         return result.stderr
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
@@ -124,17 +126,29 @@ def _probe_extension(audio_file: str, ext: str, temp_dir: str) -> bool:
     extraction with the same flags real extraction will use.
     """
     import tempfile
+
     with tempfile.TemporaryDirectory(dir=temp_dir) as tmp_dir_path:
         output_pattern = os.path.join(tmp_dir_path, f"probe_%03d.{ext}")
         cmd = [
-            "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-            "-ss", "0",
-            "-t", "2.0",
-            "-i", audio_file,
-            "-map", "0:a:0",
-            "-acodec", "copy",
-            "-f", "segment",
-            "-segment_times", "1.0",
+            "ffmpeg",
+            "-y",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-ss",
+            "0",
+            "-t",
+            "2.0",
+            "-i",
+            audio_file,
+            "-map",
+            "0:a:0",
+            "-acodec",
+            "copy",
+            "-f",
+            "segment",
+            "-segment_times",
+            "1.0",
             output_pattern,
         ]
         try:
@@ -155,9 +169,7 @@ def probe_segment_extension(audio_file: str, temp_dir: str) -> str:
             logger.info(f"Segment extension probe selected '{ext}' for {audio_file}")
             return ext
 
-    logger.warning(
-        f"All segment-extension probes failed for {audio_file}; falling back to wav"
-    )
+    logger.warning(f"All segment-extension probes failed for {audio_file}; falling back to wav")
     return "wav"
 
 
@@ -227,13 +239,19 @@ def crop_start_to_tempfile(audio_file: str, crop_seconds: float) -> str | None:
 class AudioProcessingService:
     """Service for audio processing operations using ffmpeg"""
 
-    def __init__(self, progress_callback: ProgressCallback, running_processes=None, asr_buffer: float = 0.1, process_lock: threading.Lock = None):
+    def __init__(
+        self,
+        progress_callback: ProgressCallback,
+        running_processes=None,
+        asr_buffer: float = 0.1,
+        process_lock: Optional[threading.Lock] = None,
+    ):
         self.progress_callback: ProgressCallback = progress_callback
         self._running_processes = running_processes if running_processes is not None else []
         self._process_lock = process_lock or threading.Lock()
         self.asr_buffer = asr_buffer
 
-    def _notify_progress(self, step: Step, percent: float, message: str = "", details: dict = None):
+    def _notify_progress(self, step: Step, percent: float, message: str = "", details: Optional[Dict[str, Any]] = None):
         """Notify progress via callback"""
         self.progress_callback(step, percent, message, details or {})
 
@@ -273,15 +291,12 @@ class AudioProcessingService:
             self._notify_progress(Step.AUDIO_ANALYSIS, 0, "Starting audio analysis…")
 
         num_workers = get_worker_count()
-        use_parallel = (
-            duration is not None
-            and duration >= MIN_DURATION_FOR_PARALLEL
-            and num_workers > 1
-        )
+        use_parallel = duration is not None and duration >= MIN_DURATION_FOR_PARALLEL and num_workers > 1
 
         loop = asyncio.get_event_loop()
 
         if use_parallel:
+            assert duration is not None  # implied by use_parallel
             executor_task = loop.run_in_executor(
                 None,
                 self._run_parallel_silence_detection,
@@ -342,7 +357,7 @@ class AudioProcessingService:
             last_progress = 0.0
             last_feed_time = 0.0
 
-            for line in process.stderr:
+            for line in process.stderr or []:
                 if "silence_start" in line:
                     match = pattern_start.search(line)
                     if match:
@@ -381,9 +396,7 @@ class AudioProcessingService:
                     logger.info("ffmpeg silence detection was cancelled")
                     return None
                 else:
-                    raise RuntimeError(
-                        f"ffmpeg silence detection failed with return code {process.returncode}"
-                    )
+                    raise RuntimeError(f"ffmpeg silence detection failed with return code {process.returncode}")
 
             return list(zip(silence_starts, silence_ends))
         finally:
@@ -416,12 +429,18 @@ class AudioProcessingService:
         # noinspection SpellCheckingInspection
         cmd = [
             "ffmpeg",
-            "-ss", str(seek),
-            "-i", input_file,
-            "-t", str(segment_duration),
-            "-af", f"silencedetect=n={silence_threshold}dB:d={MIN_SILENCE_DURATION}",
-            "-f", "null",
-            "-progress", "pipe:2",
+            "-ss",
+            str(seek),
+            "-i",
+            input_file,
+            "-t",
+            str(segment_duration),
+            "-af",
+            f"silencedetect=n={silence_threshold}dB:d={MIN_SILENCE_DURATION}",
+            "-f",
+            "null",
+            "-progress",
+            "pipe:2",
             "-",
         ]
 
@@ -447,7 +466,7 @@ class AudioProcessingService:
             # slot from bouncing backwards.
             max_progress_ts = 0.0
 
-            for line in process.stderr:
+            for line in process.stderr or []:
                 if cancelled.is_set():
                     process.terminate()
                     process.wait()
@@ -481,9 +500,7 @@ class AudioProcessingService:
 
                 with progress_lock:
                     if segment_duration > 0:
-                        worker_progress[worker_index] = min(
-                            (max_progress_ts / segment_duration) * 100, 100
-                        )
+                        worker_progress[worker_index] = min((max_progress_ts / segment_duration) * 100, 100)
 
                     avg_progress = sum(worker_progress) / len(worker_progress)
                     virtual_ts = (avg_progress / 100) * duration
@@ -552,9 +569,18 @@ class AudioProcessingService:
             futures = {
                 executor.submit(
                     self._run_silence_detection_worker,
-                    input_file, seek, seg_dur, silence_threshold,
-                    duration, cancelled, worker_progress, i,
-                    cue_counter, last_feed_time, last_progress_time, finishing,
+                    input_file,
+                    seek,
+                    seg_dur,
+                    silence_threshold,
+                    duration,
+                    cancelled,
+                    worker_progress,
+                    i,
+                    cue_counter,
+                    last_feed_time,
+                    last_progress_time,
+                    finishing,
                     progress_lock,
                 ): i
                 for i, (seek, seg_dur) in enumerate(segments)
@@ -594,16 +620,13 @@ class AudioProcessingService:
             self._notify_progress(Step.AUDIO_ANALYSIS, -1, "Processing results…")
 
         merged = _merge_overlapping_silences(all_silences)
-        logger.info(
-            f"Parallel silence detection complete: {len(all_silences)} raw silences "
-            f"merged to {len(merged)}"
-        )
+        logger.info(f"Parallel silence detection complete: {len(all_silences)} raw silences merged to {len(merged)}")
         return merged
 
     async def extract_segments(
         self,
         audio_file: str,
-        timestamps: List[float],
+        timestamps: List[float] | List[Tuple[float, float]],
         output_dir: str,
         use_wav: bool = False,
         allow_retry: bool = True,
@@ -628,7 +651,6 @@ class AudioProcessingService:
             segment_extension,
         )
 
-        
         result = await executor_task
 
         # Check if extraction was cancelled (empty result could indicate cancellation)
@@ -646,7 +668,7 @@ class AudioProcessingService:
         start_time: float,
         duration: float,
         output_path: str,
-    ) -> str:
+    ) -> Optional[str]:
         """Extract a single audio segment using ffmpeg -ss/-t for direct seeking.
 
         This is more efficient than the segment-split approach for small numbers of chapters.
@@ -663,7 +685,8 @@ class AudioProcessingService:
             str(duration),
             "-i",
             audio_file,
-            "-map", "0:a:0",
+            "-map",
+            "0:a:0",
         ]
 
         if use_copy:
@@ -671,14 +694,18 @@ class AudioProcessingService:
 
         command.append(output_path)
 
-        process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
+        process = subprocess.Popen(
+            command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace"
+        )
         with self._process_lock:
             self._running_processes.append(process)
 
         try:
             _, stderr_output = process.communicate()
             if process.returncode != 0:
-                logger.warning(f"Failed to extract segment at {start_time}s: ffmpeg returned {process.returncode}: {stderr_output[-500:] if stderr_output else ''}")
+                logger.warning(
+                    f"Failed to extract segment at {start_time}s: ffmpeg returned {process.returncode}: {stderr_output[-500:] if stderr_output else ''}"
+                )
                 return None
             return output_path
         finally:
@@ -698,7 +725,7 @@ class AudioProcessingService:
 
         if silences:
             # Sort by duration and get the longest silence
-            longest = sorted(silences, key=lambda x: (x[1] - x[0]), reverse=True)[0]
+            longest = sorted(silences, key=lambda x: x[1] - x[0], reverse=True)[0]
             trim_point = max(MIN_TRIMMED_SEGMENT_LENGTH, longest[0] + self.asr_buffer)
 
             # Create temp file for trimmed audio
@@ -722,12 +749,11 @@ class AudioProcessingService:
         silences = self._sync_get_silence_boundaries(segment_path)
 
         # Filter out silences that are too close to the beginning
-        original_silences = silences.copy() if silences else []
         if silences:
             silences = [s for s in silences if s[1] >= self.asr_buffer + MIN_TRIMMED_SEGMENT_LENGTH]
 
         if silences:
-            longest = sorted(silences, key=lambda x: (x[1] - x[0]), reverse=True)[0]
+            longest = sorted(silences, key=lambda x: x[1] - x[0], reverse=True)[0]
             trim_point = max(MIN_TRIMMED_SEGMENT_LENGTH, longest[0] + self.asr_buffer)
 
             trim_cmd = [
@@ -764,7 +790,7 @@ class AudioProcessingService:
         blocks. Each block runs as one ffmpeg invocation with an input-side
         `-ss`/`-t` so that worker only demuxes its own portion of the source
         file. Within each block we use ffmpeg's segment muxer with timestamps
-        relative to the block start, splitting the kept ranges out from the 
+        relative to the block start, splitting the kept ranges out from the
         inter-range gaps.
 
         `name_timestamps`, when provided, gives the timestamp to use for each
@@ -778,13 +804,8 @@ class AudioProcessingService:
             raise ValueError("name_timestamps must match ranges in length")
 
         # Attach names to ranges so sorting keeps them in sync.
-        effective_names = (
-            name_timestamps if name_timestamps is not None
-            else [r[0] for r in ranges]
-        )
-        indexed = sorted(
-            zip(ranges, effective_names), key=lambda pair: pair[0][0]
-        )
+        effective_names = name_timestamps if name_timestamps is not None else [r[0] for r in ranges]
+        indexed = sorted(zip(ranges, effective_names), key=lambda pair: pair[0][0])
         sorted_ranges = [r for r, _ in indexed]
         sorted_names = [n for _, n in indexed]
 
@@ -800,22 +821,17 @@ class AudioProcessingService:
         for i in range(num_blocks):
             size = k + (1 if i < m else 0)
             if size:
-                blocks.append(sorted_ranges[pos:pos + size])
-                block_names.append(sorted_names[pos:pos + size])
+                blocks.append(sorted_ranges[pos : pos + size])
+                block_names.append(sorted_names[pos : pos + size])
             pos += size
 
-        extension = (
-            "wav" if use_wav
-            else (segment_extension or pick_segment_extension(audio_file))
-        )
+        extension = "wav" if use_wav else (segment_extension or pick_segment_extension(audio_file))
         cancelled = threading.Event()
         completed = [0]
         progress_lock = threading.Lock()
         total = len(sorted_ranges)
 
-        logger.debug(
-            f"Parallel range extraction: {total} ranges across {len(blocks)} blocks"
-        )
+        logger.debug(f"Parallel range extraction: {total} ranges across {len(blocks)} blocks")
         extraction_start = time.monotonic()
 
         block_results: List[Optional[List[str]]] = [None] * len(blocks)
@@ -825,8 +841,16 @@ class AudioProcessingService:
             futures = {
                 executor.submit(
                     self._extract_range_block,
-                    block_idx, block, names, audio_file, output_dir, extension,
-                    cancelled, completed, progress_lock, total,
+                    block_idx,
+                    block,
+                    names,
+                    audio_file,
+                    output_dir,
+                    extension,
+                    cancelled,
+                    completed,
+                    progress_lock,
+                    total,
                 ): block_idx
                 for block_idx, (block, names) in enumerate(zip(blocks, block_names))
             }
@@ -851,7 +875,12 @@ class AudioProcessingService:
             if worker_failed and allow_retry and not use_wav:
                 logger.warning("Parallel range extraction failed; retrying with WAV")
                 return self._run_parallel_range_extraction(
-                    audio_file, ranges, output_dir, True, False, name_timestamps,
+                    audio_file,
+                    ranges,
+                    output_dir,
+                    True,
+                    False,
+                    name_timestamps,
                 )
             return []
 
@@ -911,9 +940,7 @@ class AudioProcessingService:
         use_null_gaps = extension in _NULL_SINK_SAFE_EXTS
         if use_null_gaps:
             for gap_idx in range(1, 2 * len(block), 2):
-                gap_path = os.path.join(
-                    output_dir, f"{block_prefix}{gap_idx:03d}.{extension}"
-                )
+                gap_path = os.path.join(output_dir, f"{block_prefix}{gap_idx:03d}.{extension}")
                 try:
                     try:
                         os.unlink(gap_path)
@@ -922,8 +949,7 @@ class AudioProcessingService:
                     os.symlink("/dev/null", gap_path)
                 except OSError:
                     logger.debug(
-                        f"Null-sink symlink failed at {gap_path}; "
-                        f"falling back to real gap writes for this block."
+                        f"Null-sink symlink failed at {gap_path}; falling back to real gap writes for this block."
                     )
                     for cleanup_idx in range(1, gap_idx, 2):
                         stale = os.path.join(
@@ -938,38 +964,51 @@ class AudioProcessingService:
 
         # noinspection SpellCheckingInspection
         cmd = [
-            "ffmpeg", "-y",
-            "-ss", f"{b_start:.6f}",
-            "-t", f"{b_end - b_start:.6f}",
-            "-i", audio_file,
-            "-map", "0:a:0",
+            "ffmpeg",
+            "-y",
+            "-ss",
+            f"{b_start:.6f}",
+            "-t",
+            f"{b_end - b_start:.6f}",
+            "-i",
+            audio_file,
+            "-map",
+            "0:a:0",
         ]
         if use_copy:
             cmd.extend(["-acodec", "copy"])
         else:
             # Use 16 kHz mono for WAV fallback
             cmd.extend(["-ac", "1", "-ar", "16000"])
-        cmd.extend([
-            "-f", "segment",
-            "-segment_times", segment_times_str,
-            output_pattern,
-        ])
+        cmd.extend(
+            [
+                "-f",
+                "segment",
+                "-segment_times",
+                segment_times_str,
+                output_pattern,
+            ]
+        )
 
         process = subprocess.Popen(
-            cmd, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace",
+            cmd,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         with self._process_lock:
             self._running_processes.append(process)
 
         try:
             open_pattern = re.compile(
-                r"Opening '.*" + re.escape(block_prefix) + r"\d+\."
-                + re.escape(extension) + r"' for writing"
+                r"Opening '.*" + re.escape(block_prefix) + r"\d+\." + re.escape(extension) + r"' for writing"
             )
             block_opens = 0
             # Keep a rolling tail of stderr so a failed exit code captures
             # real output instead of just 'CalledProcessError'.
             from collections import deque
+
             stderr_tail: deque[str] = deque(maxlen=80)
             for line in process.stderr or []:
                 stderr_tail.append(line.rstrip())
@@ -987,7 +1026,8 @@ class AudioProcessingService:
                             if total > 0:
                                 pct = min((completed[0] / total) * 100, 99.0)
                                 self._notify_progress(
-                                    Step.AUDIO_EXTRACTION, pct,
+                                    Step.AUDIO_EXTRACTION,
+                                    pct,
                                     f"Extracted chapter {completed[0]} of {total}…",
                                     {
                                         "segments_created": completed[0],
@@ -1000,8 +1040,7 @@ class AudioProcessingService:
             if process.returncode != 0:
                 logger.error(
                     f"Range block {block_idx} ffmpeg failed "
-                    f"(exit {process.returncode}). Last stderr:\n"
-                    + "\n".join(stderr_tail)
+                    f"(exit {process.returncode}). Last stderr:\n" + "\n".join(stderr_tail)
                 )
                 raise subprocess.CalledProcessError(process.returncode, cmd)
         finally:
@@ -1015,19 +1054,13 @@ class AudioProcessingService:
         # delete the gap outputs (odd indices).
         paths: List[str] = []
         for seg_idx in range(len(block)):
-            kept = os.path.join(
-                output_dir, f"{block_prefix}{2 * seg_idx:03d}.{extension}"
-            )
+            kept = os.path.join(output_dir, f"{block_prefix}{2 * seg_idx:03d}.{extension}")
             if os.path.exists(kept):
                 name_ts = name_timestamps[seg_idx]
-                dst = os.path.join(
-                    output_dir, f"segment_{int(name_ts * 1000)}.{extension}"
-                )
+                dst = os.path.join(output_dir, f"segment_{int(name_ts * 1000)}.{extension}")
                 os.rename(kept, dst)
                 paths.append(dst)
-            gap = os.path.join(
-                output_dir, f"{block_prefix}{2 * seg_idx + 1:03d}.{extension}"
-            )
+            gap = os.path.join(output_dir, f"{block_prefix}{2 * seg_idx + 1:03d}.{extension}")
             if os.path.exists(gap):
                 os.remove(gap)
 
@@ -1039,7 +1072,10 @@ class AudioProcessingService:
         return paths
 
     def _cleanup_range_block_outputs(
-        self, output_dir: str, num_blocks: int, extension: str,
+        self,
+        output_dir: str,
+        num_blocks: int,
+        extension: str,
     ):
         """Remove any leftover xrngNN_* files from a cancelled/failed run."""
         for filename in os.listdir(output_dir):
@@ -1071,8 +1107,11 @@ class AudioProcessingService:
 
         if isinstance(timestamps[0], tuple):
             return self._run_parallel_range_extraction(
-                audio_file, timestamps, output_dir,  # type: ignore[arg-type]
-                use_wav, allow_retry,
+                audio_file,
+                cast(List[Tuple[float, float]], timestamps),
+                output_dir,
+                use_wav,
+                allow_retry,
                 segment_extension=segment_extension,
             )
 
@@ -1091,7 +1130,11 @@ class AudioProcessingService:
             ranges.append((start_ts, end_ts))
 
         return self._run_parallel_range_extraction(
-            audio_file, ranges, output_dir, use_wav, allow_retry,
+            audio_file,
+            ranges,
+            output_dir,
+            use_wav,
+            allow_retry,
             name_timestamps=cue_timestamps,
             segment_extension=segment_extension,
         )
@@ -1146,9 +1189,7 @@ class AudioProcessingService:
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
-                executor.submit(
-                    self._trim_single_segment, i, path, copy_only, cancelled, completed_count, total
-                ): i
+                executor.submit(self._trim_single_segment, i, path, copy_only, cancelled, completed_count, total): i
                 for i, path in enumerate(paths)
             }
 
@@ -1185,7 +1226,8 @@ class AudioProcessingService:
                 completed_count[0] += 1
                 count = completed_count[0]
                 self._notify_progress(
-                    Step.TRIMMING, (count / total) * 100,
+                    Step.TRIMMING,
+                    (count / total) * 100,
                     f"Trimmed chapter {count} of {total}…",
                     {"trimmed_segments": count, "total_segments": total},
                 )
@@ -1208,13 +1250,11 @@ class AudioProcessingService:
 
             # Filter out silences that are too close to the beginning
             if silences:
-                silences = [
-                    s for s in silences if s[1] >= self.asr_buffer + MIN_TRIMMED_SEGMENT_LENGTH
-                ]
+                silences = [s for s in silences if s[1] >= self.asr_buffer + MIN_TRIMMED_SEGMENT_LENGTH]
 
             if silences:
                 # Sort by duration and get the longest silence
-                longest = sorted(silences, key=lambda x: (x[1] - x[0]), reverse=True)[0]
+                longest = sorted(silences, key=lambda x: x[1] - x[0], reverse=True)[0]
                 trim_point = max(MIN_TRIMMED_SEGMENT_LENGTH, longest[0] + self.asr_buffer)
 
                 trim_cmd = [
@@ -1262,7 +1302,8 @@ class AudioProcessingService:
                 completed_count[0] += 1
                 count = completed_count[0]
                 self._notify_progress(
-                    Step.TRIMMING, (count / total) * 100,
+                    Step.TRIMMING,
+                    (count / total) * 100,
                     f"Trimmed chapter {count} of {total}…",
                     {"trimmed_segments": count, "total_segments": total},
                 )
@@ -1310,7 +1351,7 @@ class AudioProcessingService:
             pattern_start = re.compile(r"silence_start:\s*([\d\.]+)")
             pattern_end = re.compile(r"silence_end:\s*([\d\.]+)")
 
-            for line in process.stderr:
+            for line in process.stderr or []:
                 if "silence_start" in line:
                     match = pattern_start.search(line)
                     if match:
@@ -1325,7 +1366,7 @@ class AudioProcessingService:
             process.wait()
 
             if process.returncode in [-15, 254, 255]:
-                logger.info(f"Silence detection was cancelled. Cleaning up…")
+                logger.info("Silence detection was cancelled. Cleaning up…")
                 if cancelled:
                     cancelled.set()
                 return None
@@ -1428,7 +1469,7 @@ class AudioProcessingService:
             current_time = 0.0
             last_progress_update = 0.0
 
-            for line in process.stderr:
+            for line in process.stderr or []:
                 line = line.strip()
                 stderr_output.append(line)
 

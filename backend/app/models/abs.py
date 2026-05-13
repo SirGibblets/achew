@@ -49,6 +49,7 @@ class BookMetadata(BaseModel):
         if self.authors and not self.authorName:
             self.authorName = self.authors[0].name
         return self
+
     seriesName: Optional[str] = None
     seriesTitle: Optional[str] = None
     series: Optional[List[SeriesDetails]] = None

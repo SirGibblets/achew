@@ -1,14 +1,14 @@
 from .chapter import ChapterData
 from .enums import Step
 from .websocket import (
-    WSMessage,
-    WSMessageType,
+    BatchOperationData,
+    ChapterUpdateData,
+    ErrorData,
+    HistoryUpdateData,
     ProgressUpdateData,
     StepChangeData,
-    ChapterUpdateData,
-    HistoryUpdateData,
-    BatchOperationData,
-    ErrorData,
+    WSMessage,
+    WSMessageType,
 )
 
 __all__ = [

@@ -13,10 +13,10 @@ Returns:
     JSON object with chunk_index, gaps array, and error status
 """
 
-import sys
 import json
 import subprocess
-import os
+import sys
+from typing import cast
 
 
 def find_gaps_in_speech(speech_timestamps, segment_start, segment_end, min_silence_duration):
@@ -63,15 +63,16 @@ def process_multiple_chunks(chunk_files_with_indices, segment_duration, min_sile
         print(f"PROGRESS:{json.dumps({'type': 'worker_init', 'message': 'Loading VAD model…'})}", flush=True)
 
     try:
-        import onnx_asr
         import numpy as np
+        import onnx_asr
         import onnxruntime as ort
+        from onnx_asr.models.silero import SileroVad
 
         sess_opts = ort.SessionOptions()
         sess_opts.intra_op_num_threads = 1
         sess_opts.inter_op_num_threads = 1
 
-        model = onnx_asr.load_vad("silero", sess_options=sess_opts)
+        model = cast(SileroVad, onnx_asr.load_vad("silero", sess_options=sess_opts))
 
         if enable_progress:
             print(
@@ -93,8 +94,19 @@ def process_multiple_chunks(chunk_files_with_indices, segment_duration, min_sile
 
             # Load the audio file
             cmd = [
-                "ffmpeg", "-loglevel", "error", "-y", "-i", chunk_file,
-                "-ac", "1", "-ar", "16000", "-f", "f32le", "-"
+                "ffmpeg",
+                "-loglevel",
+                "error",
+                "-y",
+                "-i",
+                chunk_file,
+                "-ac",
+                "1",
+                "-ar",
+                "16000",
+                "-f",
+                "f32le",
+                "-",
             ]
             process = subprocess.run(cmd, stdout=subprocess.PIPE, check=True)
             wav = np.frombuffer(process.stdout, dtype=np.float32)
@@ -123,7 +135,8 @@ def process_multiple_chunks(chunk_files_with_indices, segment_duration, min_sile
                             "type": "progress",
                             "chunk_index": chunk_index,
                             "progress": pct,
-                            "worker_progress": (i / len(chunk_files_with_indices) * 100) + (pct / len(chunk_files_with_indices)),
+                            "worker_progress": (i / len(chunk_files_with_indices) * 100)
+                            + (pct / len(chunk_files_with_indices)),
                             "chunk_in_worker": i + 1,
                             "total_chunks_in_worker": len(chunk_files_with_indices),
                         }
@@ -139,15 +152,17 @@ def process_multiple_chunks(chunk_files_with_indices, segment_duration, min_sile
                         yield prob
 
                 encoding = counting_encode(waveforms, sr, hop_size, 64)
-                segments = list(model._merge_segments(
-                    model._find_segments(
-                        (p[0] for p in encoding), hop_size, speech_pad_ms=30
-                    ),
-                    int(waveforms_len[0]), sr, speech_pad_ms=30
-                ))
+                segments = list(
+                    model._merge_segments(
+                        model._find_segments((p[0] for p in encoding), hop_size, speech_pad_ms=30),
+                        int(waveforms_len[0]),
+                        sr,
+                        speech_pad_ms=30,
+                    )
+                )
                 emit_progress(100)
             else:
-                seg_results = list(model.segment_batch(waveforms, waveforms_len, speech_pad_ms=30))
+                seg_results = list(model.segment_batch(waveforms, waveforms_len, 16000, speech_pad_ms=30))
                 segments = list(seg_results[0]) if seg_results else []
 
             speech_timestamps = [{"start": s / sr, "end": e / sr} for s, e in segments]
@@ -182,9 +197,7 @@ if __name__ == "__main__":
         min_silence_duration = float(sys.argv[3])
         enable_progress = len(sys.argv) >= 5 and sys.argv[4].lower() == "true"
 
-        process_multiple_chunks(
-            chunk_files_with_indices, segment_duration, min_silence_duration, enable_progress
-        )
+        process_multiple_chunks(chunk_files_with_indices, segment_duration, min_silence_duration, enable_progress)
 
     except (json.JSONDecodeError, ValueError) as e:
         print(json.dumps({"error": f"Failed to parse arguments: {str(e)}"}))

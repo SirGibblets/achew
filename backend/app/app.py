@@ -1,16 +1,17 @@
 import asyncio
 import logging
 import random
-from typing import Optional, List
 from datetime import datetime, timezone
+from typing import List, Optional
 
 from app.core.constants import MAX_JITTER_CROP, MIN_SEGMENT_GAP
 from app.services.asr_service_options import get_asr_buffer
 
-from .models.websocket import WSMessage, WSMessageType
-from .models.enums import Step
-from .services.progress_dispatcher import ProgressDispatcher
 from .core.config import get_configuration_status
+from .models.enums import Step
+from .models.progress import ProgressCallback
+from .models.websocket import WSMessage, WSMessageType
+from .services.progress_dispatcher import ProgressDispatcher
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,7 @@ class AppState:
     @property
     def step(self) -> Step:
         from .core.config import is_migration_failed
+
         if is_migration_failed():
             return Step.MIGRATION_FAILED
 
@@ -116,7 +118,7 @@ class AppState:
             # Reset state
             self.step = None
 
-            logger.info(f"Deleted pipeline")
+            logger.info("Deleted pipeline")
             return True
 
         except Exception as e:
@@ -127,13 +129,13 @@ class AppState:
     def add_websocket_connection(self, websocket):
         """Add WebSocket connection"""
         self.websocket_connections.append(websocket)
-        logger.info(f"Added WebSocket connection")
+        logger.info("Added WebSocket connection")
 
     def remove_websocket_connection(self, websocket):
         """Remove WebSocket connection"""
         try:
             self.websocket_connections.remove(websocket)
-            logger.info(f"Removed WebSocket connection")
+            logger.info("Removed WebSocket connection")
         except ValueError:
             pass
 
@@ -171,8 +173,8 @@ class AppState:
     async def broadcast_step_change(
         self,
         new_step: Step,
-        extras: dict = None,
-        error_message: str = None,
+        extras: Optional[dict] = None,
+        error_message: Optional[str] = None,
     ):
         """Broadcast step change to WebSocket connections"""
         # Keep dispatcher's step tracking in sync so it correctly detects
@@ -222,7 +224,7 @@ class AppState:
         await self.broadcast_message(message)
 
     # ASR service warm cache management
-    async def get_or_create_asr_service(self, progress_callback=None):
+    async def get_or_create_asr_service(self, progress_callback: ProgressCallback):
         """Get the cached ASR service, or create a new one if config changed"""
         from .services.asr_service_options import create_asr_service, get_asr_config_key
 
@@ -272,10 +274,12 @@ class AppState:
         await self._broadcast_transcribing_state()
 
         # Put a single work item on the queue
-        await self._transcription_queue.put({
-            "chapter_ids": chapter_ids,
-            "is_batch": is_batch,
-        })
+        await self._transcription_queue.put(
+            {
+                "chapter_ids": chapter_ids,
+                "is_batch": is_batch,
+            }
+        )
 
         # Start worker if not running
         if self._transcription_worker_task is None or self._transcription_worker_task.done():
@@ -324,11 +328,12 @@ class AppState:
 
     async def _transcription_worker(self):
         """Process transcription requests from the queue"""
-        import tempfile
         import os
-        from .services.audio_service import AudioProcessingService, pick_segment_extension
-        from .models.chapter_operation import TranscribeOperation, BatchChapterOperation
+        import tempfile
+
         from .core.config import get_app_config
+        from .models.chapter_operation import BatchChapterOperation, TranscribeOperation
+        from .services.audio_service import AudioProcessingService, pick_segment_extension
 
         logger.info("Transcription worker started")
 
@@ -367,11 +372,10 @@ class AppState:
 
                         # Calculate segment end time
                         chapter_idx = self.pipeline.chapters.index(chapter)
-                        next_chapters = [
-                            c for c in self.pipeline.chapters[chapter_idx + 1:]
-                            if not c.deleted
-                        ]
-                        max_end = self.pipeline.book.duration if self.pipeline.book else chapter.timestamp + segment_length
+                        next_chapters = [c for c in self.pipeline.chapters[chapter_idx + 1 :] if not c.deleted]
+                        max_end = (
+                            self.pipeline.book.duration if self.pipeline.book else chapter.timestamp + segment_length
+                        )
                         if next_chapters:
                             max_end = min(max_end, next_chapters[0].timestamp - MIN_SEGMENT_GAP)
                         duration = min(segment_length, max_end - chapter.timestamp)
@@ -381,10 +385,7 @@ class AppState:
 
                         # Extract audio segment to temp file
                         temp_dir = tempfile.mkdtemp(dir=self.pipeline.temp_dir)
-                        ext = (
-                            self.pipeline.segment_extension
-                            or pick_segment_extension(self.pipeline.audio_file_path)
-                        )
+                        ext = self.pipeline.segment_extension or pick_segment_extension(self.pipeline.audio_file_path)
 
                         output_path = os.path.join(temp_dir, f"segment_{chapter_id}.{ext}")
                         audio_service = AudioProcessingService(
@@ -460,6 +461,7 @@ class AppState:
                         # Clean up temp files
                         try:
                             import shutil
+
                             shutil.rmtree(temp_dir, ignore_errors=True)
                         except Exception:
                             pass

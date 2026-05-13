@@ -13,7 +13,7 @@ import numpy as np
 from app.models.enums import Step
 from app.models.progress import ProgressCallback
 from app.services.asr_service import ASRService
-from app.services.asr_service_options import register_asr_service, ASRModelVariant
+from app.services.asr_service_options import ASRModelVariant, register_asr_service
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +62,8 @@ class ParakeetASRService(ASRService):
 
     def _transcribe_file(self, audio_file: str, retry_on_empty: bool = True) -> str:
         """Transcribe a single audio file"""
+        if self.model is None:
+            raise RuntimeError("Parakeet model is not loaded")
         try:
             audio_array = self._convert_audio_to_array(audio_file)
             result = self.model.recognize(audio_array)
@@ -75,8 +77,19 @@ class ParakeetASRService(ASRService):
         """Convert audio file to 16kHz float32 numpy array"""
         try:
             cmd = [
-                "ffmpeg", "-loglevel", "error", "-y", "-i", audio_file,
-                "-ac", "1", "-ar", "16000", "-f", "f32le", "-"
+                "ffmpeg",
+                "-loglevel",
+                "error",
+                "-y",
+                "-i",
+                audio_file,
+                "-ac",
+                "1",
+                "-ar",
+                "16000",
+                "-f",
+                "f32le",
+                "-",
             ]
             process = subprocess.run(cmd, stdout=subprocess.PIPE, check=True)
             return np.frombuffer(process.stdout, dtype=np.float32)
@@ -104,7 +117,7 @@ PARAKEET_VARIANTS = [
 ]
 
 try:
-    import onnx_asr
+    import onnx_asr  # noqa: F401
 
     # Register Parakeet CPU service
     @register_asr_service(

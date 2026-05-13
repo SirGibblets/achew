@@ -2,7 +2,8 @@ import json
 import logging
 import re
 from abc import ABC, abstractmethod
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel
 
 from app.models.abs import Book
@@ -157,8 +158,8 @@ class AIService(ABC):
         deselect_non_chapters: bool = True,
         infer_opening_credits: bool = True,
         infer_end_credits: bool = True,
-        preferred_titles: List[str] = None,
-        additional_instructions: List[str] = None,
+        preferred_titles: Optional[List[str]] = None,
+        additional_instructions: Optional[List[str]] = None,
         book: Optional[Book] = None,
     ) -> str:
         """Build the system prompt dynamically based on options"""
@@ -175,7 +176,7 @@ You will output the same array, but with processed titles. You must respond with
         elif book_title:
             base_prompt += f'\n\nThe book is titled "{book_title}".'
         elif book_author:
-            base_prompt += f'\n\nThe book is by {book_author}.'
+            base_prompt += f"\n\nThe book is by {book_author}."
 
         base_prompt += """
 
@@ -230,11 +231,11 @@ Rules for processing chapter titles:
         self,
         transcriptions: List[str],
         model_id: str,
-        additional_instructions: List[str] = None,
+        additional_instructions: Optional[List[str]] = None,
         deselect_non_chapters: bool = True,
         infer_opening_credits: bool = True,
         infer_end_credits: bool = True,
-        preferred_titles: List[str] = None,
+        preferred_titles: Optional[List[str]] = None,
         book: Optional[Book] = None,
     ) -> List[Optional[str]]:
         """Process transcriptions into chapter titles using the LLM"""

@@ -97,9 +97,7 @@ async def upsert_book(
 async def get_cached_book_ids(library_id: str) -> set[str]:
     """Return the set of book IDs already cached for a library."""
     async with _get_db() as db:
-        async with db.execute(
-            "SELECT id FROM books WHERE library_id = ?", (library_id,)
-        ) as cursor:
+        async with db.execute("SELECT id FROM books WHERE library_id = ?", (library_id,)) as cursor:
             return {row["id"] async for row in cursor}
 
 
@@ -132,9 +130,7 @@ async def set_ignore(book_id: str, ignored: bool) -> None:
     """Set the ignore status of a book."""
     async with _get_db() as db:
         if ignored:
-            await db.execute(
-                "INSERT OR IGNORE INTO ignored_books (book_id) VALUES (?)", (book_id,)
-            )
+            await db.execute("INSERT OR IGNORE INTO ignored_books (book_id) VALUES (?)", (book_id,))
         else:
             await db.execute("DELETE FROM ignored_books WHERE book_id = ?", (book_id,))
         await db.commit()
@@ -181,9 +177,7 @@ async def upsert_chapters_for_book(book_id: str, chapters: list[dict]) -> None:
 async def delete_books_for_library(library_id: str) -> int:
     """Delete all cached books (and chapters via cascade) for a library. Returns count deleted."""
     async with _get_db() as db:
-        async with db.execute(
-            "SELECT COUNT(*) as cnt FROM books WHERE library_id = ?", (library_id,)
-        ) as cursor:
+        async with db.execute("SELECT COUNT(*) as cnt FROM books WHERE library_id = ?", (library_id,)) as cursor:
             row = await cursor.fetchone()
             count = row["cnt"] if row else 0
         await db.execute("DELETE FROM books WHERE library_id = ?", (library_id,))

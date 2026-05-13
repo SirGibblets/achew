@@ -12,7 +12,7 @@ import sys
 from app.models.enums import Step
 from app.models.progress import ProgressCallback
 from app.services.asr_service import ASRService
-from app.services.asr_service_options import register_asr_service, ASRModelVariant
+from app.services.asr_service_options import ASRModelVariant, register_asr_service
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +58,8 @@ class ParakeetMLXASRService(ASRService):
 
     def _transcribe_file(self, audio_file: str, retry_on_empty: bool = True) -> str:
         """Transcribe a single audio file using Parakeet MLX"""
+        if self.model is None:
+            raise RuntimeError("Parakeet MLX model is not loaded")
         try:
             result = self.model.transcribe(audio_file)
             return result.text.strip()
@@ -88,7 +90,7 @@ PARAKEET_MLX_VARIANTS = [
 # Register Parakeet MLX service (only on macOS with Parakeet MLX available)
 if sys.platform == "darwin":
     try:
-        import parakeet_mlx
+        import parakeet_mlx  # noqa: F401
 
         @register_asr_service(
             service_id="parakeet_mlx",
