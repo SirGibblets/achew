@@ -16,3 +16,23 @@ repos:
         files: ^backend/.*\.py$
         pass_filenames: false
         require_serial: true
+
+      - id: prettier
+        name: prettier (frontend)
+        entry: bash -c 'paths=("${@/#frontend\//}"); cd frontend && exec npx prettier --write "${paths[@]}"' --
+        language: system
+        files: ^frontend/.*\.(ts|js|svelte|json|css|html)$
+
+      - id: eslint
+        name: eslint (frontend)
+        entry: bash -c 'paths=("${@/#frontend\//}"); cd frontend && exec npx eslint --fix "${paths[@]}"' --
+        language: system
+        files: ^frontend/.*\.(ts|js|svelte)$
+
+      - id: svelte-check
+        name: svelte-check (frontend)
+        entry: bash -c 'cd frontend && npx svelte-check --tsconfig ./tsconfig.json'
+        language: system
+        files: ^frontend/.*\.(ts|svelte)$
+        pass_filenames: false
+        require_serial: true

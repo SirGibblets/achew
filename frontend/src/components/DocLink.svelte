@@ -1,21 +1,30 @@
-<script>
-  import BookOpen from "@lucide/svelte/icons/book-open";
+<script lang="ts">
+  import BookOpen from '@lucide/svelte/icons/book-open';
 
-  const BASE_URL = "https://achew.readthedocs.io/stable";
+  const BASE_URL = 'https://achew.readthedocs.io/stable';
+
+  interface Props {
+    path: string;
+    text?: string;
+    inlineIcon?: boolean;
+    size?: number | string;
+    label?: string;
+    featureName?: string;
+  }
 
   let {
     path,
     text = undefined,
     inlineIcon = false,
     size = undefined,
-    label = "View documentation",
+    label = 'View documentation',
     featureName = undefined,
-  } = $props();
+  }: Props = $props();
 
   const iconProps = $derived(size != null ? { size } : {});
 
   const href = $derived(BASE_URL + path);
-  const tooltip = $derived(featureName ? `View docs for ${featureName}` : "Click to view documentation");
+  const tooltip = $derived(featureName ? `View docs for ${featureName}` : 'Click to view documentation');
 </script>
 
 <a
@@ -90,7 +99,7 @@
   }
 
   .doc-link[data-tooltip]:hover::before {
-    content: "";
+    content: '';
     position: absolute;
     bottom: 100%;
     left: 50%;

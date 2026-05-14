@@ -1,80 +1,93 @@
-<script>
-    import { useSortable } from "@dnd-kit-svelte/svelte/sortable";
-    import GripVertical from "@lucide/svelte/icons/grip-vertical";
+<script lang="ts">
+  import { useSortable } from '@dnd-kit-svelte/svelte/sortable';
+  import GripVertical from '@lucide/svelte/icons/grip-vertical';
+  import type { Snippet } from 'svelte';
 
-    let {
-        id,
-        index,
-        children,
-        type = "item",
-        accept = ["item"],
-        group = undefined,
-        data = undefined,
-        collisionPriority = undefined,
-        isOverlay = false,
-    } = $props();
+  interface Props {
+    id: string;
+    index: number;
+    children: Snippet;
+    type?: string;
+    accept?: string[];
+    group?: string | undefined;
+    data?: Record<string, unknown> | undefined;
+    collisionPriority?: number | undefined;
+    isOverlay?: boolean;
+  }
 
-    const { ref, handleRef, isDragging, isDropTarget } = useSortable({
-        id: () => id,
-        index: () => index,
-        type: () => type,
-        accept: () => accept,
-        group: () => group,
-        data: () => data,
-        collisionPriority: () => collisionPriority,
-        disabled: () => isOverlay,
-    });
+  let {
+    id,
+    index,
+    children,
+    type = 'item',
+    accept = ['item'],
+    group = undefined,
+    data = undefined,
+    collisionPriority = undefined,
+    isOverlay = false,
+  }: Props = $props();
+
+  const { ref, handleRef, isDragging, isDropTarget } = useSortable({
+    id: () => id,
+    index: () => index,
+    type: () => type,
+    accept: () => accept,
+    group: () => group,
+    data: () => data,
+    collisionPriority: () => collisionPriority,
+    disabled: () => isOverlay,
+  });
 </script>
 
 <div
-    class="sortable-item"
-    class:is-dragging={isDragging.current && !isOverlay}
-    class:is-drop-target={isDropTarget.current && !isDragging.current}
-    {@attach ref}
+  class="sortable-item"
+  class:is-dragging={isDragging.current && !isOverlay}
+  class:is-drop-target={isDropTarget.current && !isDragging.current}
+  {@attach ref}
 >
-    <span class="drag-handle" {@attach handleRef}>
-        <GripVertical size="14" />
-    </span>
-    <div class="item-content">
-        {@render children()}
-    </div>
+  <span class="drag-handle" {@attach handleRef}>
+    <GripVertical size="14" />
+  </span>
+  <div class="item-content">
+    {@render children()}
+  </div>
 </div>
 
 <style>
-    .sortable-item {
-        display: flex;
-        align-items: flex-start;
-        gap: 0.375rem;
-        border-radius: 6px;
-    }
+  .sortable-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.375rem;
+    border-radius: 6px;
+  }
 
-    .sortable-item.is-dragging {
-        opacity: 0.3;
-        /* When dragging a container with children, we don't want it to collapse completely, but we might want it hidden.
+  .sortable-item.is-dragging {
+    opacity: 0.3;
+    /* When dragging a container with children, we don't want it to collapse completely, but we might want it hidden.
            Let's just keep opacity 0.3 for now to see where it went, but maybe it vanishes because of `display: flex` disappearing? */
-    }
+  }
 
-    .sortable-item.is-drop-target {
-        outline: 2px solid var(--primary);
-        outline-offset: 1px;
-    }
+  .sortable-item.is-drop-target {
+    outline: 2px solid var(--primary);
+    outline-offset: 1px;
+  }
 
-    .drag-handle {
-        display: flex;
-        align-items: center;
-        padding-top: 0.5rem;
-        color: var(--text-muted, var(--text-secondary));
-        cursor: grab;
-        flex-shrink: 0;
-        touch-action: none; /* required for pointer sensor */
-    }
+  .drag-handle {
+    display: flex;
+    align-items: center;
+    padding-top: 0.5rem;
+    color: var(--text-muted, var(--text-secondary));
+    cursor: grab;
+    flex-shrink: 0;
+    touch-action: none; /* required for pointer sensor */
+  }
 
-    .drag-handle:active {
-        cursor: grabbing;
-    }
+  .drag-handle:active {
+    cursor: grabbing;
+  }
 
-    .item-content {
-        flex: 1;
-        min-width: 0;
-    }
+  .item-content {
+    flex: 1;
+    min-width: 0;
+  }
 </style>
