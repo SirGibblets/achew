@@ -273,7 +273,7 @@ class GeminiService(AIService):
 
     async def process_chapter_titles(
         self,
-        transcriptions: List[str],
+        titles: List[str],
         model_id: str,
         additional_instructions: Optional[List[str]] = None,
         deselect_non_chapters: bool = True,
@@ -282,10 +282,10 @@ class GeminiService(AIService):
         preferred_titles: Optional[List[str]] = None,
         book: Optional[Book] = None,
     ) -> List[Optional[str]]:
-        """Process transcriptions into chapter titles using Gemini"""
+        """Refine chapter titles using Gemini"""
 
-        if not transcriptions:
-            logger.warning("Gemini No transcriptions provided, returning empty list")
+        if not titles:
+            logger.warning("Gemini No titles provided, returning empty list")
             return []
 
         additional_instructions = additional_instructions or []
@@ -303,7 +303,7 @@ class GeminiService(AIService):
         )
 
         # Create JSON input for all chapters
-        chapter_data = [{"id": idx, "title": text} for idx, text in enumerate(transcriptions)]
+        chapter_data = [{"id": idx, "title": text} for idx, text in enumerate(titles)]
         user_message = f"Input data:\n{json.dumps(chapter_data)}"
 
         # Retry on JSON decode errors
@@ -322,7 +322,7 @@ class GeminiService(AIService):
 
                 # Initialize incremental parser for progress tracking
                 parser = IncrementalJSONParser()
-                total_chapters = len(transcriptions)
+                total_chapters = len(titles)
 
                 # Combine system prompt and user message
                 combined_prompt = f"{system_prompt}\n\n{user_message}"

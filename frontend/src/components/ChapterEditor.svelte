@@ -83,7 +83,7 @@
   let textareaRefs = new SvelteMap<string, HTMLTextAreaElement>();
 
   // Check if any chapters have transcriptions
-  let hasTranscriptions = $derived($chapters.some((chapter) => chapter.asr_title && chapter.asr_title.trim() !== ''));
+  let hasTranscriptions = $derived($chapters.some((chapter) => chapter.transcript && chapter.transcript.trim() !== ''));
 
   let hasAlignmentData = $derived($chapters.some((chapter) => chapter.realignment != null));
 
@@ -580,12 +580,12 @@
     error = handleApiError(err);
   }
 
-  // Quick restore ASR title
-  async function restoreAsrTitle(chapterId: string, asrTitle: string) {
+  // Quick restore transcript as the title
+  async function restoreTranscript(chapterId: string, transcript: string) {
     if ($session.step !== 'chapter_editing') return;
 
     try {
-      await updateChapterTitle(chapterId, asrTitle);
+      await updateChapterTitle(chapterId, transcript);
     } catch (err) {
       error = handleApiError(err);
     }
@@ -828,7 +828,7 @@
       <p>Chapters will appear here once processing is complete.</p>
     </div>
   {:else}
-    <div class="table-container" class:hide-transcriptions={editorSettings.hide_transcriptions}>
+    <div class="table-container" class:hide-transcripts={editorSettings.hide_transcriptions}>
       <table class="table">
         <thead>
           <tr>
@@ -858,7 +858,7 @@
               </th>
             {/if}
             {#if showTranscriptions}
-              <th style="width: 1px">Transcription</th>
+              <th style="width: 1px">Transcript</th>
               <th style="width: 1px"></th>
             {/if}
             <th>Title</th>
@@ -977,16 +977,16 @@
               {/if}
               {#if showTranscriptions}
                 <td class="original-title-cell">
-                  <span class="asr-title" title={chapter.asr_title}>
-                    {chapter.asr_title?.length > 120 ? chapter.asr_title.substring(0, 120) + '…' : chapter.asr_title}
+                  <span class="transcript-text" title={chapter.transcript}>
+                    {chapter.transcript?.length > 120 ? chapter.transcript.substring(0, 120) + '…' : chapter.transcript}
                   </span>
                 </td>
                 <td class="restore-cell">
                   <button
                     class="btn btn-sm btn-outline restore-btn"
-                    onclick={() => restoreAsrTitle(chapter.id, chapter.asr_title)}
-                    disabled={chapter.current_title === chapter.asr_title}
-                    title="Replace with transcribed title"
+                    onclick={() => restoreTranscript(chapter.id, chapter.transcript)}
+                    disabled={chapter.title === chapter.transcript}
+                    title="Replace title with transcript"
                   >
                     <ArrowRight size="14" />
                   </button>
@@ -995,10 +995,10 @@
               <td class="title-cell">
                 <textarea
                   class="chapter-title-input"
-                  value={chapter.current_title}
+                  value={chapter.title}
                   oninput={(e) => {
                     const target = e.target as HTMLTextAreaElement;
-                    handleTitleEdit(chapter.id, target.value, chapter.current_title);
+                    handleTitleEdit(chapter.id, target.value, chapter.title);
                     autoResizeTextarea(e);
                   }}
                   use:trackTextarea={chapter.id}
@@ -1105,8 +1105,8 @@
                     checked={editorSettings.hide_transcriptions}
                     onchange={handleHideTranscriptionsChange}
                   />
-                  <span>Hide Transcriptions</span>
-                  <div class="help-icon" data-tooltip="Hide the original transcriptions to focus on editing titles">
+                  <span>Hide Transcripts</span>
+                  <div class="help-icon" data-tooltip="Hide the original transcripts to focus on editing titles">
                     <CircleQuestionMark size="14" />
                   </div>
                 </label>
@@ -1723,7 +1723,7 @@
     text-align: center;
   }
 
-  .asr-title {
+  .transcript-text {
     color: var(--text-secondary);
     font-size: 0.875rem;
     font-style: italic;
@@ -1765,7 +1765,7 @@
     margin-bottom: -0.25rem;
   }
 
-  :global(.hide-transcriptions) .chapter-title-input {
+  :global(.hide-transcripts) .chapter-title-input {
     max-height: 2.5rem;
     overflow: hidden;
   }

@@ -111,7 +111,7 @@ class ASRService(ABC):
 
     async def transcribe(self, audio_files: List[str]) -> List[str]:
         """Common transcription logic for all ASR services"""
-        transcriptions = []
+        transcripts: List[str] = []
         total_files = len(audio_files)
 
         self._notify_progress(
@@ -129,7 +129,7 @@ class ASRService(ABC):
                     audio_file,
                 )
 
-                transcriptions.append(result)
+                transcripts.append(result)
 
                 # Update progress
                 progress = (i + 1) / total_files * 100
@@ -146,10 +146,10 @@ class ASRService(ABC):
 
             except Exception as e:
                 logger.error(f"Failed to transcribe {audio_file}: {e}")
-                transcriptions.append("[Transcription Error]")
+                transcripts.append("[Transcription Error]")
 
         self._notify_progress(Step.ASR_PROCESSING, 100, "Transcription completed")
-        return transcriptions
+        return transcripts
 
     @abstractmethod
     async def __aenter__(self):

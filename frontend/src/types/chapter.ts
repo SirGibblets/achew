@@ -7,10 +7,9 @@ export interface RealignmentData {
 export interface ChapterData {
   id: string;
   timestamp: number;
-  asr_title: string;
-  current_title: string;
+  transcript: string;
+  title: string;
   deleted: boolean;
-  audio_segment_path?: string | null;
   realignment?: RealignmentData | null;
   selected: boolean;
 }

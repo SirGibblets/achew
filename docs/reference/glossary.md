@@ -40,7 +40,7 @@ A custom vocabulary passed to Whisper to bias the model toward specific spelling
 A timestamp + title. Every row in the chapter editor is a chapter.
 
 ## Chapter Editor
-Achew's main editing interface for chapter lists, shown at the end of every [workflow](#workflow). Each row displays a chapter's timestamp, transcription, and title alongside per-chapter controls for adding, transcribing, playing, and deleting. The [Action Bar](#action-bar) sits at the bottom of the screen. See [Chapter Editor Overview](../editor/overview.md).
+Achew's main editing interface for chapter lists, shown at the end of every [workflow](#workflow). Each row displays a chapter's timestamp, transcript, and title alongside per-chapter controls for adding, transcribing, playing, and deleting. The [Action Bar](#action-bar) sits at the bottom of the screen. See [Chapter Editor Overview](../editor/overview.md).
 
 ## Chapter Source
 See [Chapter Sources](../getting-started/chapter-sources.md).

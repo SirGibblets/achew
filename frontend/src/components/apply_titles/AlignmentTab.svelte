@@ -183,14 +183,12 @@
         </button>
         <span class="chapter-title">
           {#if checked[chapter.id]}
-            <span class="title-original-strikethrough" class:fallback={!chapter.current_title}
-              >{chapter.current_title || 'No Title'}</span
+            <span class="title-original-strikethrough" class:fallback={!chapter.title}
+              >{chapter.title || 'No Title'}</span
             >
             <span class="title-new">{pair.sourceTitle}</span>
           {:else}
-            <span class="title-original" class:fallback={!chapter.current_title}
-              >{chapter.current_title || 'No Title'}</span
-            >
+            <span class="title-original" class:fallback={!chapter.title}>{chapter.title || 'No Title'}</span>
           {/if}
         </span>
       </label>
@@ -214,9 +212,7 @@
           {/if}
         </button>
         <span class="chapter-title">
-          <span class="title-original" class:fallback={!chapter.current_title}
-            >{chapter.current_title || 'No Title'}</span
-          >
+          <span class="title-original" class:fallback={!chapter.title}>{chapter.title || 'No Title'}</span>
         </span>
       </div>
     {/if}

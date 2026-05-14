@@ -634,9 +634,7 @@ async def export_chapters_csv():
 
         # Write chapter data
         for idx, chapter in enumerate(selected_chapters):
-            writer.writerow(
-                [idx + 1, _format_timestamp_readable(chapter.timestamp), chapter.timestamp, chapter.current_title]
-            )
+            writer.writerow([idx + 1, _format_timestamp_readable(chapter.timestamp), chapter.timestamp, chapter.title])
 
         csv_content = output.getvalue()
         output.close()
@@ -681,7 +679,7 @@ async def export_chapters_json():
                 {
                     "chapter": idx + 1,
                     "timestamp": chapter.timestamp,
-                    "title": chapter.current_title,
+                    "title": chapter.title,
                 }
                 for idx, chapter in enumerate(selected_chapters)
             ],
@@ -734,7 +732,7 @@ async def export_chapters_cue():
         for idx, chapter in enumerate(selected_chapters):
             track_num = idx + 1
             cue_lines.append(f"  TRACK {track_num:02d} AUDIO")
-            cue_lines.append(f'    TITLE "{chapter.current_title}"')
+            cue_lines.append(f'    TITLE "{chapter.title}"')
             cue_lines.append(f"    INDEX 01 {_format_timestamp_for_cue(chapter.timestamp)}")
             if idx < len(selected_chapters) - 1:
                 cue_lines.append("")
@@ -781,7 +779,7 @@ async def export_chapters_as_snapshot():
         short_name = name
 
         sorted_chapters = sorted(selected_chapters, key=lambda ch: ch.timestamp)
-        cues = [ExistingCue(timestamp=ch.timestamp, title=ch.current_title or "") for ch in sorted_chapters]
+        cues = [ExistingCue(timestamp=ch.timestamp, title=ch.title or "") for ch in sorted_chapters]
         duration = float(app_state.pipeline.book.duration) if app_state.pipeline.book else 0.0
 
         new_source = ExistingCueSource(
@@ -864,7 +862,7 @@ async def get_add_options(chapter_id: str):
         for chapter in app_state.pipeline.chapters:
             if chapter.deleted and min_timestamp < chapter.timestamp < max_timestamp:
                 deleted_chapters.append(
-                    DeletedChapter(timestamp=chapter.timestamp, title=chapter.current_title or chapter.asr_title or "")
+                    DeletedChapter(timestamp=chapter.timestamp, title=chapter.title or chapter.transcript or "")
                 )
 
         # Determine scan availability
@@ -963,8 +961,7 @@ async def add_chapter(request: AddChapterRequest):
 
             new_chapter = ChapterData(
                 timestamp=request.timestamp,
-                asr_title="",
-                current_title=request.title or "",
+                title=request.title or "",
             )
             new_chapter.selected = True
             operation = AddChapterOperation(chapter=new_chapter)

@@ -1,5 +1,4 @@
 import uuid
-from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel, Field, computed_field
@@ -14,12 +13,9 @@ class RealignmentData(BaseModel):
 class ChapterData(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     timestamp: float
-    asr_title: str
-    current_title: str
+    transcript: str = ""
+    title: str = ""
     deleted: bool = False
-    audio_segment_path: Optional[str] = None
-    created_at: datetime = Field(default_factory=datetime.now)
-    modified_at: datetime = Field(default_factory=datetime.now)
     realignment: Optional[RealignmentData] = None
     _selected: bool = True
 

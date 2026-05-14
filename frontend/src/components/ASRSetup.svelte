@@ -58,7 +58,7 @@
     <h2>
       Transcription Settings <DocLink path="/reference/transcription/" featureName="Transcription Settings" size="16" />
     </h2>
-    <p>Configure the Automatic Speech Recognition service used for transcribing chapter titles.</p>
+    <p>Configure the service used for transcribing chapter titles.</p>
   </div>
 
   <div class="settings-content">
@@ -67,7 +67,7 @@
 
   {#if hasActiveTranscriptions}
     <div class="warning-banner">
-      Transcriptions are currently in progress. Settings changes will take effect for future transcriptions.
+      Transcription is currently in progress. Settings changes will take effect for future transcription.
     </div>
   {/if}
 

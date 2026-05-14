@@ -90,7 +90,7 @@
     const newTimestamps = computeNewTimestamps();
     return affectedChapters.map((ch, i) => ({
       id: ch.id,
-      title: ch.current_title || ch.asr_title || null,
+      title: ch.title || ch.transcript || null,
       oldTimestamp: ch.timestamp,
       newTimestamp: newTimestamps[i].new_timestamp,
     }));

@@ -19,8 +19,8 @@ The editor shows a list of chapters and an Action Bar at the bottom.
 | 1 | :material-checkbox-marked:{ .icon-token .primary } Checkbox | Selects or deselects the chapter. <kbd>Shift</kbd>-click another checkbox to apply the same selection state to every chapter in the range between the two clicks. The checkbox at the very top can be used to select/deselect all chapters. |
 | 2 | Timestamp | The chapter timestamp. Clicking on the timestamp allows you to edit it. The very first chapter (timestamp `0`) is fixed and cannot be edited. Toggle between formatted timestamps and raw seconds in the [editor settings](#editor-settings). |
 | 3 | Offset | Shown when using the [Realignment](../workflows/realign-chapters.md) workflow. Shows the difference between the original source timestamp and the realigned one. A warning icon :lucide-triangle-alert:{ .icon-token .warning } appears on low-confidence or guessed alignments; give those a listen to verify accuracy before submitting your chapters. |
-| 4 | Transcription | The raw transcription for the chapter. Non-editable, serves as a reference for writing the title. The transcription column can be hidden via the [editor settings](#editor-settings). |
-| 5 | :lucide-arrow-right:{ .icon-token .primary } Use Transcription | Replaces the current title with the transcribed text. Disabled when there is no transcription, or when the title already matches the transcription. |
+| 4 | Transcript | The raw transcript for the chapter. Non-editable, serves as a reference for writing the title. The transcript column can be hidden via the [editor settings](#editor-settings). |
+| 5 | :lucide-arrow-right:{ .icon-token .primary } Use Transcript | Replaces the current title with the transcribed text. Disabled when there is no transcript, or when the title already matches the transcript. |
 | 6 | Title | The editable chapter title. |
 | 7 | :lucide-plus:{ .icon-token } Add Chapter | Opens the [Add Chapter Dialog](add-chapter-dialog.md) to insert a new chapter. Chapters can be added from cues, chapter sources, deleted chapters, or a specific timestamp. |
 | 8 | :lucide-mic:{ .icon-token } Transcribe | Transcribes the audio just for this chapter using the current [transcription settings](../reference/transcription.md#configuring-transcription). |
@@ -45,7 +45,7 @@ Clicking the menu button (:lucide-ellipsis-vertical:{ .icon-token }) on the Acti
 ### Editor Settings
 
 - **Tab to Next:** If enabled, pressing Tab on the keyboard while editing a chapter title will move focus to the title of the next selected chapter.
-- **Hide Transcriptions:** If enabled, the Transcriptions column will not be shown.
+- **Hide Transcripts:** If enabled, the Transcript column will not be shown.
 - **Format Timestamps:** If enabled, timestamps will be displayed using the `HH:MM:SS` format instead of displaying raw seconds.
 
 ### Additional Tools

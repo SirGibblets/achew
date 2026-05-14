@@ -351,14 +351,12 @@
         </button>
         <span class="title">
           {#if paired}
-            <span class="title-original-strikethrough" class:fallback={!chapter.current_title}
-              >{chapter.current_title || 'No Title'}</span
+            <span class="title-original-strikethrough" class:fallback={!chapter.title}
+              >{chapter.title || 'No Title'}</span
             >
             <span class="title-new">{paired.title}</span>
           {:else}
-            <span class="title-original" class:fallback={!chapter.current_title}
-              >{chapter.current_title || 'No Title'}</span
-            >
+            <span class="title-original" class:fallback={!chapter.title}>{chapter.title || 'No Title'}</span>
           {/if}
         </span>
       </label>

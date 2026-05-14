@@ -294,7 +294,7 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
         <div class="asr-controls-row">
           <!-- Service Selection -->
           <div class="asr-control-group">
-            <label for="asr-service">ASR Service</label>
+            <label for="asr-service">Transcription Service</label>
             <div class="custom-select" class:open={serviceDropdownOpen}>
               <button
                 type="button"
@@ -362,7 +362,7 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
                 {#if currentASRLanguage === 'auto' && availableLanguages.length > 1}
                   <div
                     class="warning-icon"
-                    data-tooltip="Transcriptions tend to be faster and more accurate when the audio language is specified."
+                    data-tooltip="Transcription tends to be faster and more accurate when the audio language is specified."
                   >
                     <TriangleAlert size="14" />
                   </div>
@@ -418,7 +418,7 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
             Trim segments
             <div
               class="help-icon"
-              data-tooltip="Trimming can help increase transcription speed and accuracy by removing excess speech from chapter audio segments. Disable this if transcriptions are frequently blank, nonsensical, or missing desired portions of the chapter title."
+              data-tooltip="Trimming can help increase transcription speed and accuracy by removing excess speech from chapter audio segments. Disable this if transcripts are frequently blank, nonsensical, or missing desired portions of the chapter title."
             >
               <CircleQuestionMark size="14" />
             </div>
@@ -428,7 +428,7 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
         <label
           class="checkbox-label"
           class:disabled={!currentServiceSupportsBiasWords}
-          data-tooltip={!currentServiceSupportsBiasWords ? 'Not available for this ASR Service' : null}
+          data-tooltip={!currentServiceSupportsBiasWords ? 'Not available for this transcription service' : null}
         >
           <input
             type="checkbox"
@@ -442,7 +442,7 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
             {#if currentServiceSupportsBiasWords}
               <div
                 class="help-icon"
-                data-tooltip="Bias words can help guide the ASR model toward more consistent results. For example, providing numerical digits helps the model produce chapter numbers as digits instead of words. Providing a list of uncommon words or names can help the model spell those correctly. You'll want to ensure that the bias words are in the same language as the audiobook."
+                data-tooltip="Bias words can help guide the transcription model toward more consistent results. For example, providing numerical digits helps the model produce chapter numbers as digits instead of words. Providing a list of uncommon words or names can help the model spell those correctly. You'll want to ensure that the bias words are in the same language as the audiobook."
               >
                 <CircleQuestionMark size="14" />
               </div>

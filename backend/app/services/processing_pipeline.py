@@ -100,7 +100,7 @@ class ProcessingPipeline:
         self.cues: List[float] = []
         self.segment_files: List[str] = []
         self.trimmed_segment_files: List[str] = []
-        self.transcriptions: List[str] = []
+        self.transcripts: List[str] = []
         self.transcribed_chapters: List[ChapterData] = []
         self.include_unaligned: List[str] = []
 
@@ -335,7 +335,7 @@ class ProcessingPipeline:
         if step_num <= RestartStep.CONFIGURE_ASR.ordinal:
             self.cleanup_segment_files()
             self.cleanup_trimmed_files()
-            self.transcriptions = []
+            self.transcripts = []
             self.transcribed_chapters = []
             self.chapters = []
             self.history_stack = []
@@ -910,9 +910,7 @@ class ProcessingPipeline:
         for cue in existing_source.cues:
             chapter = ChapterData(
                 timestamp=cue.timestamp,
-                asr_title=cue.title,
-                current_title=cue.title,
-                audio_segment_path="",
+                title=cue.title,
             )
             self.chapters.append(chapter)
 
@@ -1023,8 +1021,7 @@ class ProcessingPipeline:
 
                 chapter_data = ChapterData(
                     timestamp=timestamp,
-                    asr_title=ch["title"],
-                    current_title=ch["title"],
+                    title=ch["title"],
                     realignment=RealignmentData(
                         original_timestamp=original_chapter.timestamp,
                         confidence=confidence,
@@ -1332,7 +1329,7 @@ class ProcessingPipeline:
 
         # Run transcription
         self._transcription_task = asyncio.create_task(asr_service.transcribe(self.trimmed_segment_files))
-        self.transcriptions = await self._transcription_task
+        self.transcripts = await self._transcription_task
         self._transcription_task = None
 
         # Check if processing was cancelled during transcription
@@ -1342,7 +1339,7 @@ class ProcessingPipeline:
 
         self._notify_progress(Step.ASR_PROCESSING, 100, "Transcription complete")
 
-        logger.info(f"Transcribed {len(self.transcriptions)} segments")
+        logger.info(f"Transcribed {len(self.transcripts)} segments")
 
     async def _create_initial_chapters(self):
         """Create initial chapter objects with basic titles (without AI cleanup)"""
@@ -1357,18 +1354,17 @@ class ProcessingPipeline:
         # Create chapter objects with basic titles
         for i, timestamp in enumerate(self.cues):
             # Use transcription for title if available, otherwise use empty string
-            if i < len(self.transcriptions) and self.transcriptions[i].strip():
+            if i < len(self.transcripts) and self.transcripts[i].strip():
                 # Use full transcription as basic title
-                initial_title = self.transcriptions[i].strip()
+                initial_title = self.transcripts[i].strip()
             else:
                 # Fallback to empty string
                 initial_title = ""
 
             chapter = ChapterData(
                 timestamp=timestamp,
-                asr_title=initial_title,
-                current_title=initial_title,
-                audio_segment_path=self.trimmed_segment_files[i] if i < len(self.trimmed_segment_files) else "",
+                transcript=initial_title,
+                title=initial_title,
             )
             self.transcribed_chapters.append(chapter)
 
@@ -1434,20 +1430,15 @@ class ProcessingPipeline:
         """Skip transcription and create empty chapters with timestamps only"""
         try:
             # Create chapter objects with empty titles
-            for i, timestamp in enumerate(self.cues):
-                chapter = ChapterData(
-                    timestamp=timestamp,
-                    asr_title="",
-                    current_title="",
-                    audio_segment_path=self.segment_files[i] if i < len(self.segment_files) else "",
-                )
+            for timestamp in self.cues:
+                chapter = ChapterData(timestamp=timestamp)
                 self.transcribed_chapters.append(chapter)
 
             # Also populate the main chapters list for the UI
             self.chapters = self.transcribed_chapters.copy()
 
-            # Set empty transcriptions to match chapter count
-            self.transcriptions = [""] * len(self.cues)
+            # Set empty transcripts to match chapter count
+            self.transcripts = [""] * len(self.cues)
 
             # self.step = Step.CHAPTER_EDITING
             self._notify_progress(Step.CHAPTER_EDITING, 0)
@@ -1627,7 +1618,7 @@ class ProcessingPipeline:
         chapter_data = []
         for chapter in chapters:
             if chapter.selected:  # Only submit selected chapters
-                chapter_data.append((chapter.timestamp, chapter.current_title))
+                chapter_data.append((chapter.timestamp, chapter.title))
 
         try:
             async with ABSService() as abs_service:
@@ -1683,10 +1674,10 @@ class ProcessingPipeline:
             if not ai_provider:
                 raise ValueError(f"Failed to create provider {self.ai_options.provider_id}")
 
-            # Prepare transcriptions for processing (use ASR titles as raw transcriptions)
-            transcriptions = []
+            # Pass current chapter titles to the AI as input
+            titles = []
             for chapter in selected_chapters:
-                transcriptions.append(chapter.current_title)
+                titles.append(chapter.title)
 
             # Use AI options
             infer_opening_credits = self.ai_options.inferOpeningCredits
@@ -1726,7 +1717,7 @@ class ProcessingPipeline:
             # Use the main processing method with selected model
             try:
                 processed_titles = await ai_provider.process_chapter_titles(
-                    transcriptions,
+                    titles,
                     model_id=self.ai_options.model_id,
                     additional_instructions=instructions_list,
                     deselect_non_chapters=deselect_non_chapters,
@@ -1760,7 +1751,7 @@ class ProcessingPipeline:
                         operations.append(
                             AICleanupOperation(
                                 chapter_id=chapter.id,
-                                old_title=chapter.current_title,
+                                old_title=chapter.title,
                                 new_title=new_title,
                             )
                         )
@@ -1768,8 +1759,8 @@ class ProcessingPipeline:
                         operations.append(
                             AICleanupOperation(
                                 chapter_id=chapter.id,
-                                old_title=chapter.current_title,
-                                new_title=chapter.current_title if keep_deselected_titles else "",
+                                old_title=chapter.title,
+                                new_title=chapter.title if keep_deselected_titles else "",
                                 selected=False,
                             )
                         )
