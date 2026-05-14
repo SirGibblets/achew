@@ -168,7 +168,7 @@ class AIService(ABC):
 
         # Base prompt
         base_prompt = """You are a helpful assistant that validates and cleans up audiobook chapter titles.
-You will receive a JSON array of objects, each containing a chapter index (int) and a raw text transcription of the title. Note that there may be inaccuracies in the transcriptions.
+You will receive a JSON array of objects, each containing a chapter index (int) and a raw text transcript of the title. Note that there may be inaccuracies in the transcripts.
 You will output the same array, but with processed titles. You must respond with ONLY the raw JSON data - no additional text, comments, or markdown."""
 
         if book_title and book_author:
@@ -181,14 +181,14 @@ You will output the same array, but with processed titles. You must respond with
         base_prompt += """
 
 Rules for processing chapter titles:
-- For transcriptions that clearly denote a numbered chapter/section (e.g., "Chapter 1", "Part 5", "One", "Section IX"):
+- For transcripts that clearly denote a numbered chapter/section (e.g., "Chapter 1", "Part 5", "One", "Section IX"):
     - Keep the terminology (e.g. "Chapter", "Part", "Section")
     - Always use digits for numbers
     - Place a colon (:) after the chapter number, but only if there is relevant title text following it
     - Do not include a colon if you do not also include text after it
 - Remove any partial sentences or unrelated words at the end of the text
 - Remove periods at the end of the text
-- For transcriptions that do not appear to denote numbered chapters/sections/etc:
+- For transcripts that do not appear to denote numbered chapters/sections/etc:
     - If it appears near the start of the list:
         - It could be opening credits, a prologue, a foreword, etc. Consider labelling it accordingly."""
 
@@ -229,7 +229,7 @@ Rules for processing chapter titles:
     @abstractmethod
     async def process_chapter_titles(
         self,
-        transcriptions: List[str],
+        titles: List[str],
         model_id: str,
         additional_instructions: Optional[List[str]] = None,
         deselect_non_chapters: bool = True,
@@ -238,5 +238,5 @@ Rules for processing chapter titles:
         preferred_titles: Optional[List[str]] = None,
         book: Optional[Book] = None,
     ) -> List[Optional[str]]:
-        """Process transcriptions into chapter titles using the LLM"""
+        """Refine chapter titles using the LLM"""
         pass

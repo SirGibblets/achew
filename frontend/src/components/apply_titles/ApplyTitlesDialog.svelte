@@ -90,7 +90,7 @@
     if (currentMappings.length === 0) return false;
     return currentMappings.some((m) => {
       const ch = $chapters.find((c) => c.id === m.chapter_id);
-      return ch && ch.current_title !== m.new_title;
+      return ch && ch.title !== m.new_title;
     });
   });
 
@@ -137,7 +137,7 @@
     /* Filter to only mappings that actually change a title */
     const effectiveMappings = currentMappings.filter((m) => {
       const ch = $chapters.find((c) => c.id === m.chapter_id);
-      return ch && ch.current_title !== m.new_title;
+      return ch && ch.title !== m.new_title;
     });
 
     if (effectiveMappings.length === 0) return;

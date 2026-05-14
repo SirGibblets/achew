@@ -306,7 +306,7 @@ class OpenAIService(AIService):
 
     async def process_chapter_titles(
         self,
-        transcriptions: List[str],
+        titles: List[str],
         model_id: str,
         additional_instructions: Optional[List[str]] = None,
         deselect_non_chapters: bool = True,
@@ -315,9 +315,9 @@ class OpenAIService(AIService):
         preferred_titles: Optional[List[str]] = None,
         book: Optional[Book] = None,
     ) -> List[Optional[str]]:
-        """Process transcriptions into chapter titles using OpenAI"""
+        """Refine chapter titles using OpenAI"""
 
-        if not transcriptions:
+        if not titles:
             return []
 
         additional_instructions = additional_instructions or []
@@ -335,7 +335,7 @@ class OpenAIService(AIService):
         )
 
         # Create JSON input for all chapters
-        chapter_data = [{"id": idx, "title": text} for idx, text in enumerate(transcriptions)]
+        chapter_data = [{"id": idx, "title": text} for idx, text in enumerate(titles)]
 
         try:
             client = self._create_client()
@@ -351,7 +351,7 @@ class OpenAIService(AIService):
 
             # Initialize incremental parser for progress tracking
             parser = IncrementalJSONParser()
-            total_chapters = len(transcriptions)
+            total_chapters = len(titles)
 
             stream_kwargs = {
                 "model": model_id,

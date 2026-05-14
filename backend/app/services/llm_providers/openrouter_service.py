@@ -247,7 +247,7 @@ class OpenRouterService(AIService):
 
     async def process_chapter_titles(
         self,
-        transcriptions: List[str],
+        titles: List[str],
         model_id: str,
         additional_instructions: Optional[List[str]] = None,
         deselect_non_chapters: bool = True,
@@ -256,9 +256,9 @@ class OpenRouterService(AIService):
         preferred_titles: Optional[List[str]] = None,
         book: Optional[Book] = None,
     ) -> List[Optional[str]]:
-        """Process transcriptions into chapter titles using OpenRouter"""
+        """Refine chapter titles using OpenRouter"""
 
-        if not transcriptions:
+        if not titles:
             return []
 
         additional_instructions = additional_instructions or []
@@ -274,7 +274,7 @@ class OpenRouterService(AIService):
             book=book,
         )
 
-        chapter_data = [{"id": idx, "title": text} for idx, text in enumerate(transcriptions)]
+        chapter_data = [{"id": idx, "title": text} for idx, text in enumerate(titles)]
 
         try:
             api_key = self._get_api_key()
@@ -286,7 +286,7 @@ class OpenRouterService(AIService):
             headers = self._create_headers(api_key)
 
             parser = IncrementalJSONParser()
-            total_chapters = len(transcriptions)
+            total_chapters = len(titles)
 
             is_thinking_model = any(term in model_id.lower() for term in ["reasoning", "thinking"])
 

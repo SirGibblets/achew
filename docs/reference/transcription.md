@@ -57,7 +57,7 @@ Start by picking the **transcription service**, **model variant**, and **languag
 
 Then, configure the other options:
 
-- **Trim segments:** Attempts to increase transcription speed by trimming unnecessary part from the audio. It's typically fine to keep this enabled, but you'll want to disable it if it's giving you blank/nonsensical transcriptions or if important parts of the title are being missed.
+- **Trim segments:** Attempts to increase transcription speed by trimming unnecessary part from the audio. It's typically fine to keep this enabled, but you'll want to disable it if it's giving you blank/nonsensical transcripts or if important parts of the title are being missed.
 - **Use Bias Words:** (Whisper only) Enables a word list that can help guide the transcription model toward more consistent results. This list is editable so you can tune it for your specific book or language (you'll want to use words in the target language). Use the :lucide-rotate-ccw:{ .icon-token } Reset button in the top right of the edit area to reset to the default word list.
 - **Transcription Length:** Length of the audio segment extracted for transcription, before trimming. The default of 8 seconds generally works well, but you may need to increase this for books that have unusually long chapter titles.
 

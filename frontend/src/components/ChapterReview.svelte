@@ -39,13 +39,13 @@
   $effect(() => {
     const emptyChapters = selectedChapters
       .map((chapter, index) => ({ chapter, index }))
-      .filter(({ chapter }) => !chapter.current_title || chapter.current_title.trim() === '');
+      .filter(({ chapter }) => !chapter.title || chapter.title.trim() === '');
     hasEmptyChapters = emptyChapters.length > 0;
     emptyChapterNumbers = emptyChapters.map(({ index }) => index + 1);
   });
 
   function isChapterEmpty(chapter: ChapterData) {
-    return !chapter.current_title || chapter.current_title.trim() === '';
+    return !chapter.title || chapter.title.trim() === '';
   }
 
   // Format timestamp
@@ -266,7 +266,7 @@
                         <span class="empty-title-text">Empty title</span>
                       </div>
                     {:else}
-                      {chapter.current_title}
+                      {chapter.title}
                     {/if}
                   </td>
                   <td class="chapter-length">

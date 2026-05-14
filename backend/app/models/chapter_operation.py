@@ -74,13 +74,13 @@ class RestoreChapterOperation(ChapterOperation):
         chapter.selected = True
         chapter.deleted = False
         if self.new_title:
-            self.old_title = chapter.current_title
-            chapter.current_title = self.new_title
+            self.old_title = chapter.title
+            chapter.title = self.new_title
 
     def undo(self, pipeline: "ProcessingPipeline"):
         chapter = self.find_chapter(pipeline, self.chapter_id)
         if self.new_title:
-            chapter.current_title = self.old_title
+            chapter.title = self.old_title
         chapter.deleted = True
 
 
@@ -91,12 +91,12 @@ class EditTitleOperation(ChapterOperation):
 
     def apply(self, pipeline: "ProcessingPipeline"):
         chapter = self.find_chapter(pipeline, self.chapter_id)
-        self.old_title = chapter.current_title
-        chapter.current_title = self.new_title
+        self.old_title = chapter.title
+        chapter.title = self.new_title
 
     def undo(self, pipeline: "ProcessingPipeline"):
         chapter = self.find_chapter(pipeline, self.chapter_id)
-        chapter.current_title = self.old_title
+        chapter.title = self.old_title
 
 
 class AICleanupOperation(ChapterOperation):
@@ -107,33 +107,33 @@ class AICleanupOperation(ChapterOperation):
 
     def apply(self, pipeline: "ProcessingPipeline"):
         chapter = self.find_chapter(pipeline, self.chapter_id)
-        chapter.current_title = self.new_title
+        chapter.title = self.new_title
         chapter.selected = self.selected
 
     def undo(self, pipeline: "ProcessingPipeline"):
         chapter = self.find_chapter(pipeline, self.chapter_id)
-        chapter.current_title = self.old_title
+        chapter.title = self.old_title
         chapter.selected = True
 
 
 class TranscribeOperation(ChapterOperation):
     chapter_id: str
-    new_asr_title: str
-    new_current_title: str
-    old_asr_title: str = ""
-    old_current_title: str = ""
+    new_transcript: str
+    new_title: str
+    old_transcript: str = ""
+    old_title: str = ""
 
     def apply(self, pipeline: "ProcessingPipeline"):
         chapter = self.find_chapter(pipeline, self.chapter_id)
-        self.old_asr_title = chapter.asr_title
-        self.old_current_title = chapter.current_title
-        chapter.asr_title = self.new_asr_title
-        chapter.current_title = self.new_current_title
+        self.old_transcript = chapter.transcript
+        self.old_title = chapter.title
+        chapter.transcript = self.new_transcript
+        chapter.title = self.new_title
 
     def undo(self, pipeline: "ProcessingPipeline"):
         chapter = self.find_chapter(pipeline, self.chapter_id)
-        chapter.asr_title = self.old_asr_title
-        chapter.current_title = self.old_current_title
+        chapter.transcript = self.old_transcript
+        chapter.title = self.old_title
 
 
 class EditTimestampOperation(ChapterOperation):

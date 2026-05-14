@@ -446,8 +446,8 @@ class AppState:
                         # Create and apply operation
                         op = TranscribeOperation(
                             chapter_id=chapter_id,
-                            new_asr_title=transcription,
-                            new_current_title=transcription,
+                            new_transcript=transcription,
+                            new_title=transcription,
                         )
                         operations.append(op)
 

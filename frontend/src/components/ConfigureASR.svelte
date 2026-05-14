@@ -64,7 +64,7 @@
     </h2>
     <p>
       Titles will be generated for <strong>{segmentCount}</strong>
-      chapter{segmentCount !== 1 ? 's' : ''} using a local ASR model.<br />
+      chapter{segmentCount !== 1 ? 's' : ''} using a local transcription model.<br />
       Configure the transcription settings below.
     </p>
   </div>

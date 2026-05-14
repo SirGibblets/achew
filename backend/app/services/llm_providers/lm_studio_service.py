@@ -286,7 +286,7 @@ class LMStudioService(AIService):
 
     async def process_chapter_titles(
         self,
-        transcriptions: List[str],
+        titles: List[str],
         model_id: str,
         additional_instructions: Optional[List[str]] = None,
         deselect_non_chapters: bool = True,
@@ -295,10 +295,10 @@ class LMStudioService(AIService):
         preferred_titles: Optional[List[str]] = None,
         book: Optional[Book] = None,
     ) -> List[Optional[str]]:
-        """Process transcriptions into chapter titles using LM Studio"""
+        """Refine chapter titles using LM Studio"""
 
-        if not transcriptions:
-            logger.warning("LM Studio No transcriptions provided, returning empty list")
+        if not titles:
+            logger.warning("LM Studio No titles provided, returning empty list")
             return []
 
         additional_instructions = additional_instructions or []
@@ -316,7 +316,7 @@ class LMStudioService(AIService):
         )
 
         # Create JSON input for all chapters
-        chapter_data = [{"id": idx, "title": text} for idx, text in enumerate(transcriptions)]
+        chapter_data = [{"id": idx, "title": text} for idx, text in enumerate(titles)]
         user_message = f"Input data:\n{json.dumps(chapter_data)}"
 
         try:
@@ -334,7 +334,7 @@ class LMStudioService(AIService):
 
                 # Initialize incremental parser for progress tracking
                 parser = IncrementalJSONParser()
-                total_chapters = len(transcriptions)
+                total_chapters = len(titles)
 
                 # Stream the response for progress updates
                 stream_count = 0

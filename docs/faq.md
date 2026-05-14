@@ -12,7 +12,7 @@ Yes! Three options: Gemini's free tier, GitHub Copilot Free, or a local model vi
 
 Yes. Achew does not include built-in authentication, so do not expose it directly to the internet; use your reverse proxy to put an auth layer in front (basic auth, Tailscale, Authelia, etc.). Make sure the proxy forwards WebSocket upgrades. See [Reverse Proxy](installation/reverse-proxy.md).
 
-## How can I improve the consistency of chapter transcriptions?
+## How can I improve the consistency of chapter transcripts?
 
 See [Tips for improving transcription](reference/transcription.md#tips-for-improving-transcription).
 
