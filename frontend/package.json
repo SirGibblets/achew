@@ -7,17 +7,33 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "devDependencies": {
-    "@sveltejs/vite-plugin-svelte": "^5.1.0",
-    "svelte": "^5.34.7",
-    "vite": "^6.3.5"
+    "@eslint/js": "^10.0.1",
+    "@sveltejs/vite-plugin-svelte": "^7.1.2",
+    "@tsconfig/svelte": "^5.0.8",
+    "@types/node": "^25.7.0",
+    "eslint": "^10.3.0",
+    "eslint-plugin-svelte": "^3.17.1",
+    "globals": "^17.6.0",
+    "prettier": "^3.8.3",
+    "prettier-plugin-svelte": "^3.5.2",
+    "svelte": "^5.55.5",
+    "svelte-check": "^4.4.8",
+    "svelte-eslint-parser": "^1.6.1",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.59.3",
+    "vite": "^8.0.12"
   },
   "dependencies": {
     "@dnd-kit-svelte/svelte": "^0.1.6",
-    "@dnd-kit/helpers": "^0.3.2",
-    "@lucide/svelte": "^0.539.0",
+    "@dnd-kit/helpers": "^0.4.0",
+    "@lucide/svelte": "^1.14.0",
     "svelte-dnd-action": "^0.9.64"
   }
 }
