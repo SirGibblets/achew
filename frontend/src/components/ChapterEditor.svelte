@@ -52,7 +52,6 @@
     timestamp: Date;
   }
 
-  let mounted = false;
   let lastScrollY = 0;
   let loading = $state(false);
   let error = $state<string | null>(null);
@@ -79,8 +78,7 @@
   // Shift-click range selection
   let lastClickedChapterId = $state<string | null>(null);
 
-  // Store textarea references for auto-resizing
-  let textareaRefs = new SvelteMap<string, HTMLTextAreaElement>();
+  let inputRefs = new SvelteMap<string, HTMLInputElement>();
 
   // Check if any chapters have transcriptions
   let hasTranscriptions = $derived($chapters.some((chapter) => chapter.transcript && chapter.transcript.trim() !== ''));
@@ -91,8 +89,6 @@
 
   // Load chapters and AI options when component mounts
   onMount(async () => {
-    mounted = true;
-
     await loadEditorSettings();
     await loadChapters();
     await tick();
@@ -165,15 +161,6 @@
     document.removeEventListener('click', handleOutsideClick);
     if (transcriptionBarTimer) {
       clearTimeout(transcriptionBarTimer);
-    }
-  });
-
-  // Resize all text areas after updates (for programmatic value changes)
-  $effect(() => {
-    if (mounted) {
-      textareaRefs.forEach((textarea) => {
-        resizeTextareaByElement(textarea);
-      });
     }
   });
 
@@ -260,10 +247,10 @@
   function handleKeydown(event: KeyboardEvent) {
     // Check if user is typing in an input field
     const target = event.target as HTMLElement;
-    if (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT') {
+    if (target.tagName === 'INPUT') {
       if (event.key === 'Tab' && editorSettings.tab_navigation) {
         event.preventDefault();
-        handleTabNavigation(target as HTMLTextAreaElement, event.shiftKey);
+        handleTabNavigation(target as HTMLInputElement, event.shiftKey);
       }
       return;
     }
@@ -280,9 +267,9 @@
     }
   }
 
-  function handleTabNavigation(currentTextarea: HTMLTextAreaElement, isReverse = false) {
+  function handleTabNavigation(currentInput: HTMLInputElement, isReverse = false) {
     const selectedChapters = $chapters.filter((ch) => ch.selected);
-    const currentChapterId = getCurrentChapterIdFromTextarea(currentTextarea);
+    const currentChapterId = getCurrentChapterIdFromInput(currentInput);
     const currentChapterIndex = selectedChapters.findIndex((ch) => ch.id === currentChapterId);
 
     if (currentChapterIndex === -1) return;
@@ -300,25 +287,25 @@
     }
 
     if (targetChapter) {
-      const targetTextarea = textareaRefs.get(targetChapter.id);
-      if (targetTextarea) {
-        targetTextarea.focus();
-        targetTextarea.select();
+      const targetInput = inputRefs.get(targetChapter.id);
+      if (targetInput) {
+        targetInput.focus();
+        targetInput.select();
 
-        scrollToFocusedInput(targetTextarea);
+        scrollToFocusedInput(targetInput);
       }
     }
   }
 
-  function scrollToFocusedInput(textarea: HTMLElement) {
+  function scrollToFocusedInput(input: HTMLElement) {
     requestAnimationFrame(() => {
-      const textareaRect = textarea.getBoundingClientRect();
+      const inputRect = input.getBoundingClientRect();
       const stickyBar = document.querySelector('.sticky-action-bar');
       const stickyBarRect = stickyBar ? stickyBar.getBoundingClientRect() : null;
 
       const bottomBarHeight = stickyBarRect ? stickyBarRect.height : 0;
       const padding = 32;
-      const scrollTarget = textareaRect.bottom + bottomBarHeight + padding;
+      const scrollTarget = inputRect.bottom + bottomBarHeight + padding;
       const viewportHeight = window.innerHeight;
 
       if (scrollTarget > viewportHeight) {
@@ -331,9 +318,9 @@
     });
   }
 
-  function getCurrentChapterIdFromTextarea(textarea: HTMLTextAreaElement) {
-    for (const [chapterId, ref] of textareaRefs.entries()) {
-      if (ref === textarea) {
+  function getCurrentChapterIdFromInput(input: HTMLInputElement) {
+    for (const [chapterId, ref] of inputRefs.entries()) {
+      if (ref === input) {
         return chapterId;
       }
     }
@@ -435,7 +422,6 @@
   async function deleteBySelection(target: 'selected' | 'unselected') {
     const count = target === 'selected' ? $selectionStats.selected : $selectionStats.unselected;
     if (count === 0) return;
-    if (!confirm(`Delete ${count} ${target} chapter${count !== 1 ? 's' : ''}?`)) return;
     try {
       await api.chapters.deleteBySelection(target);
       audio.clearSegmentCache();
@@ -522,32 +508,12 @@
     titleTimeouts.set(chapterId, timeoutId);
   }
 
-  // Auto-resize textarea up to max 3 lines
-  function autoResizeTextarea(event: Event) {
-    const textarea = event.target as HTMLTextAreaElement;
-    textarea.style.height = 'auto';
-    const newHeight = Math.min(textarea.scrollHeight, 72); // Max 72px (3 lines * 24px including padding)
-    textarea.style.height = newHeight + 'px';
-  }
-
-  // Auto-resize textarea when value changes (for programmatic updates)
-  function resizeTextareaByElement(textarea: HTMLTextAreaElement) {
-    if (textarea) {
-      textarea.style.height = 'auto';
-      const newHeight = Math.min(textarea.scrollHeight, 72);
-      textarea.style.height = newHeight + 'px';
-    }
-  }
-
-  // Action to track textarea elements
-  function trackTextarea(node: HTMLTextAreaElement, chapterId: string) {
-    textareaRefs.set(chapterId, node);
-    // Initial resize
-    resizeTextareaByElement(node);
+  function trackInput(node: HTMLInputElement, chapterId: string) {
+    inputRefs.set(chapterId, node);
 
     return {
       destroy() {
-        textareaRefs.delete(chapterId);
+        inputRefs.delete(chapterId);
       },
     };
   }
@@ -828,7 +794,7 @@
       <p>Chapters will appear here once processing is complete.</p>
     </div>
   {:else}
-    <div class="table-container" class:hide-transcripts={editorSettings.hide_transcriptions}>
+    <div class="table-container">
       <table class="table">
         <thead>
           <tr>
@@ -976,9 +942,9 @@
                 </td>
               {/if}
               {#if showTranscriptions}
-                <td class="original-title-cell">
-                  <span class="transcript-text" title={chapter.transcript}>
-                    {chapter.transcript?.length > 120 ? chapter.transcript.substring(0, 120) + '…' : chapter.transcript}
+                <td class="transcript-cell">
+                  <span class="transcript-tooltip-wrapper" data-tooltip={chapter.transcript}>
+                    <span class="transcript-text">{chapter.transcript}</span>
                   </span>
                 </td>
                 <td class="restore-cell">
@@ -993,18 +959,16 @@
                 </td>
               {/if}
               <td class="title-cell">
-                <textarea
+                <input
+                  type="text"
                   class="chapter-title-input"
                   value={chapter.title}
                   oninput={(e) => {
-                    const target = e.target as HTMLTextAreaElement;
+                    const target = e.target as HTMLInputElement;
                     handleTitleEdit(chapter.id, target.value, chapter.title);
-                    autoResizeTextarea(e);
                   }}
-                  use:trackTextarea={chapter.id}
-                  placeholder=""
-                  rows="1"
-                ></textarea>
+                  use:trackInput={chapter.id}
+                />
               </td>
               <td>
                 <div class="action-buttons">
@@ -1710,12 +1674,12 @@
     z-index: 10002;
   }
 
-  .original-title-cell {
-    min-width: 320px;
-    max-width: 480px;
+  .transcript-cell {
+    min-width: 120px;
+    max-width: 280px;
     padding: 0.75rem;
     line-height: 1.4;
-    vertical-align: top;
+    vertical-align: middle;
   }
 
   .restore-cell {
@@ -1723,15 +1687,53 @@
     text-align: center;
   }
 
+  .transcript-tooltip-wrapper {
+    display: block;
+    position: relative;
+  }
+
   .transcript-text {
+    display: block;
     color: var(--text-secondary);
     font-size: 0.875rem;
     font-style: italic;
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-    word-break: break-word;
-    hyphens: auto;
     line-height: 1.4;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .transcript-tooltip-wrapper[data-tooltip]::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    margin-bottom: 8px;
+    padding: 8px 12px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-style: normal;
+    line-height: 1.4;
+    white-space: normal;
+    width: max-content;
+    max-width: 480px;
+    z-index: 10001;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition:
+      opacity 0.15s ease,
+      visibility 0s linear 0.15s;
+  }
+
+  .transcript-tooltip-wrapper[data-tooltip]:hover::after {
+    opacity: 1;
+    visibility: visible;
+    transition-delay: 0.5s, 0.5s;
   }
 
   .title-cell {
@@ -1751,27 +1753,10 @@
     font-size: 0.875rem;
     color: var(--text-primary);
     transition: all 0.2s ease;
-    resize: none;
-    overflow-y: hidden;
-    min-height: 1.5rem;
-    max-height: 4.5rem;
     line-height: 1.5rem;
     font-family: inherit;
     width: 100%;
     box-sizing: border-box;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-    margin-top: 0.2rem;
-    margin-bottom: -0.25rem;
-  }
-
-  :global(.hide-transcripts) .chapter-title-input {
-    max-height: 2.5rem;
-    overflow: hidden;
-  }
-
-  .chapter-title-input::-webkit-scrollbar {
-    display: none;
   }
 
   .chapter-title-input:hover {
@@ -1938,7 +1923,7 @@
       overflow-x: auto;
     }
 
-    .original-title-cell {
+    .transcript-cell {
       min-width: 120px;
       max-width: 200px;
     }
