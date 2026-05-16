@@ -1,21 +1,15 @@
 <script lang="ts">
-  import { SvelteMap } from 'svelte/reactivity';
-  import { chapters } from '../../stores/session';
-  import { audio, currentSegmentId, isPlaying } from '../../stores/audio';
+  import CornerDownRight from '@lucide/svelte/icons/corner-down-right';
   import Pause from '@lucide/svelte/icons/pause';
   import Play from '@lucide/svelte/icons/play';
-  import type { ChapterData } from '../../types/chapter';
+  import { audio, currentSegmentId, isPlaying } from '../../stores/audio';
+  import { chapters } from '../../stores/session';
   import type { ExistingCueSource } from '../../types/sources';
+  import { alignByTimestamp } from '../../utils/alignment';
 
   interface TitleMapping {
     chapter_id: string;
     new_title: string;
-  }
-
-  interface AlignedPair {
-    sourceTitle: string;
-    chapter: ChapterData;
-    dist: number;
   }
 
   interface Props {
@@ -38,41 +32,9 @@
     }
   }
 
-  /*
-   * Alignment tolerance in seconds
-   */
-  const TOLERANCE = 5;
-
   let allChapters = $derived($chapters.filter((c) => !c.deleted));
 
-  /**
-   * For each original chapter, find the closest source cue within TOLERANCE.
-   * Deduplicates: if two source cues match the same chapter, the closest wins.
-   * Returns Map<chapter_id, { sourceTitle, chapter }>.
-   */
-  let alignedMap = $derived.by<SvelteMap<string, AlignedPair>>(() => {
-    if (!source?.cues?.length) return new SvelteMap();
-
-    const map = new SvelteMap<string, AlignedPair>();
-    for (const cue of source.cues) {
-      let best: ChapterData | null = null;
-      let bestDist = Infinity;
-      for (const ch of allChapters) {
-        const d = Math.abs(cue.timestamp - ch.timestamp);
-        if (d <= TOLERANCE && d < bestDist) {
-          bestDist = d;
-          best = ch;
-        }
-      }
-      if (!best) continue;
-
-      const existing = map.get(best.id);
-      if (!existing || bestDist < existing.dist) {
-        map.set(best.id, { sourceTitle: cue.title, chapter: best, dist: bestDist });
-      }
-    }
-    return map;
-  });
+  let alignedMap = $derived(alignByTimestamp(allChapters, source?.cues ?? []));
 
   let alignedCount = $derived(alignedMap.size);
 
@@ -183,10 +145,16 @@
         </button>
         <span class="chapter-title">
           {#if checked[chapter.id]}
-            <span class="title-original-strikethrough" class:fallback={!chapter.title}
-              >{chapter.title || 'No Title'}</span
-            >
-            <span class="title-new">{pair.sourceTitle}</span>
+            <span class="title-original-superscript" class:fallback={!chapter.title}>
+              {chapter.title || 'No Title'}
+            </span>
+            <span class="title-new" class:unchanged={pair.sourceTitle === chapter.title}>
+              &nbsp;<CornerDownRight
+                size="14"
+                style="margin-right: 0.15rem;"
+                color={pair.sourceTitle === chapter.title ? 'var(--text-muted)' : 'var(--primary-color)'}
+              />{pair.sourceTitle}
+            </span>
           {:else}
             <span class="title-original" class:fallback={!chapter.title}>{chapter.title || 'No Title'}</span>
           {/if}
@@ -240,12 +208,12 @@
     align-items: center;
     gap: 0.4rem;
     padding: 0.35rem 0.6rem;
-    min-height: 3rem;
-    font-size: 0.82rem;
+    min-height: 3.5rem;
+    font-size: 0.875rem;
   }
 
   .row:nth-child(even) {
-    background: var(--hover-bg, rgba(128, 128, 128, 0.06));
+    background: rgba(128, 128, 128, 0.06);
   }
 
   .row.unaligned {
@@ -316,11 +284,15 @@
   }
 
   .title-new {
-    color: var(--primary-color);
-    font-weight: 500;
+    color: var(--text-primary);
+    font-weight: 600;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .title-new.unchanged {
+    color: var(--text-muted);
   }
 
   .title-original {
@@ -330,14 +302,13 @@
     white-space: nowrap;
   }
 
-  .title-original-strikethrough {
+  .title-original-superscript {
     color: var(--text-muted);
-    text-decoration: line-through;
     font-size: 0.65rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    line-height: 1.1;
+    line-height: 1.2;
   }
 
   .fallback {

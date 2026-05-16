@@ -222,8 +222,13 @@ export interface AddOptionsResponse {
   allow_vad_scan: boolean;
 }
 
-export interface SegmentCountResponse {
-  segment_count: number;
+export interface SelectedCuesResponse {
+  cues: number[];
+}
+
+export interface PreassignedTitle {
+  cue_index: number;
+  title: string;
 }
 
 export interface CancelResponse {

@@ -34,8 +34,9 @@ The Smart Detect workflow finds chapter cues by analyzing the audio itself. This
 4. *(Optional)* Add or inspect existing [Chapter Sources](../getting-started/chapter-sources.md) from this screen. These can be used as a comparison reference once detection finishes.
 5. Click **Start Smart Detect**, and Achew will begin analyzing the audio. This process can take anywhere from a few seconds to several minutes depending on the length of the book, how powerful your machine is, and whether **Dramatized** was checked.
 6. After detection has finished, use the **Initial Chapter Selection** screen (see below) to decide which cues will become chapters, then click **Create Chapters**.
-7. On the **Transcribe Titles** screen, choose your [transcription settings](../reference/transcription.md) and click **Transcribe**. The first few seconds of audio at each chapter timestamp will be transcribed into a title.
-8. After transcription has finished, use the [Chapter Editor](../editor/index.md) to review and polish the chapters.
+7. On the **Transcribe Titles** screen, choose your [transcription settings](../reference/transcription.md). If you have a [source](../getting-started/chapter-sources.md) whose chapter timestamps line up with any of your chosen cues, you can optionally enable **Use aligned titles from** to pick and choose titles to use directly without transcribing them. See [Using aligned titles](../reference/transcription.md#using-aligned-titles) for details.
+8. Click **Transcribe Titles**. The first few seconds of audio at each chapter timestamp will be transcribed into a title.
+9. After transcription has finished, use the [Chapter Editor](../editor/index.md) to review and polish the chapters.
 
 ## Initial Chapter Selection
 

@@ -25,7 +25,8 @@ import type {
   LLMProvidersResponse,
   LLMProviderValidationResponse,
   PipelineState,
-  SegmentCountResponse,
+  PreassignedTitle,
+  SelectedCuesResponse,
   ShiftOperation,
   SourcesResponse,
   StatusResponse,
@@ -194,15 +195,15 @@ export const session = {
     return apiRequest<CancelResponse>('/pipeline/cancel', { method: 'POST' });
   },
 
-  configureASR(action: string) {
+  configureASR(action: string, preassignedTitles: PreassignedTitle[] = []) {
     return apiRequest<unknown>('/pipeline/configure-asr', {
       method: 'POST',
-      body: { action },
+      body: { action, preassigned_titles: preassignedTitles },
     });
   },
 
-  getSegmentCount() {
-    return apiRequest<SegmentCountResponse>('/pipeline/segment-count');
+  getSelectedCues() {
+    return apiRequest<SelectedCuesResponse>('/pipeline/selected-cues');
   },
 };
 

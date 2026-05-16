@@ -100,9 +100,6 @@ class ProcessingPipeline:
         self.cues: List[float] = []
         self.segment_files: List[str] = []
         self.trimmed_segment_files: List[str] = []
-        self.transcripts: List[str] = []
-        self.transcribed_chapters: List[ChapterData] = []
-        self.include_unaligned: List[str] = []
 
         self.detected_cues: List[DetectedCue] = []
         self.initial_chapter_selection_available: bool = False  # True only after smart-detect populates detected_cues
@@ -335,8 +332,6 @@ class ProcessingPipeline:
         if step_num <= RestartStep.CONFIGURE_ASR.ordinal:
             self.cleanup_segment_files()
             self.cleanup_trimmed_files()
-            self.transcripts = []
-            self.transcribed_chapters = []
             self.chapters = []
             self.history_stack = []
             self.history_index = -1
@@ -345,7 +340,6 @@ class ProcessingPipeline:
         if step_num <= RestartStep.INITIAL_CHAPTER_SELECTION.ordinal:
             self.cleanup_segment_files()
             self.cues = []
-            self.include_unaligned = []
             self.step = Step.INITIAL_CHAPTER_SELECTION
 
         if step_num <= RestartStep.SELECT_WORKFLOW.ordinal:
@@ -889,7 +883,7 @@ class ProcessingPipeline:
                 if not existing_source:
                     raise ValueError(f"Invalid cue source: {cue_source}")
 
-                self.cues = [c.timestamp for c in existing_source.cues]
+                self.cues = self._filter_cues_by_duration([c.timestamp for c in existing_source.cues])
                 self._notify_progress(Step.CONFIGURE_ASR, 0, "Ready for transcription configuration")
 
         except Exception as e:
@@ -1222,13 +1216,13 @@ class ProcessingPipeline:
         )
         logger.info(f"Detected {len(self.detected_cues)} cues, ready for initial chapter selection")
 
-    async def _extract_audio_segments(self):
-        """Extract audio segments for transcription"""
+    async def _extract_audio_segments(self, preassigned_titles: Optional[Dict[int, str]] = None):
+        """Extract audio segments for transcription, skipping cues with preassigned titles"""
 
         self._notify_progress(Step.AUDIO_EXTRACTION, 0, "Extracting chapter audio segments…")
 
-        # Filter chapter breaks to remove any that occur after the audiobook ends
-        self.cues = self._filter_cues_by_duration(self.cues)
+        preassigned = preassigned_titles or {}
+        timestamps_to_extract = [ts for i, ts in enumerate(self.cues) if i not in preassigned]
 
         audio_service = AudioProcessingService(
             self._scoped_progress_callback(),
@@ -1239,7 +1233,7 @@ class ProcessingPipeline:
 
         extracted = await audio_service.extract_segments(
             audio_file=self.audio_file_path,
-            timestamps=self.cues,
+            timestamps=timestamps_to_extract,
             output_dir=self.temp_dir,
             segment_extension=self.segment_extension,
         )
@@ -1315,7 +1309,7 @@ class ProcessingPipeline:
             await self.restart_at_step(RestartStep.CONFIGURE_ASR, f"Failed to create trimmed segments: {str(e)}")
             raise
 
-    async def _transcribe_segments(self) -> None:
+    async def _transcribe_segments(self) -> List[str]:
         """Transcribe audio segments using ASR"""
 
         self._notify_progress(
@@ -1329,19 +1323,25 @@ class ProcessingPipeline:
 
         # Run transcription
         self._transcription_task = asyncio.create_task(asr_service.transcribe(self.trimmed_segment_files))
-        self.transcripts = await self._transcription_task
+        transcripts = await self._transcription_task
         self._transcription_task = None
 
         # Check if processing was cancelled during transcription
         if self.step != Step.ASR_PROCESSING:
             logger.info("Processing was cancelled during transcription, stopping transcription")
-            return
+            return transcripts
 
         self._notify_progress(Step.ASR_PROCESSING, 100, "Transcription complete")
 
-        logger.info(f"Transcribed {len(self.transcripts)} segments")
+        logger.info(f"Transcribed {len(transcripts)} segments")
 
-    async def _create_initial_chapters(self):
+        return transcripts
+
+    async def _create_initial_chapters(
+        self,
+        transcripts: List[str],
+        preassigned_titles: Optional[Dict[int, str]] = None,
+    ):
         """Create initial chapter objects with basic titles (without AI cleanup)"""
 
         # Check if processing was cancelled before creating chapters
@@ -1351,40 +1351,60 @@ class ProcessingPipeline:
 
         self._notify_progress(Step.CHAPTER_EDITING, 0, "Creating initial chapters…")
 
+        preassigned = preassigned_titles or {}
+        # Map each cue index to its position in ``transcripts`` (skipping preassigned cues)
+        transcript_indices = {i: k for k, i in enumerate(i for i in range(len(self.cues)) if i not in preassigned)}
+
+        self.chapters = []
         # Create chapter objects with basic titles
         for i, timestamp in enumerate(self.cues):
-            # Use transcription for title if available, otherwise use empty string
-            if i < len(self.transcripts) and self.transcripts[i].strip():
-                # Use full transcription as basic title
-                initial_title = self.transcripts[i].strip()
+            if i in preassigned:
+                transcript = ""
+                title = preassigned[i]
             else:
-                # Fallback to empty string
-                initial_title = ""
+                k = transcript_indices.get(i)
+                if k is not None and k < len(transcripts) and transcripts[k].strip():
+                    # Use full transcription as basic title
+                    transcript = transcripts[k].strip()
+                    title = transcript
+                else:
+                    # Fallback to empty string
+                    transcript = ""
+                    title = ""
 
             chapter = ChapterData(
                 timestamp=timestamp,
-                transcript=initial_title,
-                title=initial_title,
+                transcript=transcript,
+                title=title,
             )
-            self.transcribed_chapters.append(chapter)
+            self.chapters.append(chapter)
 
-        # Also populate the main chapters list for the UI
-        self.chapters = self.transcribed_chapters.copy()
         self.step = Step.CHAPTER_EDITING
 
         self._notify_progress(
             Step.CHAPTER_EDITING,
             100,
-            f"Created {len(self.transcribed_chapters)} initial chapters",
+            f"Created {len(self.chapters)} initial chapters",
         )
 
-        logger.info(f"Created {len(self.transcribed_chapters)} initial chapters")
+        logger.info(f"Created {len(self.chapters)} initial chapters")
 
-    async def proceed_with_transcription(self):
-        """Proceed with extraction, trimming and transcription from CONFIGURE_ASR step"""
+    async def proceed_with_transcription(self, preassigned_titles: Optional[Dict[int, str]] = None) -> Dict[str, Any]:
+        """Proceed with extraction, trimming and transcription from CONFIGURE_ASR step.
+
+        Cues whose index appears in ``preassigned_titles`` skip extraction/transcription and
+        inherit the supplied title directly. If every cue is preassigned, this short-circuits
+        to ``skip_transcription`` since there is nothing to transcribe.
+        """
+        preassigned = preassigned_titles or {}
         try:
+            # When every cue has a preassigned title there is nothing to transcribe;
+            # fall through to skip_transcription which applies titles directly.
+            if preassigned and len(preassigned) >= len(self.cues):
+                return await self.skip_transcription(preassigned_titles=preassigned)
+
             # First extract audio segments with the model-appropriate buffer
-            await self.extract_segments()
+            await self.extract_segments(preassigned_titles=preassigned)
 
             # Check if extraction was cancelled
             if self.segment_files is None or self.step != Step.AUDIO_EXTRACTION:
@@ -1395,7 +1415,7 @@ class ProcessingPipeline:
             await self._create_trimmed_segments()
 
             # Then transcribe the trimmed segments
-            await self._transcribe_segments()
+            transcripts = await self._transcribe_segments()
 
             # Check if transcription was cancelled
             if self.step != Step.ASR_PROCESSING:
@@ -1403,7 +1423,7 @@ class ProcessingPipeline:
                 return {"success": False, "message": "Processing was cancelled"}
 
             # Create initial chapters
-            await self._create_initial_chapters()
+            await self._create_initial_chapters(transcripts, preassigned_titles=preassigned)
 
             # Check if chapter creation was cancelled
             if self.step != Step.CHAPTER_EDITING:
@@ -1413,7 +1433,7 @@ class ProcessingPipeline:
             return {
                 "success": True,
                 "book": self.book,
-                "chapters": self.transcribed_chapters,
+                "chapters": self.chapters,
                 "segment_files": self.segment_files,
                 "step": Step.CHAPTER_EDITING,
                 "message": "Chapter extraction and transcription complete",
@@ -1421,34 +1441,37 @@ class ProcessingPipeline:
         except asyncio.CancelledError:
             logger.info("Processing was cancelled during transcription")
             await self.restart_at_step(RestartStep.CONFIGURE_ASR)
+            return {"success": False, "message": "Processing was cancelled"}
         except Exception as e:
             logger.error(f"Failed to proceed with transcription: {e}", exc_info=True)
             await self.restart_at_step(RestartStep.CONFIGURE_ASR, f"Transcription failed: {str(e)}")
             raise
 
-    async def skip_transcription(self) -> Dict[str, Any]:
-        """Skip transcription and create empty chapters with timestamps only"""
+    async def skip_transcription(self, preassigned_titles: Optional[Dict[int, str]] = None) -> Dict[str, Any]:
+        """Skip transcription and create chapters with timestamps only.
+
+        If ``preassigned_titles`` is supplied, those titles are applied directly to the matching
+        cue indices instead of leaving them empty.
+        """
         try:
-            # Create chapter objects with empty titles
-            for timestamp in self.cues:
-                chapter = ChapterData(timestamp=timestamp)
-                self.transcribed_chapters.append(chapter)
+            preassigned = preassigned_titles or {}
 
-            # Also populate the main chapters list for the UI
-            self.chapters = self.transcribed_chapters.copy()
-
-            # Set empty transcripts to match chapter count
-            self.transcripts = [""] * len(self.cues)
+            self.chapters = []
+            # Create chapter objects, using any preassigned titles
+            for i, timestamp in enumerate(self.cues):
+                title = preassigned.get(i, "")
+                chapter = ChapterData(timestamp=timestamp, title=title)
+                self.chapters.append(chapter)
 
             # self.step = Step.CHAPTER_EDITING
             self._notify_progress(Step.CHAPTER_EDITING, 0)
 
-            logger.info(f"Skipped transcription, created {len(self.transcribed_chapters)} empty chapters")
+            logger.info(f"Skipped transcription, created {len(self.chapters)} chapters")
 
             return {
                 "success": True,
                 "book": self.book,
-                "chapters": self.transcribed_chapters,
+                "chapters": self.chapters,
                 "segment_files": [],
                 "step": Step.CHAPTER_EDITING,
                 "message": "Chapters created without transcription",
@@ -1459,12 +1482,12 @@ class ProcessingPipeline:
             await self.restart_at_step(RestartStep.CONFIGURE_ASR, f"Failed to create chapters: {str(e)}")
             raise
 
-    async def extract_segments(self) -> None:
+    async def extract_segments(self, preassigned_titles: Optional[Dict[int, str]] = None) -> None:
         """Extract initial audio segments after CONFIGURE_ASR step"""
         try:
             # Clean up any stale segments from a previous run before re-extracting
             self.cleanup_segment_files()
-            await self._extract_audio_segments()
+            await self._extract_audio_segments(preassigned_titles=preassigned_titles)
 
             # Check if extraction was cancelled
             if self.segment_files is None or self.step != Step.AUDIO_EXTRACTION:
@@ -1579,15 +1602,16 @@ class ProcessingPipeline:
         try:
             # Set the selected cues directly from provided timestamps
             self.cues = sorted(timestamps)
-            self.include_unaligned = include_unaligned or []
 
             # Add unaligned cues if specified
-            if self.include_unaligned:
+            if include_unaligned:
                 self.cues = self._merge_unaligned_timestamps(
                     self.cues,
                     self.existing_cue_sources,
-                    self.include_unaligned,
+                    include_unaligned,
                 )
+
+            self.cues = self._filter_cues_by_duration(self.cues)
 
             logger.info(f"Selected {len(self.cues)} initial chapters")
 
@@ -1606,10 +1630,6 @@ class ProcessingPipeline:
                 RestartStep.INITIAL_CHAPTER_SELECTION, f"Initial chapter selection failed: {str(e)}"
             )
             raise
-
-    def get_segment_count(self) -> int:
-        """Get the number of segments that will be transcribed"""
-        return len(self.cues) if self.cues else 0
 
     async def submit_chapters(self, chapters: List[ChapterData]) -> bool:
         """Submit final chapters to Audiobookshelf"""

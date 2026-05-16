@@ -4,32 +4,32 @@
   import { api } from '../utils/api';
   import ASRSettings from './ASRSettings.svelte';
   import DocLink from './DocLink.svelte';
+  import AlignedTitlesPanel from './configure_asr/AlignedTitlesPanel.svelte';
+  import type { PreassignedTitle } from '../types/api';
 
   let loading = $state(false);
-  let segmentCount = $state(0);
+  let cues = $state<number[]>([]);
+  let preassignedTitles = $state<PreassignedTitle[]>([]);
 
-  interface SegmentCountResponse {
-    segment_count: number;
-  }
+  let cueSources = $derived($session.cueSources ?? []);
+  let toTranscribeCount = $derived(cues.length - preassignedTitles.length);
 
-  // Load segment count
-  async function loadSegmentCount() {
+  async function loadCues() {
     try {
-      const response = (await api.session.getSegmentCount()) as SegmentCountResponse;
-      segmentCount = response.segment_count;
+      const response = await api.session.getSelectedCues();
+      cues = response.cues;
     } catch (error) {
-      console.error('Failed to load segment count:', error);
-      segmentCount = 0;
+      console.error('Failed to load selected cues:', error);
+      cues = [];
     }
   }
 
-  // Action handlers
   async function proceedWithTranscription() {
     if (loading) return;
 
     loading = true;
     try {
-      await api.session.configureASR('transcribe');
+      await api.session.configureASR('transcribe', preassignedTitles);
     } catch (error) {
       console.error('Failed to start transcription:', error);
       session.setError('Failed to start transcription: ' + (error as Error).message);
@@ -43,7 +43,7 @@
 
     loading = true;
     try {
-      await api.session.configureASR('skip');
+      await api.session.configureASR('skip', preassignedTitles);
     } catch (error) {
       console.error('Failed to skip transcription:', error);
       session.setError('Failed to skip transcription: ' + (error as Error).message);
@@ -53,7 +53,7 @@
   }
 
   onMount(async () => {
-    await loadSegmentCount();
+    await loadCues();
   });
 </script>
 
@@ -63,8 +63,8 @@
       Transcribe Titles <DocLink path="/reference/transcription/" featureName="Transcription Settings" size="16" />
     </h2>
     <p>
-      Titles will be generated for <strong>{segmentCount}</strong>
-      chapter{segmentCount !== 1 ? 's' : ''} using a local transcription model.<br />
+      Titles will be generated for <strong>{toTranscribeCount}</strong>
+      chapter{toTranscribeCount !== 1 ? 's' : ''} using a local transcription model.<br />
       Configure the transcription settings below.
     </p>
   </div>
@@ -83,15 +83,25 @@
       {/if}
     </button>
 
-    <button class="btn btn-verify" onclick={proceedWithTranscription} disabled={loading}>
+    <button
+      class="btn btn-verify"
+      onclick={proceedWithTranscription}
+      disabled={loading || (toTranscribeCount === 0 && preassignedTitles.length === 0)}
+    >
       {#if loading}
         <span class="btn-spinner"></span>
         Starting…
+      {:else if toTranscribeCount === 0 && preassignedTitles.length > 0}
+        Apply {preassignedTitles.length} Title{preassignedTitles.length === 1 ? '' : 's'}
       {:else}
-        Transcribe
+        Transcribe {toTranscribeCount} Title{toTranscribeCount === 1 ? '' : 's'}
       {/if}
     </button>
   </div>
+
+  {#if cueSources.length > 0 && cues.length > 0}
+    <AlignedTitlesPanel {cues} {cueSources} bind:preassignedTitles />
+  {/if}
 </div>
 
 <style>

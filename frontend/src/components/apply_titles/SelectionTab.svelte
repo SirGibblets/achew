@@ -1,11 +1,12 @@
 <script lang="ts">
-  import { onMount, onDestroy, tick } from 'svelte';
-  import { chapters } from '../../stores/session';
-  import { audio, currentSegmentId, isPlaying } from '../../stores/audio';
+  import CornerDownRight from '@lucide/svelte/icons/corner-down-right';
   import Pause from '@lucide/svelte/icons/pause';
   import Play from '@lucide/svelte/icons/play';
+  import { onDestroy, onMount, tick } from 'svelte';
+  import { audio, currentSegmentId, isPlaying } from '../../stores/audio';
+  import { chapters } from '../../stores/session';
   import type { ChapterData } from '../../types/chapter';
-  import type { ExistingCueSource, ExistingCue } from '../../types/sources';
+  import type { ExistingCue, ExistingCueSource } from '../../types/sources';
 
   interface TitleMapping {
     chapter_id: string;
@@ -351,10 +352,16 @@
         </button>
         <span class="title">
           {#if paired}
-            <span class="title-original-strikethrough" class:fallback={!chapter.title}
-              >{chapter.title || 'No Title'}</span
-            >
-            <span class="title-new">{paired.title}</span>
+            <span class="title-original-superscript" class:fallback={!chapter.title}>
+              {chapter.title || 'No Title'}
+            </span>
+            <span class="title-new" class:unchanged={paired.title === chapter.title}>
+              &nbsp;<CornerDownRight
+                size="14"
+                style="margin-right: 0.15rem;"
+                color={paired.title === chapter.title ? 'var(--text-muted)' : 'var(--primary-color)'}
+              />{paired.title}
+            </span>
           {:else}
             <span class="title-original" class:fallback={!chapter.title}>{chapter.title || 'No Title'}</span>
           {/if}
@@ -436,8 +443,8 @@
     align-items: center;
     gap: 0.4rem;
     padding: 0.35rem 0.6rem;
-    min-height: 3rem;
-    font-size: 0.82rem;
+    min-height: 3.5rem;
+    font-size: 0.875rem;
     cursor: pointer;
     opacity: 0.4;
     user-select: none;
@@ -445,7 +452,7 @@
   }
 
   .col-row:nth-child(even) {
-    background: var(--hover-bg, rgba(128, 128, 128, 0.06));
+    background: rgba(128, 128, 128, 0.06);
   }
 
   .col-row:hover {
@@ -502,11 +509,15 @@
   }
 
   .title-new {
-    color: var(--primary-color);
-    font-weight: 500;
+    color: var(--text-primary);
+    font-weight: 600;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .title-new.unchanged {
+    color: var(--text-muted);
   }
 
   .title-original {
@@ -515,14 +526,13 @@
     white-space: nowrap;
   }
 
-  .title-original-strikethrough {
+  .title-original-superscript {
     color: var(--text-muted);
-    text-decoration: line-through;
     font-size: 0.65rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    line-height: 1.1;
+    line-height: 1.2;
   }
 
   .fallback {
