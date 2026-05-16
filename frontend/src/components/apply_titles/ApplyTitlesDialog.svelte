@@ -315,7 +315,7 @@
 
   .modal-dialog {
     width: 90%;
-    max-width: 720px;
+    max-width: 920px;
     max-height: 90vh;
     background: var(--bg-card);
     border-radius: 0.5rem;

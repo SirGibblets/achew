@@ -21,5 +21,6 @@ Some examples:
 2. Choose **Regenerate Titles** on the *Select a Workflow* screen.
 3. **Pick a source**, e.g. Embedded Chapters. If there are no sources, or you wish to include additional sources, click the **Add Chapter Source** button near the bottom.
 4. Click the **Continue with...** button.
-5. On the **Transcribe Titles** screen, choose your [transcription settings](../reference/transcription.md) and click **Transcribe**. The first few seconds of audio at each chapter timestamp will be transcribed into a title.
-6. After transcription has finished, use the [Chapter Editor](../editor/index.md) to review and polish the chapters.
+5. On the **Transcribe Titles** screen, choose your [transcription settings](../reference/transcription.md). If you have another [source](../getting-started/chapter-sources.md) with chapters whose timestamps line up with the source you originally selected for this workflow, you can optionally enable **Use aligned titles from** to pick and choose titles to use directly without transcribing them. See [Using aligned titles](../reference/transcription.md#using-aligned-titles) for details.
+6. Click **Transcribe Titles**. The first few seconds of audio at each chapter timestamp will be transcribed into a title.
+7. After transcription has finished, use the [Chapter Editor](../editor/index.md) to review and polish the chapters.

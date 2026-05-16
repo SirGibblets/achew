@@ -37,8 +37,14 @@ class ASROptionsRequest(BaseModel):
     segment_length: float = 8.0
 
 
+class PreassignedTitle(BaseModel):
+    cue_index: int
+    title: str
+
+
 class ConfigureASRRequest(BaseModel):
     action: str  # "transcribe" or "skip"
+    preassigned_titles: List[PreassignedTitle] = []
 
 
 class RealignChapterRequest(BaseModel):
@@ -380,12 +386,28 @@ async def configure_asr(request: ConfigureASRRequest, background_tasks: Backgrou
 
         pipeline = app_state.pipeline
 
+        # Validate preassigned titles and build the cue_index -> title map
+        cue_count = len(pipeline.cues)
+        preassigned: Dict[int, str] = {}
+        for item in request.preassigned_titles:
+            if item.cue_index < 0 or item.cue_index >= cue_count:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"preassigned_titles cue_index {item.cue_index} out of range [0, {cue_count})",
+                )
+            if item.cue_index in preassigned:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"preassigned_titles contains duplicate cue_index {item.cue_index}",
+                )
+            preassigned[item.cue_index] = item.title
+
         async def process_asr_action():
             try:
                 if request.action == "transcribe":
-                    await pipeline.proceed_with_transcription()
+                    await pipeline.proceed_with_transcription(preassigned_titles=preassigned)
                 elif request.action == "skip":
-                    await pipeline.skip_transcription()
+                    await pipeline.skip_transcription(preassigned_titles=preassigned)
             except Exception as e:
                 logger.error(f"Failed to process ASR action: {e}")
 
@@ -403,9 +425,9 @@ async def configure_asr(request: ConfigureASRRequest, background_tasks: Backgrou
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/pipeline/segment-count")
-async def get_segment_count():
-    """Get the number of segments that will be transcribed"""
+@router.get("/pipeline/selected-cues")
+async def get_selected_cues():
+    """Get the cues that are queued for transcription"""
     try:
         app_state = get_app_state()
 
@@ -415,19 +437,17 @@ async def get_segment_count():
         if app_state.step != Step.CONFIGURE_ASR:
             raise HTTPException(
                 status_code=400,
-                detail="Pipeline must be in configure_asr step to get segment count",
+                detail="Pipeline must be in configure_asr step to get selected cues",
             )
 
-        segment_count = app_state.pipeline.get_segment_count()
-
         return {
-            "segment_count": segment_count,
+            "cues": list(app_state.pipeline.cues),
         }
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get segment count: {e}")
+        logger.error(f"Failed to get selected cues: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

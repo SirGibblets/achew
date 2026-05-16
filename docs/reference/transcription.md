@@ -61,6 +61,17 @@ Then, configure the other options:
 - **Use Bias Words:** (Whisper only) Enables a word list that can help guide the transcription model toward more consistent results. This list is editable so you can tune it for your specific book or language (you'll want to use words in the target language). Use the :lucide-rotate-ccw:{ .icon-token } Reset button in the top right of the edit area to reset to the default word list.
 - **Transcription Length:** Length of the audio segment extracted for transcription, before trimming. The default of 8 seconds generally works well, but you may need to increase this for books that have unusually long chapter titles.
 
+## Using aligned titles
+
+If you have one or more full [chapter sources](../getting-started/chapter-sources.md) whose timestamps line up with the chapters you're about to transcribe, you can use those titles directly instead of transcribing them from scratch.
+
+![Aligned Titles](../img/aligned-titles-dark.webp#only-dark)
+![Aligned Titles](../img/aligned-titles-light.webp#only-light)
+
+On the **Transcribe Titles** screen, check the box labeled **Use aligned titles from** and pick a source from the dropdown. A list shows each chapter from the selected source that aligns with any chapter pending transcription. From here you can select or deselect the titles you wish to use. Checking the **Show unaligned chapters** box (if available) will also show chapters from the selected source that *do not* align with any pending chapters.
+
+When one or more aligned titles are selected, clicking **Transcribe Titles** will use those selected titles and only the remaining titles will be transcribed. Clicking **Skip Transcription** will also use the selected titles, but will leave the remaining titles blank.
+
 ## Tips for improving transcription
 
 Transcription models can vary wildly on capitalization, number formatting, and punctuation. For the most part that's just the nature of the beast, but there are a few things you can do:
