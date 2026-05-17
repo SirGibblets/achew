@@ -3,6 +3,10 @@
     .md-typeset table:not([class]) td:nth-child(1) {
         min-width: 1rem;
     }
+    .md-typeset img[align=left] {
+        margin: 1em 1em 0 0;
+        padding-top: 0.35em;
+    }
 </style>
 
 # Chapter Editor Overview
@@ -17,7 +21,7 @@ The editor shows a list of chapters and an Action Bar at the bottom.
 | # | Component | What it does |
 |--:|---|---|
 | 1 | :material-checkbox-marked:{ .icon-token .primary } Checkbox | Selects or deselects the chapter. <kbd>Shift</kbd>-click another checkbox to apply the same selection state to every chapter in the range between the two clicks. The checkbox at the very top can be used to select/deselect all chapters. |
-| 2 | Timestamp | The chapter timestamp. Clicking on the timestamp allows you to edit it. The very first chapter (timestamp `0`) is fixed and cannot be edited. Toggle between formatted timestamps and raw seconds in the [editor settings](#editor-settings). |
+| 2 | Timestamp | The chapter timestamp. Clicking on the timestamp allows you to edit it: <div style="height: 0.5rem;"></div> ![Inline Timestamp Editi](../img/timestamp-edit-dark.webp#only-dark){ width="200" align=left} ![Inline Timestamp Editi](../img/timestamp-edit-light.webp#only-light){ width="200" alight=left} While editing, use the <kbd>‹</kbd> and <kbd>›</kbd> buttons (or [Keyboard Shortcuts](keyboard-shortcuts.md#inline-timestamp-shortcuts)) to jump to nearby detected cues. The very first chapter (at timestamp `0`) is fixed and cannot be edited. Toggle between formatted timestamps and raw seconds in the [editor settings](#editor-settings). |
 | 3 | Offset | Shown when using the [Realignment](../workflows/realign-chapters.md) workflow. Shows the difference between the original source timestamp and the realigned one. A warning icon :lucide-triangle-alert:{ .icon-token .warning } appears on low-confidence or guessed alignments; give those a listen to verify accuracy before submitting your chapters. |
 | 4 | Transcript | The raw transcript for the chapter. Non-editable, serves as a reference for writing the title. Long transcripts are truncated; hover over the transcript to see the full text. The transcript column can be hidden via the [editor settings](#editor-settings). |
 | 5 | :lucide-arrow-right:{ .icon-token .primary } Use Transcript | Replaces the current title with the transcribed text. Disabled when there is no transcript, or when the title already matches the transcript. |

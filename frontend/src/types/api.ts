@@ -201,6 +201,10 @@ export interface DetectedCuesResponse {
   existing_cue_sources: ExistingCueSource[];
 }
 
+export interface NearbyCuesResponse {
+  cues: DetectedCueEntry[];
+}
+
 export interface AddOptionsExistingCue {
   timestamp: number;
   title: string;

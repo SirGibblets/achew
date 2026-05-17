@@ -2,7 +2,7 @@
   import { onDestroy, onMount, tick } from 'svelte';
   import { SvelteMap } from 'svelte/reactivity';
   import { get } from 'svelte/store';
-  import { slide } from 'svelte/transition';
+  import { fade, slide } from 'svelte/transition';
   import { audio, currentSegmentId, isPlaying } from '../stores/audio';
   import DocLink from './DocLink.svelte';
   import {
@@ -27,6 +27,8 @@
   import ArrowRight from '@lucide/svelte/icons/arrow-right';
   import BookMarked from '@lucide/svelte/icons/book-marked';
   import Check from '@lucide/svelte/icons/check';
+  import ChevronLeft from '@lucide/svelte/icons/chevron-left';
+  import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import Pause from '@lucide/svelte/icons/pause';
   import Play from '@lucide/svelte/icons/play';
   import Plus from '@lucide/svelte/icons/plus';
@@ -43,7 +45,7 @@
   import CircleHelp from '@lucide/svelte/icons/circle-help';
   import Mic from '@lucide/svelte/icons/mic';
 
-  import type { EditorSettings } from '../types/api';
+  import type { DetectedCueEntry, EditorSettings } from '../types/api';
 
   interface AICleanupErrorInfo {
     message: string;
@@ -74,6 +76,13 @@
   let editingTimestampId = $state<string | null>(null);
   let timestampInputValue = $state('');
   let timestampValidationError = $state<string | null>(null);
+
+  // Jump-to-cue state (populated while a timestamp is being edited)
+  type JumpTarget = { timestamp: number; isOriginal: boolean };
+  let nearbyCues = $state<DetectedCueEntry[] | null>(null);
+  let editingOriginalTimestamp = $state<number | null>(null);
+  let nearbyCuesError = $state<string | null>(null);
+  let currentJumpPosition = $state<number | null>(null);
 
   // Shift-click range selection
   let lastClickedChapterId = $state<string | null>(null);
@@ -609,6 +618,25 @@
     editingTimestampId = chapterId;
     timestampInputValue = formatTimestamp(currentTimestamp);
     timestampValidationError = null;
+    editingOriginalTimestamp = currentTimestamp;
+    currentJumpPosition = currentTimestamp;
+    nearbyCues = null;
+    nearbyCuesError = null;
+    api.chapters
+      .getNearbyCues(chapterId)
+      .then((res) => {
+        if (editingTimestampId === chapterId) nearbyCues = res.cues;
+      })
+      .catch((err) => {
+        if (editingTimestampId === chapterId) nearbyCuesError = handleApiError(err);
+      });
+  }
+
+  function clearJumpState() {
+    nearbyCues = null;
+    editingOriginalTimestamp = null;
+    nearbyCuesError = null;
+    currentJumpPosition = null;
   }
 
   function cancelTimestampEdit() {
@@ -618,6 +646,56 @@
     editingTimestampId = null;
     timestampInputValue = '';
     timestampValidationError = null;
+    clearJumpState();
+  }
+
+  function buildJumpList(): JumpTarget[] {
+    if (editingOriginalTimestamp === null || nearbyCues === null) return [];
+    const COLLISION = 0.1;
+    const original = editingOriginalTimestamp;
+    const result: JumpTarget[] = [{ timestamp: original, isOriginal: true }];
+    for (const cue of nearbyCues) {
+      if (Math.abs(cue.timestamp - original) > COLLISION) {
+        result.push({ timestamp: cue.timestamp, isOriginal: false });
+      }
+    }
+    result.sort((a, b) => a.timestamp - b.timestamp);
+    return result;
+  }
+
+  function findJumpTarget(direction: 'prev' | 'next', current: number): JumpTarget | undefined {
+    const list = buildJumpList();
+    if (direction === 'next') {
+      return list.find((t) => t.timestamp > current);
+    }
+    for (let i = list.length - 1; i >= 0; i--) {
+      if (list[i].timestamp < current) return list[i];
+    }
+    return undefined;
+  }
+
+  function jumpToCue(direction: 'prev' | 'next', chapterId: string) {
+    if (currentJumpPosition === null) return;
+    const target = findJumpTarget(direction, currentJumpPosition);
+    if (!target) return;
+    timestampInputValue = formatTimestamp(target.timestamp);
+    currentJumpPosition = target.timestamp;
+    timestampValidationError = null;
+    audio.play(`timestamp-edit-${chapterId}`, target.timestamp);
+  }
+
+  function jumpTooltip(target: JumpTarget | undefined, current: number, dir: 'prev' | 'next'): string {
+    if (!target) {
+      return dir === 'next'
+        ? 'No cues before next chapter. Use the Add Chapter button to scan for cues.'
+        : 'No cues after previous chapter. Use the Add Chapter button to scan for cues.';
+    }
+    if (target.isOriginal) {
+      return `Jump to original timestamp: ${formatTimestamp(target.timestamp)}`;
+    }
+    const delta = target.timestamp - current;
+    const sign = delta >= 0 ? '+' : '-';
+    return `Jump to ${dir} cue: ${formatTimestamp(target.timestamp)} (${sign}${formatTimestamp(Math.abs(delta))})`;
   }
 
   function parseTimestampInput(input: string) {
@@ -703,18 +781,30 @@
       }
     } else if (event.key === 'ArrowUp') {
       event.preventDefault();
+      if (event.shiftKey) {
+        jumpToCue('next', chapterId);
+        return;
+      }
       if ($currentSegmentId && $currentSegmentId.startsWith('timestamp-edit-')) {
         audio.stop();
       }
       const current = parseTimestampInput(timestampInputValue) || 0;
-      timestampInputValue = formatTimestamp(current + 1);
+      const nudged = current + 1;
+      timestampInputValue = formatTimestamp(nudged);
+      currentJumpPosition = nudged;
     } else if (event.key === 'ArrowDown') {
       event.preventDefault();
+      if (event.shiftKey) {
+        jumpToCue('prev', chapterId);
+        return;
+      }
       if ($currentSegmentId && $currentSegmentId.startsWith('timestamp-edit-')) {
         audio.stop();
       }
       const current = parseTimestampInput(timestampInputValue) || 0;
-      timestampInputValue = formatTimestamp(Math.max(0, current - 1));
+      const nudged = Math.max(0, current - 1);
+      timestampInputValue = formatTimestamp(nudged);
+      currentJumpPosition = nudged;
     }
   }
 
@@ -726,8 +816,10 @@
     const parsedTimestamp = parseTimestampInput(timestampInputValue);
     if (parsedTimestamp !== null && editingTimestampId !== null) {
       timestampValidationError = validateTimestamp(editingTimestampId, parsedTimestamp);
+      currentJumpPosition = parsedTimestamp;
     } else if (parsedTimestamp === null) {
       timestampValidationError = 'Invalid timestamp format. Use hh:mm:ss, mm:ss, or seconds.';
+      currentJumpPosition = null;
     }
   }
 
@@ -877,15 +969,53 @@
                         <Play size="14" />
                       {/if}
                     </button>
-                    <input
-                      class="timestamp-input"
-                      class:error={timestampValidationError}
-                      bind:value={timestampInputValue}
-                      onkeydown={(e) => handleTimestampInputKeydown(e, chapter.id)}
-                      oninput={handleTimestampInputChange}
-                      placeholder="hh:mm:ss or seconds"
-                      use:focusInput
-                    />
+                    <div class="timestamp-input-wrap">
+                      <input
+                        class="timestamp-input"
+                        class:error={timestampValidationError}
+                        bind:value={timestampInputValue}
+                        onkeydown={(e) => handleTimestampInputKeydown(e, chapter.id)}
+                        oninput={handleTimestampInputChange}
+                        placeholder="hh:mm:ss or seconds"
+                        use:focusInput
+                      />
+                      {#if nearbyCuesError !== null}
+                        <span
+                          class="jump-fetch-error"
+                          data-tooltip={`Could not load cues: ${nearbyCuesError}`}
+                          transition:fade={{ duration: 250 }}
+                        >
+                          <TriangleAlert size="10" />
+                        </span>
+                      {:else}
+                        {@const cuesLoaded = nearbyCues !== null}
+                        {@const current = currentJumpPosition ?? parseTimestampInput(timestampInputValue) ?? 0}
+                        {@const prevTarget = cuesLoaded ? findJumpTarget('prev', current) : undefined}
+                        {@const nextTarget = cuesLoaded ? findJumpTarget('next', current) : undefined}
+                        <button
+                          type="button"
+                          class="jump-btn jump-btn-prev"
+                          class:loaded={cuesLoaded}
+                          disabled={!cuesLoaded || !prevTarget}
+                          data-tooltip={jumpTooltip(prevTarget, current, 'prev')}
+                          onmousedown={(e) => e.preventDefault()}
+                          onclick={() => jumpToCue('prev', chapter.id)}
+                        >
+                          <ChevronLeft size="12" />
+                        </button>
+                        <button
+                          type="button"
+                          class="jump-btn jump-btn-next"
+                          class:loaded={cuesLoaded}
+                          disabled={!cuesLoaded || !nextTarget}
+                          data-tooltip={jumpTooltip(nextTarget, current, 'next')}
+                          onmousedown={(e) => e.preventDefault()}
+                          onclick={() => jumpToCue('next', chapter.id)}
+                        >
+                          <ChevronRight size="12" />
+                        </button>
+                      {/if}
+                    </div>
                     {#if timestampValidationError}
                       <button class="timestamp-warning-btn" data-tooltip={timestampValidationError}>
                         <TriangleAlert size="14" />
@@ -1529,7 +1659,7 @@
   .timestamp-edit-overlay {
     position: absolute;
     top: 0.5rem;
-    left: -4rem;
+    left: -4.91rem;
     bottom: 0.5rem;
     display: flex;
     align-items: center;
@@ -1540,7 +1670,7 @@
     padding: 0.25rem 0.5rem;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     z-index: 1000;
-    min-width: 230px;
+    min-width: 262px;
   }
 
   .timestamp-play-btn {
@@ -1578,11 +1708,18 @@
     color: white;
   }
 
+  .timestamp-input-wrap {
+    position: relative;
+    flex: 1;
+    display: flex;
+    min-width: 0;
+  }
+
   .timestamp-input {
     flex: 1;
     border: none;
     border-radius: 0.25rem;
-    padding: 0.25rem 0.5rem;
+    padding: 0.25rem 1.4rem;
     font-size: 0.875rem;
     font-family: monospace;
     color: var(--text-primary);
@@ -1590,6 +1727,105 @@
     transition: all 0.2s ease;
     min-width: 0;
     width: 100%;
+  }
+
+  .jump-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.1rem;
+    height: 1.1rem;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    cursor: pointer;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+  }
+
+  .jump-btn.loaded {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .jump-btn :global(svg) {
+    opacity: 0.45;
+    transition: opacity 0.15s ease;
+  }
+
+  .jump-btn:hover:not(:disabled) :global(svg) {
+    opacity: 0.9;
+  }
+
+  .jump-btn:disabled {
+    cursor: default;
+  }
+
+  .jump-btn:disabled :global(svg) {
+    opacity: 0.2;
+  }
+
+  .jump-btn-prev {
+    left: 0.15rem;
+  }
+
+  .jump-btn-next {
+    right: 0.15rem;
+  }
+
+  .jump-btn[data-tooltip]:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%) translateY(-6px);
+    padding: 6px 10px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 0.8125rem;
+    line-height: 1.3;
+    white-space: nowrap;
+    z-index: 10001;
+    pointer-events: none;
+  }
+
+  .jump-fetch-error {
+    position: absolute;
+    right: 0.3rem;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--warning);
+    opacity: 0.6;
+    cursor: help;
+  }
+
+  .jump-fetch-error[data-tooltip]:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%) translateY(-6px);
+    padding: 6px 10px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 0.8125rem;
+    line-height: 1.3;
+    white-space: nowrap;
+    max-width: 260px;
+    z-index: 10001;
+    pointer-events: none;
   }
 
   .timestamp-input:focus {
