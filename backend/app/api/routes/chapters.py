@@ -132,6 +132,10 @@ class AddOptionsResponse(BaseModel):
     allow_vad_scan: bool = False
 
 
+class NearbyCuesResponse(BaseModel):
+    cues: List[DetectedCue]
+
+
 class PartialScanRequest(BaseModel):
     scan_type: Literal["normal", "vad"]
 
@@ -897,6 +901,45 @@ async def get_add_options(chapter_id: str):
         raise
     except Exception as e:
         logger.error(f"Failed to get add options: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/chapters/{chapter_id}/nearby-cues", response_model=NearbyCuesResponse)
+async def get_nearby_cues(chapter_id: str):
+    """Get detected cues between the previous and next chapters"""
+    try:
+        app_state = get_app_state()
+
+        if not app_state.pipeline:
+            raise HTTPException(status_code=404, detail="Pipeline not found")
+
+        if app_state.pipeline.step != Step.CHAPTER_EDITING:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Can only fetch nearby cues during editing. Current step: {app_state.pipeline.step.value}",
+            )
+
+        if not app_state.pipeline.book:
+            raise HTTPException(status_code=404, detail="Book not found")
+
+        chapters = sorted([ch for ch in app_state.pipeline.chapters if not ch.deleted], key=lambda ch: ch.timestamp)
+        current_index = next((i for i, ch in enumerate(chapters) if ch.id == chapter_id), -1)
+        if current_index == -1:
+            raise HTTPException(status_code=404, detail="Chapter not found")
+
+        prev_chapter = chapters[current_index - 1] if current_index > 0 else None
+        next_chapter = chapters[current_index + 1] if current_index < len(chapters) - 1 else None
+
+        min_timestamp = (prev_chapter.timestamp if prev_chapter else 0.0) + 1
+        max_timestamp = (next_chapter.timestamp if next_chapter else app_state.pipeline.book.duration) - 1
+
+        cues = [cue for cue in app_state.pipeline.detected_cues if min_timestamp < cue.timestamp < max_timestamp]
+        return NearbyCuesResponse(cues=cues)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get nearby cues: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

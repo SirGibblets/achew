@@ -24,6 +24,7 @@ import type {
   LLMProviderResponse,
   LLMProvidersResponse,
   LLMProviderValidationResponse,
+  NearbyCuesResponse,
   PipelineState,
   PreassignedTitle,
   SelectedCuesResponse,
@@ -276,6 +277,10 @@ export const chapters = {
 
   getAddOptions(chapterId: string) {
     return apiRequest<AddOptionsResponse>(`/chapters/add-options/${chapterId}`);
+  },
+
+  getNearbyCues(chapterId: string) {
+    return apiRequest<NearbyCuesResponse>(`/chapters/${chapterId}/nearby-cues`);
   },
 
   startPartialScan(chapterId: string, scanType: string) {
