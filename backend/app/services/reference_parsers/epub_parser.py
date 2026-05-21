@@ -1,7 +1,7 @@
 import logging
 
-from ...models.sources import ExistingTitleSource, TitleSourceType
-from .base_parser import BaseTitleParser
+from ...models.references import TitleReference, TitleRefType
+from .base_parser import BaseTitleRefParser
 
 logger = logging.getLogger(__name__)
 
@@ -21,10 +21,10 @@ def _extract_toc_titles(toc_items, depth=0) -> list[str]:
     return titles
 
 
-class EpubParser(BaseTitleParser):
+class EpubParser(BaseTitleRefParser):
     short_name = "EPUB"
 
-    def parse(self, file_path: str, source_name: str) -> ExistingTitleSource:
+    def parse(self, file_path: str, ref_name: str) -> TitleReference:
         """Parse an EPUB file and extract chapter titles from its TOC.
 
         Falls back to spine item titles if the TOC is empty.
@@ -55,13 +55,13 @@ class EpubParser(BaseTitleParser):
         if not titles:
             raise ValueError("Could not extract any chapter titles from EPUB")
 
-        name = self.ellipsize_name(source_name)
-        logger.info(f"Parsed {source_name} as EPUB title source ({len(titles)} titles)")
-        return ExistingTitleSource(
-            type=TitleSourceType.EPUB,
+        name = self.ellipsize_name(ref_name)
+        logger.info(f"Parsed {ref_name} as EPUB Title Reference ({len(titles)} titles)")
+        return TitleReference(
+            type=TitleRefType.EPUB,
             name=f"EPUB File ({name})",
             short_name=self.short_name,
             description=f'Chapter titles extracted from EPUB file "{name}"',
-            metadata={"File": source_name},
+            metadata={"File": ref_name},
             titles=titles,
         )

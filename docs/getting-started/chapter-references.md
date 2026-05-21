@@ -9,16 +9,16 @@
     }
 </style>
 
-# Chapter Sources
+# References
 
-Achew designates sets of external chapter reference data as **sources**. There are two kinds:
+Achew designates sets of external chapter data as **References**. There are two kinds:
 
-- **Full chapter sources**: These have timestamps *and* titles. They drive the Realign, Regenerate Titles, and Quick Edit workflows, and serve as points of comparison during initial chapter selection in the Smart Detect workflow. Full chapter sources can also be used anywhere a title-only source is accepted.
-- **Title-only sources**: These only have titles (no timestamps). These sources can be used as reference data during [AI Cleanup](../editor/ai-cleanup.md), and as input when using the [Apply Titles](../editor/apply-titles.md) feature. They cannot be used for chapter alignment.
+- **Chapter References**: These have timestamps *and* titles. They drive the Realign, Regenerate Titles, and Quick Edit workflows, and serve as points of comparison during initial chapter selection in the Smart Detect workflow. Chapter References can also be used anywhere a Title Reference is accepted.
+- **Title References**: These only have titles, no timestamps. They can be used with [AI Cleanup](../editor/ai-cleanup.md) and the [Apply Titles](../editor/apply-titles.md) feature. They cannot be used for chapter alignment.
 
-Sources stay loaded for the duration of your session and appear as options during workflow selection and as tabs in the editor's [Add Chapter Dialog](../editor/add-chapter-dialog.md).
+References stay loaded for the duration of your session. They appear as options during workflow selection and as tabs in the editor's [Add Chapter Dialog](../editor/add-chapter-dialog.md).
 
-## Full chapter sources
+## Chapter References
 
 ### :simple-audiobookshelf: Audiobookshelf
 The chapters currently set on the book in Audiobookshelf.
@@ -27,7 +27,7 @@ The chapters currently set on the book in Audiobookshelf.
 Auto-added if available.
 </div>
 
-### :material-tag-multiple: Embedded Metadata
+### :material-tag-multiple: Embedded Chapters
 Chapter markers stored inside the audio file's metadata.
 
 <div class="muted-section" markdown>
@@ -48,7 +48,7 @@ Chapter data from [Audnexus](https://audnex.us){:target="_blank"}, the same serv
 <div class="muted-section" markdown>
 Auto-added if the book is assigned an [ASIN](https://en.wikipedia.org/wiki/Amazon_Standard_Identification_Number){:target="_blank"} in Audiobookshelf.
 <br>
-Can also be searched/added via the **Add Chapter Source** dialog.
+Can also be searched/added via the **Add Chapter Reference** dialog.
 </div>
 
 ### :material-code-json: JSON File
@@ -70,7 +70,7 @@ A `.json` file containing an array of objects with timestamp[^1] and title field
 <div class="muted-section top-margin" markdown>
 Auto-added from **Library Files**[^2] named `chapters.json`.
 <br>
-Can also be uploaded via the **Add Chapter Source** dialog.
+Can also be uploaded via the **Add Chapter Reference** dialog.
 </div>
 
 ### :material-file-delimited: CSV File
@@ -79,7 +79,7 @@ A `.csv` file with columns for timestamps[^1] and titles. Achew tries to detect 
 <div class="muted-section" markdown>
 Auto-added from **Library Files**[^2] named `chapters.csv`.
 <br>
-Can also be uploaded via the **Add Chapter Source** dialog.
+Can also be uploaded via the **Add Chapter Reference** dialog.
 </div>
 
 ### :material-album: Cue Sheet
@@ -88,7 +88,7 @@ A standard cue sheet file (`.cue`).
 <div class="muted-section" markdown>
 Auto-added from **Library Files**[^2] named `*.cue`.
 <br>
-Can also be uploaded via the **Add Chapter Source** dialog.
+Can also be uploaded via the **Add Chapter Reference** dialog.
 </div>
 
 ### :lucide-bookmark-plus: Snapshot
@@ -98,7 +98,7 @@ A snapshot of the chapters you've produced inside Achew, usable only during the 
 Added using the **Create Snapshot** button on the [Review and Submit](../editor/review-submit-export.md#snapshot) screen.
 </div>
 
-## Title-only sources
+## Title References
 
 ### :material-file-document-outline: Text File
 A plain `.txt` file, one title per line. Blank lines are ignored. 
@@ -106,7 +106,7 @@ A plain `.txt` file, one title per line. Blank lines are ignored.
 <div class="muted-section" markdown>
 Auto-added from **Library Files**[^2] named `titles.txt`.
 <br>
-Can also be uploaded via the **Add Chapter Source** dialog.
+Can also be uploaded via the **Add Chapter Reference** dialog.
 </div>
 
 ### :material-book-open-variant: EPUB File
@@ -115,32 +115,32 @@ An `.epub` e-book file. Chapter titles are extracted from its Table of Contents.
 <div class="muted-section" markdown>
 Auto-added from **Library Files**[^2] named `*.epub`.
 <br>
-Can also be uploaded via the **Add Chapter Source** dialog.
+Can also be uploaded via the **Add Chapter Reference** dialog.
 </div>
 
 ### :material-playlist-edit: Custom Titles
 You can edit a list of custom titles directly in Achew:
 
-1. In the [Apply Titles](../editor/apply-titles.md) dialog or the [AI Cleanup](../editor/ai-cleanup.md) dialog, use the appropriate dropdown to select the **Custom Titles** source.
-2. Click the **Pencil** icon next to the source to open the editor.
+1. In the [Apply Titles](../editor/apply-titles.md) dialog or the [AI Cleanup](../editor/ai-cleanup.md) dialog, use the appropriate dropdown to select the **Custom Titles** Reference.
+2. Click the **Pencil** icon next to the Reference to open the editor.
 3. Type or paste your desired list of titles, one title per line. Blank lines are ignored.
 
 <hr>
 <br>
 
-## Adding Chapter Sources
+## Adding Chapter References
 
-New sources can be manually added using the **Add Chapter Source** dialog. This dialog can be accessed from [Workflow Selection](./workflows-overview.md), the [Apply Titles](../editor/apply-titles.md) dialog, or the [AI Cleanup](../editor/ai-cleanup.md) dialog: 
+New References can be manually added using the **Add Chapter Reference** dialog. This dialog can be accessed from [Workflow Selection](./workflows-overview.md), the [Apply Titles](../editor/apply-titles.md) dialog, or the [AI Cleanup](../editor/ai-cleanup.md) dialog: 
 
-![Add Chapter Source button](../img/add-source-button-light.webp#only-light)
-![Add Chapter Source button](../img/add-source-button-dark.webp#only-dark)
+![Add Chapter Reference button](../img/add-reference-button-light.webp#only-light)
+![Add Chapter Reference button](../img/add-reference-button-dark.webp#only-dark)
 
 Two tabs are available: **Upload File** and **Audnexus Search**.
 
 ### Upload File 
 
-![Upload File tab](../img/add-source-upload-light.webp#only-light){ width="480" }
-![Upload File tab](../img/add-source-upload-dark.webp#only-dark){ width="480" }
+![Upload File tab](../img/add-reference-upload-light.webp#only-light){ width="480" }
+![Upload File tab](../img/add-reference-upload-dark.webp#only-dark){ width="480" }
 
 In the **Upload File** tab, drop a file into the upload zone or click **browse** to pick one. 
 
@@ -148,17 +148,17 @@ Supported Formats:
 
 <div class="grid" markdown>
 
-| Format | Extension | Source type |
-|--------|-----------|-------------|
-| [JSON file](#json-file) | `.json` | Full chapter source |
-| [CSV file](#csv-file) | `.csv` | Full chapter source |
-| [Cue sheet](#cue-sheet) | `.cue` | Full chapter source |
-| [Text file](#text-file) | `.txt` | Title-only source |
-| [EPUB file](#epub-file) | `.epub` | Title-only source |
+| Format | Extension | Reference type |
+|--------|-----------|----------------|
+| [JSON file](#json-file) | `.json` | Chapter Reference |
+| [CSV file](#csv-file) | `.csv` | Chapter Reference |
+| [Cue sheet](#cue-sheet) | `.cue` | Chapter Reference |
+| [Text file](#text-file) | `.txt` | Title Reference |
+| [EPUB file](#epub-file) | `.epub` | Title Reference |
 
 <div markdown>
 !!! tip
-    Although title-only sources (`.txt` or `.epub`) cannot be used to start a workflow, you are allowed to upload them from the workflow selection screen; you'll be able to use them later when [Applying Titles](../editor/apply-titles.md) or running [AI Cleanup](../editor/ai-cleanup.md).
+    Although Title References (`.txt` or `.epub`) cannot be used to start a workflow, you are allowed to upload them from the workflow selection screen; you'll be able to use them later when [Applying Titles](../editor/apply-titles.md) or running [AI Cleanup](../editor/ai-cleanup.md).
 </div>
 
 </div>
@@ -170,13 +170,13 @@ Supported Formats:
 
 In the **Audnexus Search** tab, you can search the [Audnexus](https://audnex.us){:target="_blank"} database by book title and/or author. Changing the **provider** allows you to change which Audible storefront region is searched.
 
-![Audnexus Search tab](../img/add-source-search-light.webp#only-light){ width="480"; .center}
-![Audnexus Search tab](../img/add-source-search-dark.webp#only-dark){ width="480"; .center}
+![Audnexus Search tab](../img/add-reference-search-light.webp#only-light){ width="480"; .center}
+![Audnexus Search tab](../img/add-reference-search-dark.webp#only-dark){ width="480"; .center}
 
-Each result displays relevant information that can help you decide on a good match. Use the **Eye** button in the top right of each result to preview its chapter list, and click the **Add** button to add it as a chapter source.
+Each result displays relevant information that can help you decide on a good match. Use the **Eye** button in the top right of each result to preview its chapter list, and click the **Add** button to add it as a Chapter Reference.
 
 !!! tip
-    If the book has an ASIN set in Audiobookshelf, Achew auto-adds the Audnexus source for the US storefront at load time. Use this dialog to add new sources using a different region, or to search by title when no ASIN is set.
+    If the book has an ASIN set in Audiobookshelf, Achew auto-adds the Audnexus Reference for the US storefront at load time. Use this dialog to add new References using a different region, or to search by title when no ASIN is set.
 
 [^1]:
     Timestamps in JSON and CSV files can be in any of these formats:

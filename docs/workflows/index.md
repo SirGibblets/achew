@@ -5,7 +5,7 @@ Achew offers four main workflows. If you are not sure which to pick, see [Choosi
 - **[Smart Detect](smart-detect.md):**  Find chapter cues from the audio itself.
 - **[Realign Chapters](realign-chapters.md):**  Fix misaligned chapter timing.
 - **[Regenerate Titles](regenerate-titles.md):**  Transcribe new titles at existing timestamps.
-- **[Quick Edit](quick-edit.md):**  Load an existing chapter source directly into the editor.
+- **[Quick Edit](quick-edit.md):**  Load an existing Chapter Reference directly into the editor.
 
 ## Completion chime
 

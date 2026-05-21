@@ -2,7 +2,7 @@
 
 ## Chapter
 
-A **chapter** is exactly what you might think: the combination of a title and a timestamp. Every row in the editor is a chapter.
+A **chapter** is exactly what you might think: the combination of a title and a timestamp. Every row in the [Chapter Editor](../editor/overview.md) is a chapter. You save finished chapters back to Audiobookshelf. You can use chapters from [Chapter References](./chapter-references.md) to start workflows.
 
 ## Cue
 

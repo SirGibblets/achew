@@ -6,7 +6,7 @@
   import CustomInstructionsList from './CustomInstructionsList.svelte';
   import DocLink from './DocLink.svelte';
   import Icon from './Icon.svelte';
-  import AddSourceDialog from './AddSourceDialog.svelte';
+  import AddReferenceDialog from './AddReferenceDialog.svelte';
   import CustomTitlesDialog from './CustomTitlesDialog.svelte';
 
   // Icons
@@ -22,7 +22,7 @@
   import Search from '@lucide/svelte/icons/search';
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 
-  import type { ExistingCueSource } from '../types/sources';
+  import type { ChapterReference } from '../types/references';
   import type { AIOptions, LLMProvider, LLMModel } from '../types/api';
 
   interface ChapterTitleEntry {
@@ -34,13 +34,13 @@
   interface Props {
     isOpen?: boolean;
     sessionStep?: string;
-    cueSources?: ExistingCueSource[];
+    chapterRefs?: ChapterReference[];
     onconfirm?: (aiOptions: AIOptions) => void;
     onerror?: (err: unknown) => void;
     oncancel?: () => void;
   }
 
-  let { isOpen = $bindable(false), sessionStep = '', cueSources = [], onconfirm, onerror, oncancel }: Props = $props();
+  let { isOpen = $bindable(false), sessionStep = '', chapterRefs = [], onconfirm, onerror, oncancel }: Props = $props();
 
   // AI Cleanup options
   let aiOptions = $state({
@@ -49,7 +49,7 @@
     deselectNonChapters: false,
     keepDeselectedTitles: false,
     usePreferredTitles: false,
-    preferredTitlesSource: '',
+    preferredTitlesRef: '',
     additionalInstructions: '',
     provider_id: '',
     model_id: '',
@@ -58,38 +58,38 @@
   // Features section collapsed state
   let featuresCollapsed = $state(true);
 
-  // Available chapter sources for preferred titles (cue + title) — kept in sync
-  // reactively so SOURCES_UPDATE messages never trigger a full options reload.
-  let availableChapterSources = $derived.by(() => {
-    const fromCue = cueSources.map((source) => ({
-      id: source.id,
-      type: source.type,
-      name: source.name,
-      count: source.cues.length,
-      chapters: source.cues.map((cue, i) => ({
-        timestamp: cue.timestamp,
-        title: cue.title || `Chapter ${i + 1}`,
+  // Available chapter references for preferred titles — kept in sync
+  // reactively so REFERENCES_UPDATE messages never trigger a full options reload.
+  let availableChapterRefs = $derived.by(() => {
+    const fromChapter = chapterRefs.map((ref) => ({
+      id: ref.id,
+      type: ref.type,
+      name: ref.name,
+      count: ref.chapters.length,
+      chapters: ref.chapters.map((chapter, i) => ({
+        timestamp: chapter.timestamp,
+        title: chapter.title || `Chapter ${i + 1}`,
       })),
     }));
-    const fromTitle = ($session.titleSources || []).map((source) => ({
-      id: source.id,
-      type: source.type,
-      name: source.name,
-      count: source.titles.length,
-      chapters: source.titles.map((t) => ({ title: t })),
+    const fromTitle = ($session.titleRefs || []).map((ref) => ({
+      id: ref.id,
+      type: ref.type,
+      name: ref.name,
+      count: ref.titles.length,
+      chapters: ref.titles.map((t) => ({ title: t })),
     }));
-    return [...fromCue, ...fromTitle];
+    return [...fromChapter, ...fromTitle];
   });
 
-  let customTitlesSourceId = $derived(($session.titleSources || []).find((s) => s.type === 'custom')?.id ?? '');
+  let customTitlesRefId = $derived(($session.titleRefs || []).find((s) => s.type === 'custom')?.id ?? '');
 
-  // Add-source / edit-custom dialog state
-  let showAddSource = $state(false);
+  // Add-reference / edit-custom dialog state
+  let showAddReference = $state(false);
   let showCustomTitles = $state(false);
 
-  let selectedSourceIsCustom = $derived(
-    !!aiOptions.preferredTitlesSource &&
-      availableChapterSources.find((s) => s.id === aiOptions.preferredTitlesSource)?.type === 'custom',
+  let selectedRefIsCustom = $derived(
+    !!aiOptions.preferredTitlesRef &&
+      availableChapterRefs.find((s) => s.id === aiOptions.preferredTitlesRef)?.type === 'custom',
   );
 
   // Chapter titles modal state
@@ -174,9 +174,9 @@
       console.warn('Failed to load AI options, using defaults:', err);
     }
 
-    // If the backend had no preferred source set, default to the first available one.
-    if (!aiOptions.preferredTitlesSource && availableChapterSources.length > 0) {
-      aiOptions.preferredTitlesSource = availableChapterSources[0].id;
+    // If the backend had no preferred reference set, default to the first available one.
+    if (!aiOptions.preferredTitlesRef && availableChapterRefs.length > 0) {
+      aiOptions.preferredTitlesRef = availableChapterRefs[0].id;
     }
 
     await loadAvailableProviders();
@@ -192,8 +192,8 @@
     }
   }
 
-  function handleSourceAdded(newSource: { id: string }) {
-    aiOptions.preferredTitlesSource = newSource.id;
+  function handleReferenceAdded(newRef: { id: string }) {
+    aiOptions.preferredTitlesRef = newRef.id;
     // Also enable the checkbox so the selection is immediately visible
     aiOptions.usePreferredTitles = true;
   }
@@ -339,13 +339,13 @@
 
   // View chapter titles modal
   async function viewChapterTitles() {
-    if (!aiOptions.preferredTitlesSource) return;
+    if (!aiOptions.preferredTitlesRef) return;
 
-    const selectedSource = availableChapterSources.find((s) => s.id === aiOptions.preferredTitlesSource);
-    if (!selectedSource) return;
+    const selectedRef = availableChapterRefs.find((s) => s.id === aiOptions.preferredTitlesRef);
+    if (!selectedRef) return;
 
-    chapterTitlesModalTitle = selectedSource.name;
-    chapterTitlesModalData = selectedSource.chapters.map((chapter, index) => ({
+    chapterTitlesModalTitle = selectedRef.name;
+    chapterTitlesModalData = selectedRef.chapters.map((chapter, index) => ({
       timestamp: 'timestamp' in chapter ? chapter.timestamp : undefined,
       title: chapter.title || `Chapter ${index + 1}`,
     }));
@@ -571,17 +571,17 @@
                 </div>
               </label>
 
-              {#if availableChapterSources.length > 0}
-                <label class="checkbox-label" class:disabled={availableChapterSources.length === 0}>
+              {#if availableChapterRefs.length > 0}
+                <label class="checkbox-label" class:disabled={availableChapterRefs.length === 0}>
                   <input
                     type="checkbox"
                     bind:checked={aiOptions.usePreferredTitles}
-                    disabled={availableChapterSources.length === 0}
+                    disabled={availableChapterRefs.length === 0}
                   />
                   <span>Prefer existing titles from:</span>
                   <div
                     class="help-icon"
-                    data-tooltip="When enabled, chapter titles from the selected source will be used as a reference during cleanup."
+                    data-tooltip="When enabled, chapter titles from the selected Reference will be used during cleanup."
                   >
                     <CircleQuestionMark size="14" />
                   </div>
@@ -589,21 +589,21 @@
               {/if}
             </div>
 
-            {#if availableChapterSources.length > 0}
+            {#if availableChapterRefs.length > 0}
               <div class="preferred-titles-options">
                 <div class="preferred-titles-row">
-                  <div class="source-select-group">
+                  <div class="reference-select-group">
                     <select
-                      id="preferred-titles-source"
-                      bind:value={aiOptions.preferredTitlesSource}
-                      class="source-select"
+                      id="preferred-titles-reference"
+                      bind:value={aiOptions.preferredTitlesRef}
+                      class="reference-select"
                       disabled={!aiOptions.usePreferredTitles}
                     >
-                      {#each availableChapterSources as source}
-                        <option value={source.id}
-                          >{source.name} ({source.count}
-                          {source.type === 'custom' ||
-                          !(source.chapters?.[0] as { timestamp?: number } | undefined)?.timestamp
+                      {#each availableChapterRefs as ref}
+                        <option value={ref.id}
+                          >{ref.name} ({ref.count}
+                          {ref.type === 'custom' ||
+                          !(ref.chapters?.[0] as { timestamp?: number } | undefined)?.timestamp
                             ? 'titles'
                             : 'chapters'})</option
                         >
@@ -615,16 +615,16 @@
                     type="button"
                     class="view-titles-btn"
                     onclick={() => {
-                      if (selectedSourceIsCustom) {
+                      if (selectedRefIsCustom) {
                         showCustomTitles = true;
                       } else {
                         viewChapterTitles();
                       }
                     }}
-                    disabled={!aiOptions.preferredTitlesSource || !aiOptions.usePreferredTitles}
-                    title={selectedSourceIsCustom ? 'Edit custom titles' : 'View chapter titles from selected source'}
+                    disabled={!aiOptions.preferredTitlesRef || !aiOptions.usePreferredTitles}
+                    title={selectedRefIsCustom ? 'Edit custom titles' : 'View chapter titles from selected Reference'}
                   >
-                    {#if selectedSourceIsCustom}
+                    {#if selectedRefIsCustom}
                       <Pencil size="20" />
                     {:else}
                       <Eye size="20" />
@@ -634,9 +634,9 @@
                   <button
                     type="button"
                     class="view-titles-btn"
-                    onclick={() => (showAddSource = true)}
+                    onclick={() => (showAddReference = true)}
                     disabled={!aiOptions.usePreferredTitles}
-                    title="Add Chapter Source"
+                    title="Add Chapter Reference"
                   >
                     <Plus size="20" />
                   </button>
@@ -695,9 +695,9 @@
   onclose={closeChapterTitlesModal}
 />
 
-<AddSourceDialog bind:isOpen={showAddSource} expectCues={false} onSourceAdded={handleSourceAdded} />
+<AddReferenceDialog bind:isOpen={showAddReference} expectChapterRef={false} onReferenceAdded={handleReferenceAdded} />
 
-<CustomTitlesDialog bind:isOpen={showCustomTitles} sourceId={customTitlesSourceId} />
+<CustomTitlesDialog bind:isOpen={showCustomTitles} refId={customTitlesRefId} />
 
 <style>
   /* AI Confirmation Modal */
@@ -1027,14 +1027,14 @@
     gap: 0.5rem;
   }
 
-  .source-select-group {
+  .reference-select-group {
     flex: 1;
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
   }
 
-  .source-select {
+  .reference-select {
     width: 100%;
     padding: 0.5rem 0.75rem;
     border: 1px solid var(--border-color);
@@ -1045,12 +1045,12 @@
     transition: border-color 0.2s ease;
   }
 
-  .source-select:focus {
+  .reference-select:focus {
     outline: none;
     border-color: var(--ai-accent);
   }
 
-  .source-select:disabled {
+  .reference-select:disabled {
     opacity: 0.4;
     cursor: not-allowed;
   }

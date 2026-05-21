@@ -60,7 +60,7 @@
 
 Chapter metadata for audiobooks is often missing, wrong, or inconsistent. Achew gives you a focused toolkit for fixing it without needing to manually scrub through audio.
 
-**Find chapter boundaries.** Detect them from the audio itself when nothing reliable exists, or pull them in from Audiobookshelf, Audnexus, embedded metadata, or a variety of other sources.
+**Find chapter boundaries.** Detect them from the audio itself when nothing reliable exists, or pull them in from Audiobookshelf, Audnexus, embedded chapters, or a variety of other sources.
 
 **Fix existing chapters.** Realign timestamps that are slightly off, regenerate titles that were never set properly, or drop straight into the chapter editor for quick changes.
 

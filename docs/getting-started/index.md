@@ -6,7 +6,7 @@ Already installed? This section explains Achew's core concepts and walks you thr
 
 1. **[Achew Basics](achew-basics.md):**  The multi-step pipeline, from book selection to final submission.
 2. **[Chapters vs Cues](chapters-and-cues.md):**  Frequently-used terms you'll want to understand.
-3. **[Chapter Sources](chapter-sources.md):**  Types of Sources, and the Add Chapter Source dialog.
+3. **[Chapter References](chapter-references.md):**  Types of References, and the Add Chapter Reference dialog.
 4. **[Finding a Book](finding-a-book.md):**  Finding by title/ID, and using Chapter Search to audit your library.
 5. **[Choosing a Workflow](workflows-overview.md):**  Deciding which workflow will work best for your particular book.
 

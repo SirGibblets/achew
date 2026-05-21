@@ -110,24 +110,19 @@ class DetectedCue(BaseModel):
         )
 
 
-from ...models.sources import (  # noqa: E402 — placed here to avoid import-order churn
-    CueSourceType,
-    ExistingCue,
-    ExistingCueSource,
+from ...models.references import (  # noqa: E402 — placed here to avoid import-order churn
+    BasicChapter,
+    ChapterReference,
+    ChapterRefType,
 )
-
-
-class DeletedChapter(BaseModel):
-    timestamp: float
-    title: str
 
 
 class AddOptionsResponse(BaseModel):
     min_timestamp: float
     max_timestamp: float
     detected_cues: List[DetectedCue]
-    existing_cues: Dict[str, List[ExistingCue]]
-    deleted: List[DeletedChapter]
+    chapter_refs: Dict[str, List[BasicChapter]]
+    deleted: List[BasicChapter]
     allow_normal_scan: bool = False
     allow_vad_scan: bool = False
 
@@ -398,7 +393,7 @@ async def shift_timestamps(request: ShiftTimestampsRequest):
 
 @router.post("/chapters/apply-titles", response_model=BatchOperationResponse)
 async def apply_titles(request: ApplyTitlesRequest):
-    """Apply titles from an external cue source to selected chapters"""
+    """Apply titles from a chapter reference to selected chapters"""
     try:
         app_state = get_app_state()
 
@@ -760,9 +755,9 @@ async def export_chapters_cue():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/chapters/export/snapshot", response_model=ExistingCueSource)
+@router.post("/chapters/export/snapshot", response_model=ChapterReference)
 async def export_chapters_as_snapshot():
-    """Save selected chapters as a new in-session chapter source snapshot."""
+    """Save selected chapters as a new in-session chapter reference snapshot."""
     try:
         app_state = get_app_state()
 
@@ -773,7 +768,7 @@ async def export_chapters_as_snapshot():
         if not selected_chapters:
             raise HTTPException(status_code=400, detail="No chapters selected for export")
 
-        existing_names = {s.name for s in app_state.pipeline.existing_cue_sources if s.type == CueSourceType.SNAPSHOT}
+        existing_names = {s.name for s in app_state.pipeline.chapter_refs if s.type == ChapterRefType.SNAPSHOT}
         base_name = "Snapshot"
         name = base_name
         suffix = 2
@@ -783,25 +778,25 @@ async def export_chapters_as_snapshot():
         short_name = name
 
         sorted_chapters = sorted(selected_chapters, key=lambda ch: ch.timestamp)
-        cues = [ExistingCue(timestamp=ch.timestamp, title=ch.title or "") for ch in sorted_chapters]
+        chapters = [BasicChapter(timestamp=ch.timestamp, title=ch.title or "") for ch in sorted_chapters]
         duration = float(app_state.pipeline.book.duration) if app_state.pipeline.book else 0.0
 
-        new_source = ExistingCueSource(
-            type=CueSourceType.SNAPSHOT,
+        new_ref = ChapterReference(
+            type=ChapterRefType.SNAPSHOT,
             name=name,
             short_name=short_name,
             description="Snapshot of the chapter list, saved from the Review screen",
             metadata={
-                "Chapters": str(len(cues)),
+                "Chapters": str(len(chapters)),
                 "Saved": datetime.now().strftime("%Y-%m-%d %H:%M"),
             },
-            cues=cues,
+            chapters=chapters,
             duration=duration,
         )
-        app_state.pipeline.existing_cue_sources.append(new_source)
+        app_state.pipeline.chapter_refs.append(new_ref)
 
-        await app_state.broadcast_sources_update()
-        return new_source
+        await app_state.broadcast_references_update()
+        return new_ref
 
     except HTTPException:
         raise
@@ -851,22 +846,22 @@ async def get_add_options(chapter_id: str):
         detected_cues = [
             cue for cue in app_state.pipeline.detected_cues if min_timestamp < cue.timestamp < max_timestamp
         ]
-        existing_cues = {}
+        chapter_refs = {}
 
-        if app_state.pipeline.existing_cue_sources:
-            for source in app_state.pipeline.existing_cue_sources:
-                source_cues = []
-                for cue in source.cues:
-                    if min_timestamp < cue.timestamp < max_timestamp:
-                        source_cues.append(ExistingCue(timestamp=cue.timestamp, title=cue.title or ""))
-                if source_cues:
-                    existing_cues[source.short_name] = source_cues
+        if app_state.pipeline.chapter_refs:
+            for ref in app_state.pipeline.chapter_refs:
+                ref_chapters = []
+                for chapter in ref.chapters:
+                    if min_timestamp < chapter.timestamp < max_timestamp:
+                        ref_chapters.append(BasicChapter(timestamp=chapter.timestamp, title=chapter.title or ""))
+                if ref_chapters:
+                    chapter_refs[ref.short_name] = ref_chapters
 
         deleted_chapters = []
         for chapter in app_state.pipeline.chapters:
             if chapter.deleted and min_timestamp < chapter.timestamp < max_timestamp:
                 deleted_chapters.append(
-                    DeletedChapter(timestamp=chapter.timestamp, title=chapter.title or chapter.transcript or "")
+                    BasicChapter(timestamp=chapter.timestamp, title=chapter.title or chapter.transcript or "")
                 )
 
         # Determine scan availability
@@ -891,7 +886,7 @@ async def get_add_options(chapter_id: str):
             min_timestamp=min_timestamp_raw + 0.25,
             max_timestamp=max_timestamp_raw - 0.25,
             detected_cues=detected_cues,
-            existing_cues=existing_cues,
+            chapter_refs=chapter_refs,
             deleted=deleted_chapters,
             allow_normal_scan=allow_normal_scan,
             allow_vad_scan=allow_vad_scan,

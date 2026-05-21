@@ -2,32 +2,16 @@
   import { onMount } from 'svelte';
   import { session } from '../stores/session';
   import { api } from '../utils/api';
-  import AudiobookCard from './AudiobookCard.svelte';
+  import AddReferenceDialog from './AddReferenceDialog.svelte';
   import ChapterModal from './ChapterModal.svelte';
-  import AddSourceDialog from './AddSourceDialog.svelte';
   import DocLink from './DocLink.svelte';
-  import SourceFooter from './SourceFooter.svelte';
-
+  import ReferenceFooter from './ReferenceFooter.svelte';
   // Icons
   import CircleQuestionMark from '@lucide/svelte/icons/circle-question-mark';
   import ExternalLink from '@lucide/svelte/icons/external-link';
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 
-  import type { ExistingCueSource } from '../types/sources';
-
-  interface SourceWarning {
-    title: string;
-    description: string;
-  }
-
-  interface CueSourcesContext {
-    book_title?: string;
-    book_duration?: number;
-    cover_url?: string;
-    file_count?: number;
-    warnings?: Record<string, SourceWarning[]>;
-    [key: string]: unknown;
-  }
+  import type { ChapterReference } from '../types/references';
 
   interface LocalChapterRow {
     timestamp: number;
@@ -36,23 +20,22 @@
   }
 
   let loading = $state(false);
-  let selectedExistingSource = $state('');
-  let selectedRealignSource = $state('');
-  let selectedQuickEditSource = $state('');
+  let selectedRegenerateRef = $state('');
+  let selectedRealignRef = $state('');
+  let selectedQuickEditRef = $state('');
   let activeTab = $state('smart_detect');
   let isDramatized = $state(false);
-  let cueSources = $state<CueSourcesContext>({});
-  let existingCueSources = $state<ExistingCueSource[]>([]);
+  let chapterRefs = $state<ChapterReference[]>([]);
   let error = $state<string | null>(null);
 
-  let showAddSource = $state(false);
+  let showAddReference = $state(false);
 
-  let titleSources = $derived($session.titleSources || []);
-  function handleSourceAdded(newSource: { id: string; cues?: unknown[] }) {
-    if (newSource.cues) {
-      if (activeTab === 'realign') selectedRealignSource = newSource.id;
-      else if (activeTab === 'regenerate_titles') selectedExistingSource = newSource.id;
-      else if (activeTab === 'quick_edit') selectedQuickEditSource = newSource.id;
+  let titleRefs = $derived($session.titleRefs || []);
+  function handleReferenceAdded(newRef: { id: string; chapters?: unknown[] }) {
+    if (newRef.chapters) {
+      if (activeTab === 'realign') selectedRealignRef = newRef.id;
+      else if (activeTab === 'regenerate') selectedRegenerateRef = newRef.id;
+      else if (activeTab === 'quick_edit') selectedQuickEditRef = newRef.id;
     }
   }
 
@@ -62,58 +45,42 @@
   let chapterModalLoading = $state(false);
 
   $effect(() => {
-    if ($session.cueSources) {
-      cueSources = $session.cueSources as unknown as CueSourcesContext;
-      error = null;
-    }
-  });
-
-  $effect(() => {
-    const sources = $session.cueSources;
-    if (sources) {
-      existingCueSources = sources;
-      if (!selectedQuickEditSource) {
-        const absSource = sources.find((s) => s.type === 'abs');
-        if (absSource) selectedQuickEditSource = absSource.id;
+    const refs = $session.chapterRefs;
+    if (refs) {
+      chapterRefs = refs;
+      if (!selectedQuickEditRef) {
+        const absRef = refs.find((s) => s.type === 'abs');
+        if (absRef) selectedQuickEditRef = absRef.id;
       }
     }
   });
-
-  // Get warning data for a specific option
-  function getWarnings(optionType: string) {
-    if (!cueSources.warnings || !cueSources.warnings[optionType]) {
-      return [];
-    }
-    return cueSources.warnings[optionType];
-  }
 
   async function proceedWithSelection() {
     loading = true;
     try {
       if (activeTab === 'smart_detect') {
-        const option = isDramatized ? 'smart_detect_vad' : 'smart_detect';
-        await api.session.selectWorkflow(option);
+        await api.session.startWorkflow('smart_detect', undefined, isDramatized);
       } else if (activeTab === 'realign') {
-        if (!selectedRealignSource) {
-          alert('Please select a chapter source.');
+        if (!selectedRealignRef) {
+          alert('Please select a Chapter Reference.');
           loading = false;
           return;
         }
-        await api.session.realignChapter(selectedRealignSource, isDramatized);
-      } else if (activeTab === 'regenerate_titles') {
-        if (!selectedExistingSource) {
-          alert('Please select a chapter source.');
+        await api.session.startWorkflow('realign', selectedRealignRef, isDramatized);
+      } else if (activeTab === 'regenerate') {
+        if (!selectedRegenerateRef) {
+          alert('Please select a Chapter Reference.');
           loading = false;
           return;
         }
-        await api.session.selectWorkflow(selectedExistingSource);
+        await api.session.startWorkflow('regenerate', selectedRegenerateRef, undefined);
       } else if (activeTab === 'quick_edit') {
-        if (!selectedQuickEditSource) {
-          alert('Please select a chapter source.');
+        if (!selectedQuickEditRef) {
+          alert('Please select a Chapter Reference.');
           loading = false;
           return;
         }
-        await api.session.selectWorkflow('quick_edit:' + selectedQuickEditSource);
+        await api.session.startWorkflow('quick_edit', selectedQuickEditRef, undefined);
       }
     } catch (error) {
       console.error('Error selecting workflow:', error);
@@ -125,17 +92,17 @@
   }
 
   // Fetch detailed chapter data for modal display
-  async function fetchChapterData(sourceId: string) {
+  async function fetchChapterData(refId: string) {
     if ($session.step !== 'select_workflow') return [];
 
     chapterModalLoading = true;
     try {
-      // Find the source in existingCueSources
-      const source = existingCueSources.find((s) => s.id === sourceId);
-      if (source && source.cues) {
-        return source.cues.map((cue, index) => ({
-          timestamp: cue.timestamp,
-          title: cue.title || `Chapter ${index + 1}`,
+      // Find the reference in chapterRefs
+      const ref = chapterRefs.find((s) => s.id === refId);
+      if (ref && ref.chapters) {
+        return ref.chapters.map((chapter, index) => ({
+          timestamp: chapter.timestamp,
+          title: chapter.title || `Chapter ${index + 1}`,
         }));
       }
 
@@ -149,14 +116,14 @@
   }
 
   // Handle chapter count bubble click
-  async function handleChapterCountClick(sourceId: string) {
-    const source = existingCueSources.find((s) => s.id === sourceId);
+  async function handleChapterCountClick(refId: string) {
+    const ref = chapterRefs.find((s) => s.id === refId);
 
-    chapterModalTitle = source ? source.name : 'Chapter Data';
+    chapterModalTitle = ref ? ref.name : 'Chapter Data';
     chapterModalData = [];
     chapterModalOpen = true;
 
-    chapterModalData = await fetchChapterData(sourceId);
+    chapterModalData = await fetchChapterData(refId);
   }
 
   // Close chapter modal
@@ -168,12 +135,12 @@
 
   // Get the option display info
   function getOptionInfo(option: string) {
-    // Handle dynamic existing cue sources
-    const existingSource = existingCueSources.find((source) => source.id === option);
-    if (existingSource) {
+    // Handle dynamic chapter references
+    const chapterRef = chapterRefs.find((r) => r.id === option);
+    if (chapterRef) {
       return {
-        title: existingSource.name,
-        description: existingSource.description,
+        title: chapterRef.name,
+        description: chapterRef.description,
       };
     }
 
@@ -191,17 +158,6 @@
     <div class="alert alert-danger">
       {error}
       <button type="button" class="btn btn-sm btn-outline float-right" onclick={() => (error = null)}> Dismiss </button>
-    </div>
-  {/if}
-
-  {#if cueSources.book_duration}
-    <div class="audiobook-card-container">
-      <AudiobookCard
-        title={cueSources.book_title || 'Audiobook'}
-        duration={cueSources.book_duration}
-        coverImageUrl={cueSources.cover_url}
-        fileCount={cueSources.file_count || 1}
-      />
     </div>
   {/if}
 
@@ -236,7 +192,7 @@
   {#if loading}
     <div class="text-center p-4">
       <div class="spinner"></div>
-      <p class="mt-2">Loading chapter sources…</p>
+      <p class="mt-2">Loading Chapter References…</p>
     </div>
   {:else}
     <div class="mode-selector">
@@ -255,8 +211,8 @@
         Realign Chapters
       </button>
       <button
-        class="mode-btn {activeTab === 'regenerate_titles' ? 'active' : ''}"
-        onclick={() => (activeTab = 'regenerate_titles')}
+        class="mode-btn {activeTab === 'regenerate' ? 'active' : ''}"
+        onclick={() => (activeTab = 'regenerate')}
         type="button"
       >
         Regenerate Titles
@@ -278,12 +234,7 @@
           <DocLink path="/workflows/smart-detect/" featureName="Smart Detect" />
         </p>
 
-        <SourceFooter
-          cueSources={existingCueSources}
-          {titleSources}
-          showCueSources
-          onAddSource={() => (showAddSource = true)}
-        />
+        <ReferenceFooter {chapterRefs} {titleRefs} showRefs={true} onAddReference={() => (showAddReference = true)} />
 
         <div class="dramatized-toggle">
           <label>
@@ -310,34 +261,34 @@
         </div>
       {:else if activeTab === 'realign'}
         <p class="tab-description">
-          The <b>Realign Chapters</b> workflow attempts to realign the timestamps of an existing chapter source to
-          better match the book's audio, preserving the chapter titles. This is useful for cases where a source has
-          correct titles, but the timestamps are off by a few seconds.
+          The <b>Realign Chapters</b> workflow attempts to realign the timestamps of a Chapter Reference to better match
+          the book's audio, preserving the chapter titles. This is useful for cases where a Reference has correct
+          titles, but the timestamps are off by a few seconds.
           <DocLink path="/workflows/realign-chapters/" featureName="Chapter Realignment" />
         </p>
 
-        {#if existingCueSources.length > 0}
-          {#each existingCueSources as source}
-            <div class="option-card" class:selected={selectedRealignSource === source.id}>
+        {#if chapterRefs.length > 0}
+          {#each chapterRefs as ref}
+            <div class="option-card" class:selected={selectedRealignRef === ref.id}>
               <label>
                 <div class="option-layout">
-                  <input type="radio" bind:group={selectedRealignSource} value={source.id} disabled={loading} />
+                  <input type="radio" bind:group={selectedRealignRef} value={ref.id} disabled={loading} />
                   <div class="option-content">
                     <div class="option-header">
-                      <b>{getOptionInfo(source.id).title}</b>
+                      <b>{getOptionInfo(ref.id).title}</b>
                       <div class="chapter-count-container">
                         <button
                           class="chapter-count clickable"
-                          onclick={() => handleChapterCountClick(source.id)}
+                          onclick={() => handleChapterCountClick(ref.id)}
                           title="Click to view chapter details"
                         >
-                          {source.cues.length} chapters
+                          {ref.chapters.length} chapters
                           <ExternalLink size="12" />
                         </button>
                       </div>
                     </div>
                     <p class="description">
-                      {getOptionInfo(source.id).description}
+                      {getOptionInfo(ref.id).description}
                     </p>
                   </div>
                 </div>
@@ -345,7 +296,7 @@
             </div>
           {/each}
 
-          <SourceFooter {titleSources} onAddSource={() => (showAddSource = true)} />
+          <ReferenceFooter {titleRefs} onAddReference={() => (showAddReference = true)} />
 
           <div class="dramatized-toggle">
             <label>
@@ -361,65 +312,53 @@
           </div>
 
           <div class="actions">
-            <button class="btn btn-verify" onclick={proceedWithSelection} disabled={loading || !selectedRealignSource}>
+            <button class="btn btn-verify" onclick={proceedWithSelection} disabled={loading || !selectedRealignRef}>
               {#if loading}
                 <span class="btn-spinner"></span>
                 Processing…
-              {:else if selectedRealignSource}
-                Realign {getOptionInfo(selectedRealignSource).title}
+              {:else if selectedRealignRef}
+                Realign {getOptionInfo(selectedRealignRef).title}
               {:else}
-                Select a Chapter Source
+                Select a Chapter Reference
               {/if}
             </button>
           </div>
         {:else}
-          <div class="no-sources-card">
+          <div class="no-references-card">
             <TriangleAlert size="16" />
             <p>No existing chapters to realign</p>
           </div>
-          <button class="empty-add-source" onclick={() => (showAddSource = true)}>+ Add Chapter Source</button>
+          <button class="empty-add-reference" onclick={() => (showAddReference = true)}>+ Add Chapter Reference</button>
         {/if}
-      {:else if activeTab === 'regenerate_titles'}
+      {:else if activeTab === 'regenerate'}
         <p class="tab-description">
-          The <b>Regenerate Titles</b> workflow transcribes new titles at the timestamps of an existing chapter source.
-          This is useful for cases where a source has correct timestamps, but the titles are missing or incorrect.
+          The <b>Regenerate Titles</b> workflow transcribes new titles at the timestamps of a Chapter Reference. This is
+          useful for cases where a Reference has correct timestamps, but the titles are missing or incorrect.
           <DocLink path="/workflows/regenerate-titles/" featureName="Title Regeneration" />
         </p>
 
-        {#if existingCueSources.length > 0}
-          {#each existingCueSources as source}
-            <div class="option-card" class:selected={selectedExistingSource === source.id}>
+        {#if chapterRefs.length > 0}
+          {#each chapterRefs as ref}
+            <div class="option-card" class:selected={selectedRegenerateRef === ref.id}>
               <label>
                 <div class="option-layout">
-                  <input type="radio" bind:group={selectedExistingSource} value={source.id} disabled={loading} />
+                  <input type="radio" bind:group={selectedRegenerateRef} value={ref.id} disabled={loading} />
                   <div class="option-content">
                     <div class="option-header">
-                      <b>{getOptionInfo(source.id).title}</b>
+                      <b>{getOptionInfo(ref.id).title}</b>
                       <div class="chapter-count-container">
                         <button
                           class="chapter-count clickable"
-                          onclick={() => handleChapterCountClick(source.id)}
+                          onclick={() => handleChapterCountClick(ref.id)}
                           title="Click to view chapter details"
                         >
-                          {source.cues.length} chapters
+                          {ref.chapters.length} chapters
                           <ExternalLink size="12" />
                         </button>
-                        {#each getWarnings(source.id) as warning}
-                          <div class="warning-icon-container" title="">
-                            <TriangleAlert size="16" color="var(--warning)" />
-                            <div class="warning-tooltip">
-                              <TriangleAlert name="warning" color="var(--warning)" size="14" />
-                              <div class="warning-content">
-                                <span class="warning-title">{warning.title}:</span>
-                                <span class="warning-text">{warning.description}</span>
-                              </div>
-                            </div>
-                          </div>
-                        {/each}
                       </div>
                     </div>
                     <p class="description">
-                      {getOptionInfo(source.id).description}
+                      {getOptionInfo(ref.id).description}
                     </p>
                   </div>
                 </div>
@@ -427,57 +366,57 @@
             </div>
           {/each}
 
-          <SourceFooter {titleSources} onAddSource={() => (showAddSource = true)} />
+          <ReferenceFooter {titleRefs} onAddReference={() => (showAddReference = true)} />
 
           <div class="actions" style="margin-top: 1.5rem;">
-            <button class="btn btn-verify" onclick={proceedWithSelection} disabled={loading || !selectedExistingSource}>
+            <button class="btn btn-verify" onclick={proceedWithSelection} disabled={loading || !selectedRegenerateRef}>
               {#if loading}
                 <span class="btn-spinner"></span>
                 Processing…
-              {:else if selectedExistingSource}
-                Continue with {getOptionInfo(selectedExistingSource).title}
+              {:else if selectedRegenerateRef}
+                Continue with {getOptionInfo(selectedRegenerateRef).title}
               {:else}
-                Select a Chapter Source
+                Select a Chapter Reference
               {/if}
             </button>
           </div>
         {:else}
-          <div class="no-sources-card">
+          <div class="no-references-card">
             <TriangleAlert size="16" />
             <p>No existing chapters to regenerate</p>
           </div>
-          <button class="empty-add-source" onclick={() => (showAddSource = true)}>+ Add Chapter Source</button>
+          <button class="empty-add-reference" onclick={() => (showAddReference = true)}>+ Add Chapter Reference</button>
         {/if}
       {:else if activeTab === 'quick_edit'}
         <p class="tab-description">
-          The <b>Quick Edit</b> workflow skips audio analysis and loads chapters from an existing source directly into
+          The <b>Quick Edit</b> workflow skips audio analysis and loads chapters from a Chapter Reference directly into
           the editor. Use this when you only need to make quick changes, like using AI Cleanup or adding a missing
           chapter.
           <DocLink path="/workflows/quick-edit/" featureName="Quick Edit" />
         </p>
 
-        {#if existingCueSources.length > 0}
-          {#each existingCueSources as source}
-            <div class="option-card" class:selected={selectedQuickEditSource === source.id}>
+        {#if chapterRefs.length > 0}
+          {#each chapterRefs as ref}
+            <div class="option-card" class:selected={selectedQuickEditRef === ref.id}>
               <label>
                 <div class="option-layout">
-                  <input type="radio" bind:group={selectedQuickEditSource} value={source.id} disabled={loading} />
+                  <input type="radio" bind:group={selectedQuickEditRef} value={ref.id} disabled={loading} />
                   <div class="option-content">
                     <div class="option-header">
-                      <b>{getOptionInfo(source.id).title}</b>
+                      <b>{getOptionInfo(ref.id).title}</b>
                       <div class="chapter-count-container">
                         <button
                           class="chapter-count clickable"
-                          onclick={() => handleChapterCountClick(source.id)}
+                          onclick={() => handleChapterCountClick(ref.id)}
                           title="Click to view chapter details"
                         >
-                          {source.cues.length} chapters
+                          {ref.chapters.length} chapters
                           <ExternalLink size="12" />
                         </button>
                       </div>
                     </div>
                     <p class="description">
-                      {getOptionInfo(source.id).description}
+                      {getOptionInfo(ref.id).description}
                     </p>
                   </div>
                 </div>
@@ -485,30 +424,26 @@
             </div>
           {/each}
 
-          <SourceFooter {titleSources} onAddSource={() => (showAddSource = true)} />
+          <ReferenceFooter {titleRefs} onAddReference={() => (showAddReference = true)} />
 
           <div class="actions" style="margin-top: 1.5rem;">
-            <button
-              class="btn btn-verify"
-              onclick={proceedWithSelection}
-              disabled={loading || !selectedQuickEditSource}
-            >
+            <button class="btn btn-verify" onclick={proceedWithSelection} disabled={loading || !selectedQuickEditRef}>
               {#if loading}
                 <span class="btn-spinner"></span>
                 Loading…
-              {:else if selectedQuickEditSource}
+              {:else if selectedQuickEditRef}
                 Open in Editor
               {:else}
-                Select a Chapter Source
+                Select a Chapter Reference
               {/if}
             </button>
           </div>
         {:else}
-          <div class="no-sources-card">
+          <div class="no-references-card">
             <TriangleAlert size="16" />
             <p>No existing chapters to edit</p>
           </div>
-          <button class="empty-add-source" onclick={() => (showAddSource = true)}>+ Add Chapter Source</button>
+          <button class="empty-add-reference" onclick={() => (showAddReference = true)}>+ Add Chapter Reference</button>
         {/if}
       {/if}
     </div>
@@ -524,7 +459,7 @@
   onclose={closeChapterModal}
 />
 
-<AddSourceDialog bind:isOpen={showAddSource} expectCues={true} onSourceAdded={handleSourceAdded} />
+<AddReferenceDialog bind:isOpen={showAddReference} expectChapterRef={true} onReferenceAdded={handleReferenceAdded} />
 
 <style>
   .chapter-options {
@@ -609,12 +544,6 @@
     line-height: 1.5;
   }
 
-  .audiobook-card-container {
-    display: none;
-    margin: 0 auto 3rem auto;
-    max-width: 600px;
-  }
-
   .chapter-count {
     background: var(--bg-tertiary);
     padding: 0.25rem 0.75rem;
@@ -648,87 +577,6 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
-  }
-
-  .warning-icon-container {
-    position: relative;
-    display: flex;
-    align-items: center;
-    cursor: help;
-  }
-
-  .warning-tooltip {
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    margin-bottom: 8px;
-    padding: 8px 12px;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    font-size: 0.875rem;
-    line-height: 1.4;
-    white-space: normal;
-    min-width: 420px;
-    max-width: 640px;
-    z-index: 1000;
-    opacity: 0;
-    visibility: hidden;
-    transition: all 0.2s ease;
-    pointer-events: none;
-    display: flex;
-    align-items: flex-start;
-    gap: 0.35rem;
-  }
-
-  .warning-tooltip::before {
-    content: '';
-    position: absolute;
-    top: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    border: 6px solid transparent;
-    border-top-color: var(--border-color);
-    z-index: 1001;
-  }
-
-  .warning-tooltip::after {
-    content: '';
-    position: absolute;
-    top: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    margin-top: -1px;
-    border: 5px solid transparent;
-    border-top-color: var(--bg-primary);
-    z-index: 1002;
-  }
-
-  .warning-icon-container:hover .warning-tooltip {
-    opacity: 1;
-    visibility: visible;
-    transform: translateX(-50%) translateY(-4px);
-  }
-
-  .warning-tooltip :global(.icon) {
-    margin-top: 2px;
-    flex-shrink: 0;
-  }
-
-  .warning-content {
-    line-height: 1;
-  }
-
-  .warning-title {
-    font-size: 0.8rem;
-  }
-
-  .warning-text {
-    font-size: 0.8rem;
-    color: var(--text-secondary);
-    line-height: 1.4;
   }
 
   .actions {
@@ -845,10 +693,6 @@
       padding: 1rem;
     }
 
-    .audiobook-card-container {
-      margin: 1.5rem auto;
-    }
-
     .option-card label {
       padding: 1rem;
     }
@@ -860,31 +704,6 @@
     .chapter-count-container {
       flex-wrap: wrap;
       gap: 0.25rem;
-    }
-
-    .warning-tooltip {
-      min-width: 250px;
-      max-width: 90vw;
-      left: 0;
-      transform: translateX(0);
-    }
-
-    .warning-tooltip::before,
-    .warning-tooltip::after {
-      left: 20px;
-      transform: translateX(0);
-    }
-
-    .warning-icon-container:hover .warning-tooltip {
-      transform: translateX(0) translateY(-4px);
-    }
-
-    .warning-title {
-      font-size: 0.8rem;
-    }
-
-    .warning-text {
-      font-size: 0.75rem;
     }
   }
 
@@ -977,7 +796,7 @@
     cursor: pointer;
   }
 
-  .no-sources-card {
+  .no-references-card {
     display: flex;
     flex-direction: row;
     align-items: center;
@@ -994,14 +813,14 @@
     max-width: 100%;
   }
 
-  .no-sources-card p {
+  .no-references-card p {
     margin: 0;
     font-weight: 400;
     font-size: 0.95rem;
     color: var(--warning);
   }
 
-  .empty-add-source {
+  .empty-add-reference {
     display: block;
     margin: 0 auto;
     background: none;
@@ -1012,7 +831,7 @@
     padding: 0;
   }
 
-  .empty-add-source:hover {
+  .empty-add-reference:hover {
     opacity: 0.8;
   }
 

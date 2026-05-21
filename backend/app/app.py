@@ -210,15 +210,15 @@ class AppState:
             )
             await self.broadcast_message(error_msg)
 
-    async def broadcast_sources_update(self):
-        """Broadcast updated cue and title sources to all WebSocket connections."""
+    async def broadcast_references_update(self):
+        """Broadcast updated chapter and title references to all WebSocket connections."""
         if not self.pipeline:
             return
         message = WSMessage(
-            type=WSMessageType.SOURCES_UPDATE,
+            type=WSMessageType.REFERENCES_UPDATE,
             data={
-                "cue_sources": [s.model_dump() for s in self.pipeline.existing_cue_sources],
-                "title_sources": [s.model_dump() for s in self.pipeline.existing_title_sources],
+                "chapter_refs": [r.model_dump() for r in self.pipeline.chapter_refs],
+                "title_refs": [r.model_dump() for r in self.pipeline.title_refs],
             },
         )
         await self.broadcast_message(message)

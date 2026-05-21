@@ -7,7 +7,7 @@ Achew asks you to pick a workflow after you select a book. The four options diff
 
 ## Which workflow should I use?
 
-1. **Do you have any partially accurate chapter data for this book?** (from ABS, Audnexus, embedded metadata, or another [Source](chapter-sources.md))
+1. **Do you have any partially accurate chapter data for this book?** (from ABS, Audnexus, embedded chapters, or another [Reference](chapter-references.md))
 
     - **No** → [Smart Detect](../workflows/smart-detect.md).
     - **Yes** → continue.
@@ -17,11 +17,11 @@ Achew asks you to pick a workflow after you select a book. The four options diff
     - **Everything, I just want to tidy up or add a few missing chapters** → [Quick Edit](../workflows/quick-edit.md).
     - **Titles are fine, timestamps are slightly off** → [Realign Chapters](../workflows/realign-chapters.md).
     - **Timestamps are fine, titles are missing or wrong** → [Regenerate Titles](../workflows/regenerate-titles.md).
-    - **Both are partially wrong** → Start with [Smart Detect](../workflows/smart-detect.md) and reconcile with other Sources later in the chapter editor.
+    - **Both are partially wrong** → Start with [Smart Detect](../workflows/smart-detect.md) and reconcile with other References later in the chapter editor.
 
 ## The four workflows at a glance
 
-| Workflow | Detects cues? | Transcribes titles? | Requires existing [Source](chapter-sources.md)? | Example use case |
+| Workflow | Detects cues? | Transcribes titles? | Requires existing [Reference](chapter-references.md)? | Example use case |
 |---|---|---|---|---|
 | [**Smart Detect**](../workflows/smart-detect.md) | Yes | Optional | No | Books with no chapters or completely wrong chapters |
 | [**Realign Chapters**](../workflows/realign-chapters.md) | Partial | No | Yes | Timings are off by up to a few minutes |
@@ -32,14 +32,14 @@ Achew asks you to pick a workflow after you select a book. The four options diff
 
 Smart Detect and Realign both offer a **Dramatized** toggle for audiobooks that contain music and/or sound effects, i.e. *dramatized* audiobooks. When enabled, Achew uses a slower voice-activity-based detection strategy that is significantly more accurate for non-speech audio.
 
-## Existing chapter source selection
+## Existing Chapter Reference selection
 
-Three of the four workflows (Realign, Regenerate, Quick Edit) require you to pick an existing full chapter source. Clicking on the chapter count for a source will display the full chapter information including timestamps and titles.
+Three of the four workflows (Realign, Regenerate, Quick Edit) require you to pick an existing Chapter Reference. Clicking on the chapter count for a Reference will display the full chapter information including timestamps and titles.
 
-![View source chapters](../img/source-view-chapters-light.webp#only-light){ width="480"; .center }
-![View source chapters](../img/source-view-chapters-dark.webp#only-dark){ width="480"; .center }
+![View Reference chapters](../img/reference-view-chapters-light.webp#only-light){ width="480"; .center }
+![View Reference chapters](../img/reference-view-chapters-dark.webp#only-dark){ width="480"; .center }
 
-If the source you want is not shown, click the **Add Chapter Source** button. This will open a dialog where you can upload JSON, CSV, CUE, TXT, or EPUB files containing chapter data, or you can search for an Audnexus source by title and/or author. See [Chapter Sources](chapter-sources.md).
+If the Reference you want is not shown, click the **Add Chapter Reference** button. This will open a dialog where you can upload JSON, CSV, CUE, TXT, or EPUB files containing chapter data, or you can search for an Audnexus Reference by title and/or author. See [Chapter References](chapter-references.md).
 
 ## Changing your mind
 

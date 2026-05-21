@@ -21,7 +21,7 @@ All of these actions in the editor can be undone:
 - Deleting a chapter
 - Transcribing titles
 - Shift Timestamps
-- Apply Titles from Source
+- Apply Titles from Reference
 - AI Cleanup
 
 !!! tip "Restoring Deleted Chapters"

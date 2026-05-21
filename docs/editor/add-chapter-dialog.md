@@ -5,7 +5,7 @@ In the editor, use the :lucide-plus:{ .icon-token } button between rows to inser
 ![Add Chapter Button](../img/add-chapter-button-light.webp#only-light)
 ![Add Chapter Button](../img/add-chapter-button-dark.webp#only-dark)
 
-This opens the **Add Chapter Dialog** which has several options for adding new chapters, depending on what data and which [sources](../getting-started/chapter-sources.md) are available. Only candidates that fall between the surrounding chapters are shown; this time range is displayed in the bottom left corner of the dialog.
+This opens the **Add Chapter Dialog** which has several options for adding new chapters, depending on what data and which [References](../getting-started/chapter-references.md) are available. Only candidates that fall between the surrounding chapters are shown; this time range is displayed in the bottom left corner of the dialog.
 
 ## Chapter Options
 
@@ -29,12 +29,12 @@ Choose from cues that have been detected in the available time range. Click :luc
 If the region has not been fully scanned for cues yet, you can click on the :lucide-scan-search:{ .icon-token .primary } **Detect Cues** button or the :lucide-audio-lines:{ .icon-token .primary } **Detect Cues \[Dramatized\]** button to initiate a partial scan.
 
 
-### Chapter Sources
+### Chapter References
 
-![From Source](../img/add-chapter-from-source-light.webp#only-light){ width="480" }
-![From Source](../img/add-chapter-from-source-dark.webp#only-dark){ width="480" }
+![From Reference](../img/add-chapter-from-reference-light.webp#only-light){ width="480" }
+![From Reference](../img/add-chapter-from-reference-dark.webp#only-dark){ width="480" }
 
-One tab per [full chapter source](../getting-started/chapter-sources.md#full-chapter-sources). Click :lucide-play:{ .icon-token .primary } to preview.
+One tab per [Chapter Reference](../getting-started/chapter-references.md#chapter-references). Click :lucide-play:{ .icon-token .primary } to preview.
 
 ### Deleted
 

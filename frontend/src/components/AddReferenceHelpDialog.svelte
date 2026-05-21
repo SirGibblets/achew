@@ -36,7 +36,7 @@
       class="dialog"
       role="dialog"
       aria-modal="true"
-      aria-label="About Sources"
+      aria-label="About References"
       tabindex="-1"
       onclick={(e) => e.stopPropagation()}
       onkeydown={(e) => {
@@ -44,7 +44,7 @@
       }}
     >
       <div class="help-header">
-        <h3>About Chapter Sources <DocLink path="/getting-started/chapter-sources/" /></h3>
+        <h3>About References <DocLink path="/getting-started/chapter-references/" /></h3>
         <button class="close-btn" onclick={close} aria-label="Close">
           <X size="20" />
         </button>
@@ -52,45 +52,45 @@
 
       <div class="help-body">
         <p>
-          Sources provide reference data — chapter titles and/or timestamps — that Achew can use when processing your
-          audiobook. There are two kinds of sources: Full chapter, and title-only.
+          References provide chapter titles and/or timestamps that Achew can use when processing your audiobook. There
+          are two kinds of References: Chapter Reference and Title References.
         </p>
 
-        <h4>Full chapter sources <span class="tag">timestamps + titles</span></h4>
+        <h4>Chapter References <span class="tag">timestamps + titles</span></h4>
         <p>
-          Full chapter sources contain both a timestamp and a title for each chapter. They can be used to start the <em
+          Chapter References contain both a timestamp and a title for each chapter. They can be used to start the <em
             >Chapter Realignment</em
           >, <em>Regenerate Titles</em>, and <em>Quick Edit</em>
           workflows, and can be compared against detected cues when selecting initial chapters in the
           <em>Smart Detect</em> workflow.
         </p>
-        <p>They can also be used anywhere that title-only sources are used.</p>
+        <p>They can also be used anywhere that Title References are used.</p>
 
-        <p class="section-title">Supported sources:</p>
+        <p class="section-title">Supported types:</p>
         <ul>
           <li>
-            <strong>Audiobookshelf Chapters</strong> — ABS's existing chapter data for the selected book. This source is automatically
-            added if available.
+            <strong>Audiobookshelf Chapters</strong> — ABS's existing chapter data for the selected book. This Reference is
+            automatically added if available.
           </li>
           <li>
-            <strong>Embedded Chapters</strong> — chapter info embedded in the audiobook files, as provided by ABS. This source
+            <strong>Embedded Chapters</strong> — chapter info embedded in the audiobook files, as provided by ABS. This Reference
             is automatically added if available.
           </li>
           <li>
             <strong>File Data</strong> — chapter data inferred from the audiobook files, using file names and durations. This
-            source is automatically added for multi-file audiobooks.
+            Reference is automatically added for multi-file audiobooks.
           </li>
           <li>
             <strong>Audnexus</strong> — chapter data obtained from Audnexus using an Amazon Standard Identification Number
-            (ASIN). This is the source Audiobookshelf itself uses to fetch chapter data when the book has an associated ASIN.
-            This source is automatically added if an ASIN is assigned to the selected book in ABS. You may also search for,
-            preview chapters for, and add new Audnexus sources from the Add Chapter Source dialog.
+            (ASIN). This is the data Audiobookshelf itself uses to fetch chapter info when the book has an associated ASIN.
+            This Reference is automatically added if an ASIN is assigned to the selected book in ABS. You may also search
+            for, preview chapters for, and add new Audnexus References from the Add Chapter Reference dialog.
           </li>
           <li>
             <strong>JSON</strong> — a .json file containing an array of objects. These can be uploaded through the Add
-            Chapter Source dialog. Library Files* named <em>"chapters.json"</em> are automatically detected and added.
-            Achew attempts to automatically find timestamps** and titles, but it helps to use predictable field names
-            like <code>start</code> or
+            Chapter Reference dialog. Library Files* named <em>"chapters.json"</em> are automatically detected and
+            added. Achew attempts to automatically find timestamps** and titles, but it helps to use predictable field
+            names like <code>start</code> or
             <code>timestamp</code> and <code>name</code> or <code>title</code>. Here is an example:
             <pre><code
                 >[
@@ -108,35 +108,35 @@
           </li>
           <li>
             <strong>CSV</strong> — a .csv file containing columns for both timestamps and titles. These can be added
-            through the Add Chapter Source dialog. Library Files* named <em>"chapters.csv"</em>
+            through the Add Chapter Reference dialog. Library Files* named <em>"chapters.csv"</em>
             are automatically detected and added. Achew attempts to automatically find the timestamp** and title columns,
             even without column names, but it helps to use predictable column names like
             <code>start</code>
             or <code>timestamp</code> and <code>name</code> or <code>title</code>.
           </li>
           <li>
-            <strong>CUE Sheet</strong> — a standard .cue file. These can be uploaded through the Add Chapter Source
+            <strong>CUE Sheet</strong> — a standard .cue file. These can be uploaded through the Add Chapter Reference
             dialog. Any Library Files* with the <em>".cue"</em> extension are automatically detected and added.
           </li>
         </ul>
 
-        <h4>Title-only sources <span class="tag">titles only</span></h4>
+        <h4>Title References <span class="tag">titles only</span></h4>
         <p>
-          Title-only sources provide only chapter titles with no timestamps. They can be used as a reference when
-          cleaning up chapter titles with AI, and when applying titles to chapters using the Apply Titles feature. They
-          cannot be used for chapter alignment.
+          Title References provide only chapter titles with no timestamps. They can be used as a Reference when cleaning
+          up chapter titles with AI, and when applying titles to chapters using the Apply Titles feature. They cannot be
+          used for chapter alignment.
         </p>
-        <p class="section-title">Supported sources:</p>
+        <p class="section-title">Supported types:</p>
         <ul>
           <li>
             <strong>Text File</strong> — a plain .txt file containing one title per line; blank lines are ignored. These
-            can be uploaded through the Add Chapter Source dialog. Library Files* named
+            can be uploaded through the Add Chapter Reference dialog. Library Files* named
             <em>"titles.txt"</em>
             are automatically detected and added.
           </li>
           <li>
             <strong>EPUB</strong> — an epub e-book file; chapter titles are extracted from its table of contents. These
-            can be uploaded through the Add Chapter Source dialog. Any Library Files* with the <em>".epub"</em>
+            can be uploaded through the Add Chapter Reference dialog. Any Library Files* with the <em>".epub"</em>
             extension are automatically detected and added.
           </li>
           <li>

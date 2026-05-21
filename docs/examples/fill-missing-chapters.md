@@ -6,7 +6,7 @@ Follow these steps if your book is missing a chapter or two, but is otherwise co
 
 1. Select the book.
 2. Choose **Quick Edit** on the Select Workflow screen.
-3. Pick the relevant chapter source.
+3. Pick the relevant Chapter Reference.
 4. Click **Continue**. You'll land in the editor with those chapters loaded.
 
 ## Insert the missing chapter
@@ -25,9 +25,9 @@ Repeat for each missing chapter.
 - Edit titles manually, use the :lucide-mic:{ .icon-token } transcribe button, or run [AI Cleanup](../editor/ai-cleanup.md) to tidy up.
 - Submit to Audiobookshelf or export.
 
-## Scenario: The title is in another source
+## Scenario: The title is in another Reference
 
-If one of your *other* chapter sources has the missing chapter, use the tab for that source in the Add Chapter Dialog instead of the Detect Cues tab. Pick the missing chapter there to insert both its timestamp and title in one click.
+If one of your *other* Chapter References has the missing chapter, use the tab for that Reference in the Add Chapter Dialog instead of the Detect Cues tab. Pick the missing chapter there to insert both its timestamp and title in one click.
 
 ## Related
 

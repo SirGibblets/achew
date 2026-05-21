@@ -9,7 +9,7 @@ Achew talks to:
 
 ## Audiobookshelf
 
-Achew reads book metadata, audio files, and chapter source data from your ABS server, and writes chapter data back on submit. All of this happens over your LAN (or whatever network connection you use between Achew and ABS). Nothing is proxied through a third party.
+Achew reads book metadata, audio files, and Chapter Reference data from your ABS server, and writes chapter data back on submit. All of this happens over your LAN (or whatever network connection you use between Achew and ABS). Nothing is proxied through a third party.
 
 ## LLM providers (AI Cleanup)
 
@@ -17,7 +17,7 @@ AI Cleanup sends the following to your selected provider:
 
 - The chapter **titles** you are cleaning up.
 - The book's **title** and **author**.
-- Titles from the **Prefer existing titles from** source, if that option is enabled.
+- Titles from the **Prefer existing titles from** Reference, if that option is enabled.
 - Any **Additional Instructions** and active **Custom Instructions**.
 - The Achew prompt template.
 

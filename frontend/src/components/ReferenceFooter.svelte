@@ -1,30 +1,30 @@
 <script lang="ts">
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
-  import type { ExistingCueSource, ExistingTitleSource } from '../types/sources';
+  import type { ChapterReference, TitleReference } from '../types/references';
 
   interface Props {
-    cueSources?: ExistingCueSource[];
-    titleSources?: ExistingTitleSource[];
-    showCueSources?: boolean;
-    onAddSource?: () => void;
+    chapterRefs?: ChapterReference[];
+    titleRefs?: TitleReference[];
+    showRefs?: boolean;
+    onAddReference?: () => void;
   }
 
-  let { cueSources = [], titleSources = [], showCueSources = false, onAddSource }: Props = $props();
+  let { chapterRefs = [], titleRefs = [], showRefs = false, onAddReference }: Props = $props();
 
-  let nonEmptyTitleSources = $derived(titleSources.filter((s) => s.type !== 'custom' || (s.titles?.length ?? 0) > 0));
+  let nonEmptyTitleReferences = $derived(titleRefs.filter((s) => s.type !== 'custom' || (s.titles?.length ?? 0) > 0));
 
   let expanded = $state(false);
 </script>
 
-<div class="source-footer">
-  {#if nonEmptyTitleSources.length > 0 || showCueSources}
-    <div class="collapsible-section" class:compact={showCueSources}>
+<div class="reference-footer">
+  {#if nonEmptyTitleReferences.length > 0 || showRefs}
+    <div class="collapsible-section" class:compact={showRefs}>
       <button class="collapsible-toggle" type="button" onclick={() => (expanded = !expanded)}>
-        {#if showCueSources}
-          {cueSources.length === 0 ? 'No' : cueSources.length} chapter source{cueSources.length === 1 ? '' : 's'} available
+        {#if showRefs}
+          {chapterRefs.length === 0 ? 'No' : chapterRefs.length} Reference{chapterRefs.length === 1 ? '' : 's'} available
           for comparison
         {:else}
-          {nonEmptyTitleSources.length} title-only source{nonEmptyTitleSources.length === 1 ? '' : 's'}
+          {nonEmptyTitleReferences.length} Title Reference{nonEmptyTitleReferences.length === 1 ? '' : 's'}
         {/if}
         <span class="chevron" class:expanded>
           <ChevronDown size="12" />
@@ -33,52 +33,52 @@
 
       {#if expanded}
         <div class="collapsible-panel">
-          {#if showCueSources}
-            <p class="sources-note">
-              Chapter sources with timestamps can be used to compare against detected cues. This is helpful when
+          {#if showRefs}
+            <p class="references-note">
+              Chapter References with timestamps can be used to compare against detected cues. This is helpful when
               determining which cues are most likely to be accurate chapter markers.
             </p>
-            <p class="sources-note emphasized">
-              {#if cueSources.length > 0}
-                The following chapter sources include timestamps and can be used for comparison:
+            <p class="references-note emphasized">
+              {#if chapterRefs.length > 0}
+                The following Chapter References include timestamps and can be used for comparison:
               {:else}
-                No sources are currently available for comparison. Use the button below to add a source.
+                No References are currently available for comparison. Use the button below to add one.
               {/if}
             </p>
-            {#if cueSources.length > 0}
-              <ul class="sources-list">
-                {#each cueSources as s}
+            {#if chapterRefs.length > 0}
+              <ul class="references-list">
+                {#each chapterRefs as s}
                   <li class="emphasized">{s.name}</li>
                 {/each}
               </ul>
             {/if}
           {/if}
 
-          {#if nonEmptyTitleSources.length > 0}
-            <p class="sources-note">
-              The following sources do not include timestamps, but can be used later when editing titles:
+          {#if nonEmptyTitleReferences.length > 0}
+            <p class="references-note">
+              The following References do not include timestamps, but can be used later when editing titles:
             </p>
-            <ul class="sources-list">
-              {#each nonEmptyTitleSources as s}
+            <ul class="references-list">
+              {#each nonEmptyTitleReferences as s}
                 <li>{s.name}</li>
               {/each}
             </ul>
           {/if}
         </div>
 
-        {#if showCueSources}
-          <button class="add-source-link panel-button" onclick={onAddSource}>+ Add Chapter Source</button>
+        {#if showRefs}
+          <button class="add-reference-link panel-button" onclick={onAddReference}>+ Add Chapter Reference</button>
         {/if}
       {/if}
     </div>
   {/if}
-  {#if !showCueSources}
-    <button class="add-source-link" onclick={onAddSource}>+ Add Chapter Source</button>
+  {#if !showRefs}
+    <button class="add-reference-link" onclick={onAddReference}>+ Add Chapter Reference</button>
   {/if}
 </div>
 
 <style>
-  .source-footer {
+  .reference-footer {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -87,7 +87,7 @@
     margin-right: auto;
   }
 
-  .add-source-link {
+  .add-reference-link {
     background: none;
     border: none;
     cursor: pointer;
@@ -96,7 +96,7 @@
     padding: 0;
   }
 
-  .add-source-link:hover {
+  .add-reference-link:hover {
     opacity: 0.8;
   }
 
@@ -150,7 +150,7 @@
     margin-top: 0.5rem;
   }
 
-  .sources-note {
+  .references-note {
     margin: 0.75rem 0 0.25rem;
     font-size: 0.8rem;
     color: var(--text-secondary);
@@ -161,7 +161,7 @@
     color: var(--text-primary);
   }
 
-  .sources-list {
+  .references-list {
     margin: 0 auto;
     padding-left: 1.25rem;
     font-size: 0.8rem;
@@ -171,7 +171,7 @@
     text-align: left;
   }
 
-  .sources-list li {
+  .references-list li {
     margin: 0.1rem 0;
   }
 </style>

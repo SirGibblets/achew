@@ -98,11 +98,11 @@
 
     const tabs = ['timestamp', 'detected_cue'];
 
-    const existingCues = addOptions.existing_cues;
-    if (existingCues) {
-      Object.keys(existingCues).forEach((sourceName) => {
-        if (existingCues[sourceName].length > 0) {
-          tabs.push(sourceName);
+    const chapterRefs = addOptions.chapter_refs;
+    if (chapterRefs) {
+      Object.keys(chapterRefs).forEach((refName) => {
+        if (chapterRefs[refName].length > 0) {
+          tabs.push(refName);
         }
       });
     }
@@ -649,7 +649,7 @@
                     </tbody>
                   </table>
                 </div>
-              {:else if addOptions.existing_cues && addOptions.existing_cues[activeTab]}
+              {:else if addOptions.chapter_refs && addOptions.chapter_refs[activeTab]}
                 <div class="cue-table-section">
                   <table class="cue-table">
                     <thead>
@@ -661,45 +661,43 @@
                       </tr>
                     </thead>
                     <tbody>
-                      {#each addOptions.existing_cues[activeTab] as existingCue}
+                      {#each addOptions.chapter_refs[activeTab] as chapter}
                         <tr
                           class="cue-row clickable-row"
-                          class:selected={selectedTimestamp === existingCue.timestamp}
-                          onclick={(e) => handleRowClick(e, existingCue.timestamp, existingCue.title)}
-                          onkeydown={(e) => handleRowKeydown(e, existingCue.timestamp, existingCue.title)}
+                          class:selected={selectedTimestamp === chapter.timestamp}
+                          onclick={(e) => handleRowClick(e, chapter.timestamp, chapter.title)}
+                          onkeydown={(e) => handleRowKeydown(e, chapter.timestamp, chapter.title)}
                           tabindex="0"
                           role="button"
-                          aria-label="Select existing cue '{existingCue.title}' at {formatTimestamp(
-                            existingCue.timestamp,
-                          )}"
+                          aria-label="Select chapter '{chapter.title}' at {formatTimestamp(chapter.timestamp)}"
                         >
                           <td class="radio-cell">
                             <input
                               type="radio"
-                              name="existing-cue"
-                              checked={selectedTimestamp === existingCue.timestamp}
-                              onchange={() => selectOption(existingCue.timestamp, existingCue.title)}
+                              name="chapter"
+                              checked={selectedTimestamp === chapter.timestamp}
+                              onchange={() => selectOption(chapter.timestamp, chapter.title)}
                             />
                           </td>
                           <td class="preview-cell">
                             <button
                               class="preview-button"
-                              class:playing={$currentSegmentId === `preview-${existingCue.timestamp}` && $isPlaying}
+                              class:playing={$currentSegmentId === `preview-${chapter.timestamp}` && $isPlaying}
                               onclick={() => {
-                                selectOption(existingCue.timestamp, existingCue.title);
-                                previewAudio(existingCue.timestamp);
+                                selectOption(chapter.timestamp, chapter.title);
+                                previewAudio(chapter.timestamp);
                               }}
                               title="Preview audio"
                             >
-                              {#if $currentSegmentId === `preview-${existingCue.timestamp}` && $isPlaying}
+                              {#if $currentSegmentId === `preview-${chapter.timestamp}` && $isPlaying}
                                 <Pause size="16" />
                               {:else}
                                 <Play size="16" />
                               {/if}
                             </button>
                           </td>
-                          <td class="timestamp-cell">{formatTimestamp(existingCue.timestamp)}</td>
-                          <td class="title-cell">{existingCue.title}</td>
+                          <td class="timestamp-cell">{formatTimestamp(chapter.timestamp)}</td>
+                          <td class="title-cell">{chapter.title}</td>
                         </tr>
                       {/each}
                     </tbody>

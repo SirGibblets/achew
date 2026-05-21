@@ -8,7 +8,7 @@ If you're already in the editor after another workflow, you're set. Otherwise:
 
 1. Select the book.
 2. Choose **Quick Edit** on the *Select a Workflow* screen.
-3. Pick the source with the titles you want to clean up and click **Open in Editor.**
+3. Pick the Reference with the titles you want to clean up and click **Open in Editor.**
 
 ## Open AI Cleanup
 
@@ -23,7 +23,7 @@ Use the dropdowns in the top left of the dialog to choose a provider and model. 
 
 - **Infer opening credits/intro** / **Infer end credits/outro**: Useful if your selection contains an intro or outro chapter that isn't already labeled as such (e.g. *Opening Credits*, *End Credits*).
 - **Deselect Non-Chapters**: Drops rows that don't look like chapter titles.
-- **Prefer existing titles from:** Points AI Cleanup at the titles in another [chapter source](../getting-started/chapter-sources.md) (e.g. an Audnexus or EPUB title list) as a reference. This can be useful for establishing correct spelling or adding missing title text.
+- **Prefer existing titles from:** Points AI Cleanup at the titles in another [Chapter Reference](../getting-started/chapter-references.md) (e.g. an Audnexus or EPUB title list). This can be useful for establishing correct spelling or adding missing title text.
 
 ## Add Custom Instructions to define your style
 

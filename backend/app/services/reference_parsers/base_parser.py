@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, ClassVar
 
 if TYPE_CHECKING:
-    from ...models.sources import ExistingCueSource, ExistingTitleSource
+    from ...models.references import ChapterReference, TitleReference
 
 
 class BaseParser(ABC):
@@ -14,14 +14,14 @@ class BaseParser(ABC):
         stem, ext = os.path.splitext(filename)
         if len(stem) <= max_len:
             return filename
-        return stem[:max_len].rstrip() + "\u2026" + ext
+        return stem[:max_len].rstrip() + "…" + ext
 
 
-class BaseCueParser(BaseParser):
+class BaseChapterRefParser(BaseParser):
     @abstractmethod
-    def parse(self, file_path: str, source_name: str, duration: float = 0.0) -> "ExistingCueSource": ...
+    def parse(self, file_path: str, ref_name: str, duration: float = 0.0) -> "ChapterReference": ...
 
 
-class BaseTitleParser(BaseParser):
+class BaseTitleRefParser(BaseParser):
     @abstractmethod
-    def parse(self, file_path: str, source_name: str) -> "ExistingTitleSource": ...
+    def parse(self, file_path: str, ref_name: str) -> "TitleReference": ...

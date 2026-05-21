@@ -1,6 +1,6 @@
 # Start from scratch with Smart Detect
 
-Follow these steps when your book has no usable chapter data: No chapters in Audiobookshelf, no embedded metadata, and Audnexus has nothing for it. You'll build chapters from the audio itself.
+Follow these steps when your book has no usable chapter data: No chapters in Audiobookshelf, no embedded chapters, and Audnexus has nothing for it. You'll build chapters from the audio itself.
 
 ## Run Smart Detect
 
@@ -11,7 +11,7 @@ Follow these steps when your book has no usable chapter data: No chapters in Aud
 
 ## Tune the cue selection
 
-When detection finishes, you'll land on the *Initial Chapter Selection* screen. With no comparison source available, rely on the timeline and histogram:
+When detection finishes, you'll land on the *Initial Chapter Selection* screen. With no comparison Reference available, rely on the timeline and histogram:
 
 1. Drag the **Cue Selection Slider** to set how many cues become chapters. If you're not sure where to start, look for a clear *valley* in the histogram and place the slider just into the right slope of it. For example:
 
@@ -40,13 +40,13 @@ On the *Transcribe Titles* screen, pick your [transcription settings](../referen
 
 Click **Review Selected**, then [submit to Audiobookshelf or export](../editor/review-submit-export.md).
 
-## Scenario: A reference source exists, but is partly wrong
+## Scenario: A Reference exists, but is partly wrong
 
-If you have a chapter source whose timestamps are mostly accurate but you suspect Smart Detect can do better, make sure to add it from the Smart Detect screen *before* clicking **Start Smart Detect**. Then on the *Initial Chapter Selection* screen:
+If you have a Chapter Reference whose timestamps are mostly accurate but you suspect Smart Detect can do better, make sure to add it from the Smart Detect screen *before* clicking **Start Smart Detect**. Then on the *Initial Chapter Selection* screen:
 
-1. Toggle the source under **Compare to** in the timeline. Tick marks become color-coded by alignment quality, with the alignment percentage shown next to it.
+1. Toggle the Reference under **Compare to** in the timeline. Tick marks become color-coded by alignment quality, with the alignment percentage shown next to it.
 2. Adjust the **Cue Selection Slider** to maximize alignment.
-3. Optionally, enable the source under **Include unaligned chapters** to fold in any of its chapters that Smart Detect missed.
+3. Optionally, enable the Reference under **Include unaligned chapters** to fold in any of its chapters that Smart Detect missed.
 
 ## Related
 

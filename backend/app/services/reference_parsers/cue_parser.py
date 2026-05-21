@@ -2,8 +2,8 @@ import logging
 import re
 from typing import Optional
 
-from ...models.sources import CueSourceType, ExistingCue, ExistingCueSource
-from .base_parser import BaseCueParser
+from ...models.references import BasicChapter, ChapterReference, ChapterRefType
+from .base_parser import BaseChapterRefParser
 
 logger = logging.getLogger(__name__)
 
@@ -12,11 +12,11 @@ _TITLE_RE = re.compile(r'^\s*TITLE\s+"(.*)"', re.IGNORECASE)
 _INDEX_RE = re.compile(r"^\s*INDEX\s+01\s+(\d+):(\d+):(\d+)", re.IGNORECASE)
 
 
-class CueParser(BaseCueParser):
+class CueParser(BaseChapterRefParser):
     short_name = "CUE"
 
-    def parse(self, file_path: str, source_name: str, duration: float = 0.0) -> ExistingCueSource:
-        """Parse a CUE sheet file for chapter cue data.
+    def parse(self, file_path: str, ref_name: str, duration: float = 0.0) -> ChapterReference:
+        """Parse a CUE sheet file for chapter data.
 
         CUE INDEX timestamps use MM:SS:FF format (75 frames per second).
         """
@@ -30,7 +30,7 @@ class CueParser(BaseCueParser):
         except Exception as e:
             raise ValueError(f"Could not read CUE file: {e}") from e
 
-        cues = []
+        chapters = []
         current_title: Optional[str] = None
         in_track = False
 
@@ -50,22 +50,22 @@ class CueParser(BaseCueParser):
                 if m:
                     mm, ss, ff = int(m.group(1)), int(m.group(2)), int(m.group(3))
                     timestamp = mm * 60 + ss + ff / 75.0
-                    title = current_title or f"Track {len(cues) + 1}"
-                    cues.append((timestamp, title))
+                    title = current_title or f"Track {len(chapters) + 1}"
+                    chapters.append((timestamp, title))
                     in_track = False
                     continue
 
-        if not cues:
+        if not chapters:
             raise ValueError("No TRACK/INDEX entries found in CUE file")
 
-        name = self.ellipsize_name(source_name)
-        logger.info(f"Parsed {source_name} as CUE cue source ({len(cues)} cues)")
-        return ExistingCueSource(
-            type=CueSourceType.CUE,
+        name = self.ellipsize_name(ref_name)
+        logger.info(f"Parsed {ref_name} as CUE Chapter Reference ({len(chapters)} chapters)")
+        return ChapterReference(
+            type=ChapterRefType.CUE,
             name=f"Cue Sheet ({name})",
             short_name=self.short_name,
             description=f'Chapter data parsed from CUE Sheet file "{name}"',
-            metadata={"File": source_name},
-            cues=[ExistingCue(timestamp=ts, title=t) for ts, t in cues],
+            metadata={"File": ref_name},
+            chapters=[BasicChapter(timestamp=ts, title=t) for ts, t in chapters],
             duration=duration,
         )

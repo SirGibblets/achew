@@ -7,7 +7,7 @@ class AIOptions(BaseModel):
     deselectNonChapters: bool = False
     keepDeselectedTitles: bool = False
     usePreferredTitles: bool = False
-    preferredTitlesSource: str = ""
+    preferredTitlesRef: str = ""
     additionalInstructions: str = ""
     provider_id: str = ""
     model_id: str = ""

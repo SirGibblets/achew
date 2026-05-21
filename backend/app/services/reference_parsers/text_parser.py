@@ -1,18 +1,18 @@
 import logging
 
-from ...models.sources import ExistingTitleSource, TitleSourceType
-from .base_parser import BaseTitleParser
+from ...models.references import TitleReference, TitleRefType
+from .base_parser import BaseTitleRefParser
 
 logger = logging.getLogger(__name__)
 
 _MAX_LINES = 499
 
 
-class TextParser(BaseTitleParser):
+class TextParser(BaseTitleRefParser):
     short_name = "Txt File"
 
-    def parse(self, file_path: str, source_name: str) -> ExistingTitleSource:
-        """Parse a plain-text file as a title-only source (one title per line).
+    def parse(self, file_path: str, ref_name: str) -> TitleReference:
+        """Parse a plain-text file as a title-only reference (one title per line).
 
         Rejects files with 500 or more non-blank lines as implausibly large.
         """
@@ -35,13 +35,13 @@ class TextParser(BaseTitleParser):
         if not titles:
             raise ValueError("Text file contains no non-blank lines")
 
-        name = self.ellipsize_name(source_name)
-        logger.info(f"Parsed {source_name} as text title source ({len(titles)} titles)")
-        return ExistingTitleSource(
-            type=TitleSourceType.TEXT,
+        name = self.ellipsize_name(ref_name)
+        logger.info(f"Parsed {ref_name} as text Title Reference ({len(titles)} titles)")
+        return TitleReference(
+            type=TitleRefType.TEXT,
             name=f"Text File ({name})",
             short_name=self.short_name,
             description=f'Chapter titles parsed from text file "{name}"',
-            metadata={"File": source_name},
+            metadata={"File": ref_name},
             titles=titles,
         )

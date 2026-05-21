@@ -22,11 +22,11 @@ The editor shows a list of chapters and an Action Bar at the bottom.
 |--:|---|---|
 | 1 | :material-checkbox-marked:{ .icon-token .primary } Checkbox | Selects or deselects the chapter. <kbd>Shift</kbd>-click another checkbox to apply the same selection state to every chapter in the range between the two clicks. The checkbox at the very top can be used to select/deselect all chapters. |
 | 2 | Timestamp | The chapter timestamp. Clicking on the timestamp allows you to edit it: <div style="height: 0.5rem;"></div> ![Inline Timestamp Editi](../img/timestamp-edit-dark.webp#only-dark){ width="200" align=left} ![Inline Timestamp Editi](../img/timestamp-edit-light.webp#only-light){ width="200" alight=left} While editing, use the <kbd>‹</kbd> and <kbd>›</kbd> buttons (or [Keyboard Shortcuts](keyboard-shortcuts.md#inline-timestamp-shortcuts)) to jump to nearby detected cues. The very first chapter (at timestamp `0`) is fixed and cannot be edited. Toggle between formatted timestamps and raw seconds in the [editor settings](#editor-settings). |
-| 3 | Offset | Shown when using the [Realignment](../workflows/realign-chapters.md) workflow. Shows the difference between the original source timestamp and the realigned one. A warning icon :lucide-triangle-alert:{ .icon-token .warning } appears on low-confidence or guessed alignments; give those a listen to verify accuracy before submitting your chapters. |
-| 4 | Transcript | The raw transcript for the chapter. Non-editable, serves as a reference for writing the title. Long transcripts are truncated; hover over the transcript to see the full text. The transcript column can be hidden via the [editor settings](#editor-settings). |
+| 3 | Offset | Shown when using the [Realignment](../workflows/realign-chapters.md) workflow. Shows the difference between the original Reference timestamp and the realigned one. A warning icon :lucide-triangle-alert:{ .icon-token .warning } appears on low-confidence or guessed alignments; give those a listen to verify accuracy before submitting your chapters. |
+| 4 | Transcript | The raw transcript for the chapter, non-editable. Long transcripts are truncated; hover over the transcript to see the full text. The transcript column can be hidden via the [editor settings](#editor-settings). |
 | 5 | :lucide-arrow-right:{ .icon-token .primary } Use Transcript | Replaces the current title with the transcribed text. Disabled when there is no transcript, or when the title already matches the transcript. |
 | 6 | Title | The editable chapter title. |
-| 7 | :lucide-plus:{ .icon-token } Add Chapter | Opens the [Add Chapter Dialog](add-chapter-dialog.md) to insert a new chapter. Chapters can be added from cues, chapter sources, deleted chapters, or a specific timestamp. |
+| 7 | :lucide-plus:{ .icon-token } Add Chapter | Opens the [Add Chapter Dialog](add-chapter-dialog.md) to insert a new chapter. Chapters can be added from cues, Chapter References, deleted chapters, or a specific timestamp. |
 | 8 | :lucide-mic:{ .icon-token } Transcribe | Transcribes the audio just for this chapter using the current [transcription settings](../reference/transcription.md#configuring-transcription). |
 | 9 | :lucide-play:{ .icon-token .primary } Play | Starts playback at this chapter's timestamp. Click again to stop. |
 | 10 | :lucide-trash-2:{ .icon-token .danger } Delete | Deletes the chapter. Recoverable using the Undo button, or via the **Deleted** tab in the [Add Chapter Dialog](add-chapter-dialog.md). The very first chapter (timestamp `0`) cannot be deleted. |
@@ -54,7 +54,7 @@ Clicking the menu button (:lucide-ellipsis-vertical:{ .icon-token }) on the Acti
 
 ### Additional Tools
 
-- **[Apply Titles](apply-titles.md) from...** allows you to set titles from [chapter sources](../getting-started/chapter-sources.md). 
+- **[Apply Titles](apply-titles.md) from...** allows you to set titles from [Chapter References](../getting-started/chapter-references.md). 
 - **[Shift Timestamps](shift-timestamps.md)** allows you to shift timestamps in bulk. 
 - **Transcribe Selected** transcribes the selected chapters using current [transcription settings](../reference/transcription.md#configuring-transcription).
 - **Delete Selected/Unselected** deletes every selected (or unselected) chapter. 

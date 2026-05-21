@@ -56,7 +56,7 @@ If you're not sure which model to use, view the notes in the [provider summary](
 | **Infer end credits/outro** | Make the last selected chapter more likely to be titled "End Credits" |
 | **Deselect Non-Chapters** | Deselect rows that look like narrative content rather than chapter titles |
 | &nbsp;&nbsp;&nbsp;&nbsp;└ **Preserve Titles** | When a row gets deselected, keep its original title instead of clearing it. |
-| **Prefer existing titles from:** | Uses [Source](../getting-started/chapter-sources.md) titles as a reference for what cleaned titles should look like.<p>The :lucide-eye:{ .icon-token } preview button displays the titles in the selected source (switches to an :lucide-pencil:{ .icon-token } edit button for the *Custom Titles* source).</p><p>The :lucide-plus:{ .icon-token } add button opens the [Add Chapter Source](../getting-started/chapter-sources.md#adding-chapter-sources) dialog.</p> |
+| **Prefer existing titles from:** | Uses [Reference](../getting-started/chapter-references.md) titles when determining what cleaned titles should look like.<p>The :lucide-eye:{ .icon-token } preview button displays the titles in the selected Reference (switches to an :lucide-pencil:{ .icon-token } edit button for the *Custom Titles* Reference).</p><p>The :lucide-plus:{ .icon-token } add button opens the [Add Chapter Reference](../getting-started/chapter-references.md#adding-chapter-references) dialog.</p> |
 
 ## Custom Instructions
 
@@ -85,7 +85,7 @@ Below the Custom Instructions list is an area to enter **Additional Instructions
 
     - The selected chapter titles.
     - The book's title and author.
-    - Titles from the **Prefer existing titles from** source, if that option is enabled.
+    - Titles from the **Prefer existing titles from** Reference, if that option is enabled.
     - Your enabled **Custom Instructions** and any **Additional Instructions** for this run.
 
     No audio is sent. See [Privacy and Data](../reference/privacy-and-data.md) for details.

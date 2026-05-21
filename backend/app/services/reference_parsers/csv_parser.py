@@ -1,8 +1,8 @@
 import csv
 import logging
 
-from ...models.sources import CueSourceType, ExistingCue, ExistingCueSource
-from .base_parser import BaseCueParser
+from ...models.references import BasicChapter, ChapterReference, ChapterRefType
+from .base_parser import BaseChapterRefParser
 from .timestamp_utils import normalize_timestamps, parse_timestamp, score_timestamp
 from .title_utils import score_title
 
@@ -13,11 +13,11 @@ _TIMESTAMP_NEGATIVE = {"end", "length", "duration", "stop", "finish"}
 _TITLE_KEYWORDS = {"title", "name", "chapter", "label", "heading", "text"}
 
 
-class CsvParser(BaseCueParser):
+class CsvParser(BaseChapterRefParser):
     short_name = "CSV"
 
-    def parse(self, file_path: str, source_name: str, duration: float = 0.0) -> ExistingCueSource:
-        """Parse a CSV for chapter cue data using heuristic column scoring."""
+    def parse(self, file_path: str, ref_name: str, duration: float = 0.0) -> ChapterReference:
+        """Parse a CSV for chapter data using heuristic column scoring."""
         rows = []
         try:
             with open(file_path, newline="", encoding="utf-8") as f:
@@ -101,19 +101,19 @@ class CsvParser(BaseCueParser):
             raise ValueError("No plausible timestamp/title columns found.")
 
         normalised = normalize_timestamps(raw_timestamps)
-        cues = list(zip(normalised, titles))
+        chapters = list(zip(normalised, titles))
 
-        if duration and cues and abs(cues[-1][0] - duration) <= 3:
-            cues = cues[:-1]
+        if duration and chapters and abs(chapters[-1][0] - duration) <= 3:
+            chapters = chapters[:-1]
 
-        name = self.ellipsize_name(source_name)
-        logger.info(f"Parsed {source_name} as CSV cue source ({len(cues)} cues)")
-        return ExistingCueSource(
-            type=CueSourceType.CSV,
+        name = self.ellipsize_name(ref_name)
+        logger.info(f"Parsed {ref_name} as CSV Chapter Reference ({len(chapters)} chapters)")
+        return ChapterReference(
+            type=ChapterRefType.CSV,
             name=f"CSV File ({name})",
             short_name=self.short_name,
             description=f'Chapter data parsed from CSV file "{name}"',
-            metadata={"File": source_name},
-            cues=[ExistingCue(timestamp=ts, title=t) for ts, t in cues],
+            metadata={"File": ref_name},
+            chapters=[BasicChapter(timestamp=ts, title=t) for ts, t in chapters],
             duration=duration,
         )
