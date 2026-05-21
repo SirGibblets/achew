@@ -47,7 +47,7 @@ Contains the models used for transcription (Whisper/Parakeet). These are downloa
 Contains transient data for the current session:
 
 - Book audio files
-- Chapter source files
+- Chapter Reference files
 - Audio segments used for detection and transcription
 
 ## Back up

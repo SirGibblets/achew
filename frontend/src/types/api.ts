@@ -1,6 +1,6 @@
-import type { ChapterData, SelectionStats } from './chapter';
-import type { ExistingCueSource, ExistingTitleSource } from './sources';
 import type { Book } from './book';
+import type { BasicChapter, ChapterData, SelectionStats } from './chapter';
+import type { ChapterReference, TitleReference } from './references';
 
 export interface ProgressState {
   step: string;
@@ -16,8 +16,8 @@ export interface PipelineState {
   selection_stats: SelectionStats;
   can_undo: boolean;
   can_redo: boolean;
-  cue_sources?: ExistingCueSource[];
-  title_sources?: ExistingTitleSource[];
+  chapter_refs?: ChapterReference[];
+  title_refs?: TitleReference[];
   book?: Book | null;
   restart_options?: string[];
   audio_unsupported_codec?: boolean;
@@ -48,7 +48,7 @@ export interface AIOptions {
   deselectNonChapters: boolean;
   keepDeselectedTitles: boolean;
   usePreferredTitles: boolean;
-  preferredTitlesSource: string;
+  preferredTitlesRef: string;
   additionalInstructions: string;
   provider_id: string;
   model_id: string;
@@ -198,30 +198,19 @@ export interface DetectedCueEntry {
 export interface DetectedCuesResponse {
   detected_cues: DetectedCueEntry[];
   book_duration: number;
-  existing_cue_sources: ExistingCueSource[];
+  chapter_refs: ChapterReference[];
 }
 
 export interface NearbyCuesResponse {
   cues: DetectedCueEntry[];
 }
 
-export interface AddOptionsExistingCue {
-  timestamp: number;
-  title: string;
-}
-
-export interface AddOptionsDeletedChapter {
-  id?: string;
-  timestamp: number;
-  title?: string;
-}
-
 export interface AddOptionsResponse {
   min_timestamp: number;
   max_timestamp: number;
   detected_cues: DetectedCueEntry[];
-  existing_cues: Record<string, AddOptionsExistingCue[]>;
-  deleted: AddOptionsDeletedChapter[];
+  chapter_refs: Record<string, BasicChapter[]>;
+  deleted: BasicChapter[];
   allow_normal_scan: boolean;
   allow_vad_scan: boolean;
 }
@@ -240,9 +229,9 @@ export interface CancelResponse {
   [key: string]: unknown;
 }
 
-export interface SourcesResponse {
-  cue_sources: ExistingCueSource[];
-  title_sources: ExistingTitleSource[];
+export interface ReferencesResponse {
+  chapter_refs: ChapterReference[];
+  title_refs: TitleReference[];
 }
 
 export interface CustomInstruction {

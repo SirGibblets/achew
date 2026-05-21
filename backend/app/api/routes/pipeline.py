@@ -5,7 +5,7 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 
-from app.models.sources import ExistingCueSource, ExistingTitleSource
+from app.models.references import ChapterReference, TitleReference
 from app.services.processing_pipeline import PipelineProgress
 
 from ...app import get_app_state
@@ -22,8 +22,10 @@ class CreatePipelineRequest(BaseModel):
     item_id: str
 
 
-class SelectWorkflowRequest(BaseModel):
-    option: str
+class StartWorkflowRequest(BaseModel):
+    workflow: str
+    ref_id: Optional[str] = None
+    dramatized: Optional[bool] = False
 
 
 class RestartPipelineRequest(BaseModel):
@@ -47,11 +49,6 @@ class ConfigureASRRequest(BaseModel):
     preassigned_titles: List[PreassignedTitle] = []
 
 
-class RealignChapterRequest(BaseModel):
-    source_id: str
-    dramatized: bool
-
-
 class PipelineStateResponse(BaseModel):
     item_id: str
     step: str
@@ -60,8 +57,8 @@ class PipelineStateResponse(BaseModel):
     can_undo: bool
     can_redo: bool
     book: Optional[Book] = None
-    cue_sources: List[ExistingCueSource] = []
-    title_sources: List[ExistingTitleSource] = []
+    chapter_refs: List[ChapterReference] = []
+    title_refs: List[TitleReference] = []
     restart_options: List[str] = []
     audio_unsupported_codec: bool = False
 
@@ -91,8 +88,8 @@ async def create_pipeline(request: CreatePipelineRequest, background_tasks: Back
                 await app_state.broadcast_step_change(
                     Step.SELECT_WORKFLOW,
                     extras={
-                        "cue_sources": pipeline.existing_cue_sources,
-                        "title_sources": pipeline.existing_title_sources,
+                        "chapter_refs": pipeline.chapter_refs,
+                        "title_refs": pipeline.title_refs,
                         "audio_unsupported_codec": pipeline.audio_unsupported_codec,
                     },
                 )
@@ -142,8 +139,8 @@ async def get_pipeline_state():
             can_undo=pipeline.can_undo(),
             can_redo=pipeline.can_redo(),
             book=pipeline.book if pipeline.book else None,
-            cue_sources=pipeline.existing_cue_sources,
-            title_sources=pipeline.existing_title_sources,
+            chapter_refs=pipeline.chapter_refs,
+            title_refs=pipeline.title_refs,
             restart_options=pipeline.get_restart_options(),
             audio_unsupported_codec=pipeline.audio_unsupported_codec,
         )
@@ -237,8 +234,8 @@ async def goto_review():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/pipeline/select-workflow")
-async def select_workflow(request: SelectWorkflowRequest, background_tasks: BackgroundTasks):
+@router.post("/pipeline/start-workflow")
+async def start_workflow(request: StartWorkflowRequest, background_tasks: BackgroundTasks):
     """Set workflow"""
     try:
         app_state = get_app_state()
@@ -254,17 +251,17 @@ async def select_workflow(request: SelectWorkflowRequest, background_tasks: Back
 
         pipeline = app_state.pipeline
 
-        async def create_cues_from_source():
+        async def run_workflow():
             try:
-                await pipeline.create_cues_from_source(request.option)
+                await pipeline.start_workflow(request.workflow, request.ref_id, request.dramatized)
             except Exception as e:
-                logger.error(f"Failed to create cues from source: {e}")
+                logger.error(f"Failed to start workflow: {e}")
 
-        background_tasks.add_task(create_cues_from_source)
+        background_tasks.add_task(run_workflow)
 
         return {
-            "message": f"Selected workflow '{request.option}'",
-            "option": request.option,
+            "message": f"Selected workflow '{request.workflow}'",
+            "workflow": request.workflow,
         }
 
     except HTTPException:
@@ -299,7 +296,7 @@ async def get_detected_cues():
         return {
             "detected_cues": detected_cues,
             "book_duration": app_state.pipeline.book_duration,
-            "existing_cue_sources": app_state.pipeline.existing_cue_sources,
+            "chapter_refs": app_state.pipeline.chapter_refs,
         }
 
     except HTTPException:
@@ -331,13 +328,13 @@ async def select_initial_chapters(request: dict, background_tasks: BackgroundTas
         if not isinstance(include_unaligned, list):
             raise HTTPException(status_code=400, detail="include_unaligned must be a list")
 
-        # Validate each option against available cue sources
-        available_source_ids = [source.id for source in app_state.pipeline.existing_cue_sources]
+        # Validate each option against available chapter references
+        available_ref_ids = [ref.id for ref in app_state.pipeline.chapter_refs]
         for option in include_unaligned:
-            if option not in available_source_ids:
+            if option not in available_ref_ids:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Invalid include_unaligned option: {option}. Available options: {available_source_ids}",
+                    detail=f"Invalid include_unaligned option: {option}. Available options: {available_ref_ids}",
                 )
 
         pipeline = app_state.pipeline
@@ -448,24 +445,6 @@ async def get_selected_cues():
         raise
     except Exception as e:
         logger.error(f"Failed to get selected cues: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/pipeline/cue-sources", response_model=List[ExistingCueSource])
-async def get_cue_sources():
-    """Get detailed chapter information for available cue sources"""
-    try:
-        app_state = get_app_state()
-
-        if not app_state.pipeline:
-            raise HTTPException(status_code=404, detail="Pipeline not found")
-
-        return app_state.pipeline.existing_cue_sources
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to get cue sources for pipeline: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -603,42 +582,4 @@ async def get_asr_options():
         raise
     except Exception as e:
         logger.error(f"Failed to get ASR options for pipeline: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/pipeline/realign")
-async def realign_chapter(request: RealignChapterRequest, background_tasks: BackgroundTasks):
-    """Realign chapter cues (Stub)"""
-    try:
-        app_state = get_app_state()
-
-        if not app_state.pipeline:
-            raise HTTPException(status_code=404, detail="Pipeline not found")
-
-        if app_state.step != Step.SELECT_WORKFLOW:
-            raise HTTPException(
-                status_code=400,
-                detail="Pipeline must be in select_workflow step to select option",
-            )
-
-        pipeline = app_state.pipeline
-
-        async def realign_chapters():
-            try:
-                await pipeline.realign_chapters(request.source_id, request.dramatized)
-            except Exception as e:
-                logger.error(f"Failed to realign chapters: {e}")
-
-        background_tasks.add_task(realign_chapters)
-
-        return {
-            "message": f"Realignment started for source '{request.source_id}'",
-            "source_id": request.source_id,
-            "dramatized": request.dramatized,
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to start realignment: {e}")
         raise HTTPException(status_code=500, detail=str(e))

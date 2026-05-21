@@ -5,8 +5,8 @@
   import { onDestroy, onMount, tick } from 'svelte';
   import { audio, currentSegmentId, isPlaying } from '../../stores/audio';
   import { chapters } from '../../stores/session';
-  import type { ChapterData } from '../../types/chapter';
-  import type { ExistingCue, ExistingCueSource } from '../../types/sources';
+  import type { BasicChapter, ChapterData } from '../../types/chapter';
+  import type { Reference } from '../../types/references';
 
   interface TitleMapping {
     chapter_id: string;
@@ -15,7 +15,7 @@
 
   interface Pair {
     chapter: ChapterData;
-    cue: ExistingCue;
+    refChapter: BasicChapter;
   }
 
   interface ConnectorPath {
@@ -24,45 +24,49 @@
   }
 
   interface Props {
-    source?: ExistingCueSource | null;
+    ref?: Reference | null;
     mappings?: TitleMapping[];
   }
 
-  let { source = null, mappings = $bindable([]) }: Props = $props();
+  let { ref = null, mappings = $bindable([]) }: Props = $props();
 
   let allChapters = $derived($chapters.filter((c) => !c.deleted));
-  let sourceCues = $derived<ExistingCue[]>(source?.cues ?? []);
+  /* A reference is either a chapter reference (has `chapters`) or a title reference
+     (has `titles`). The right column only renders titles, so normalize both into a title list. */
+  let refChapters = $derived<BasicChapter[]>(
+    ref && 'chapters' in ref ? ref.chapters : (ref?.titles ?? []).map((title) => ({ timestamp: 0, title })),
+  );
 
   let leftChecked = $state<Record<string, boolean>>({});
   let rightChecked = $state<boolean[]>([]);
-  let lastSourceId = $state<string | null>(null);
+  let lastRefId = $state<string | null>(null);
 
   $effect(() => {
-    const sourceId = source?.id ?? null;
-    if (sourceId !== lastSourceId) {
+    const refId = ref?.id ?? null;
+    if (refId !== lastRefId) {
       const lc: Record<string, boolean> = {};
       for (const ch of allChapters) {
         lc[ch.id] = ch.selected;
       }
       leftChecked = lc;
-      rightChecked = sourceCues.map(() => true);
-      lastSourceId = sourceId;
+      rightChecked = refChapters.map(() => true);
+      lastRefId = refId;
     }
   });
 
   let selectedChapters = $derived(allChapters.filter((ch) => leftChecked[ch.id]));
-  let selectedCues = $derived(sourceCues.filter((_, i) => rightChecked[i]));
+  let selectedRefChapters = $derived(refChapters.filter((_, i) => rightChecked[i]));
 
-  /* Pair Nth selected original with Nth selected source cue */
+  /* Pair Nth selected original chapter with Nth selected reference chapter */
   let pairs = $derived<Pair[]>(
-    selectedChapters.slice(0, selectedCues.length).map((ch, i) => ({
+    selectedChapters.slice(0, selectedRefChapters.length).map((ch, i) => ({
       chapter: ch,
-      cue: selectedCues[i],
+      refChapter: selectedRefChapters[i],
     })),
   );
 
-  /* Map from chapter id to its paired cue for quick lookup */
-  let pairMap = $derived(new Map<string, ExistingCue>(pairs.map((p) => [p.chapter.id, p.cue])));
+  /* Map from chapter id to its paired reference chapter for quick lookup */
+  let pairMap = $derived(new Map<string, BasicChapter>(pairs.map((p) => [p.chapter.id, p.refChapter])));
 
   let lastClickedLeft = $state<number | null>(null);
   let lastClickedRight = $state<number | null>(null);
@@ -87,28 +91,28 @@
     lastClickedLeft = idx;
   }
 
-  function handleRightCheck(cueIdx: number, event: MouseEvent): void {
-    const newValue = !rightChecked[cueIdx];
+  function handleRightCheck(refIdx: number, event: MouseEvent): void {
+    const newValue = !rightChecked[refIdx];
 
     const next = [...rightChecked];
-    if (event.shiftKey && lastClickedRight !== null && lastClickedRight !== cueIdx) {
-      const lo = Math.min(lastClickedRight, cueIdx);
-      const hi = Math.max(lastClickedRight, cueIdx);
+    if (event.shiftKey && lastClickedRight !== null && lastClickedRight !== refIdx) {
+      const lo = Math.min(lastClickedRight, refIdx);
+      const hi = Math.max(lastClickedRight, refIdx);
       for (let i = lo; i <= hi; i++) {
         next[i] = newValue;
       }
     } else {
-      next[cueIdx] = newValue;
+      next[refIdx] = newValue;
     }
     rightChecked = next;
 
-    lastClickedRight = cueIdx;
+    lastClickedRight = refIdx;
   }
 
   $effect(() => {
     mappings = pairs.map((p) => ({
       chapter_id: p.chapter.id,
-      new_title: p.cue.title,
+      new_title: p.refChapter.title,
     }));
   });
 
@@ -153,8 +157,8 @@
 
     for (const p of pairs) {
       const leftEl = leftRowEls[p.chapter.id];
-      const cueIdx = sourceCues.indexOf(p.cue);
-      const rightEl = rightRowEls[cueIdx];
+      const refIdx = refChapters.indexOf(p.refChapter);
+      const rightEl = rightRowEls[refIdx];
       if (!leftEl || !rightEl) continue;
 
       const lRect = leftEl.getBoundingClientRect();
@@ -187,27 +191,27 @@
 
   /** Interpolation-based scroll sync */
   function syncOther(
-    sourceEl: HTMLDivElement | null,
-    sourceRowEls: Record<string | number, HTMLElement | null>,
-    sourceKeyFn: (i: number) => string | number,
+    referenceEl: HTMLDivElement | null,
+    referenceRowEls: Record<string | number, HTMLElement | null>,
+    referenceKeyFn: (i: number) => string | number,
     targetEl: HTMLDivElement | null,
     targetRowEls: Record<string | number, HTMLElement | null>,
     targetKeyFn: (i: number) => string | number,
   ): void {
-    if (isSyncScrolling || !sourceEl || !targetEl || pairs.length === 0) return;
+    if (isSyncScrolling || !referenceEl || !targetEl || pairs.length === 0) return;
     isSyncScrolling = true;
 
-    const scrollTop = sourceEl.scrollTop;
-    const maxScroll = sourceEl.scrollHeight - sourceEl.clientHeight;
+    const scrollTop = referenceEl.scrollTop;
+    const maxScroll = referenceEl.scrollHeight - referenceEl.clientHeight;
 
     /*
-     * Build a mapping: for each pair, record the source scrollTop at which
+     * Build a mapping: for each pair, record the reference scrollTop at which
      * that pair's row sits at the top of the viewport, and the corresponding
      * target scrollTop that would align the target pair row to the top.
      */
     const anchors: { srcOffset: number; tgtOffset: number }[] = [];
     for (let i = 0; i < pairs.length; i++) {
-      const srcEl = sourceRowEls[sourceKeyFn(i)];
+      const srcEl = referenceRowEls[referenceKeyFn(i)];
       const tgtEl = targetRowEls[targetKeyFn(i)];
       if (!srcEl || !tgtEl) continue;
       anchors.push({
@@ -271,7 +275,7 @@
       (i) => pairs[i].chapter.id,
       rightColEl,
       rightRowEls as Record<string | number, HTMLElement | null>,
-      (i) => sourceCues.indexOf(pairs[i].cue),
+      (i) => refChapters.indexOf(pairs[i].refChapter),
     );
   }
 
@@ -279,7 +283,7 @@
     syncOther(
       rightColEl,
       rightRowEls as Record<string | number, HTMLElement | null>,
-      (i) => sourceCues.indexOf(pairs[i].cue),
+      (i) => refChapters.indexOf(pairs[i].refChapter),
       leftColEl,
       leftRowEls as Record<string | number, HTMLElement | null>,
       (i) => pairs[i].chapter.id,
@@ -378,9 +382,9 @@
     {/each}
   </svg>
 
-  <!-- Right column: source cues -->
+  <!-- Right column: reference chapters -->
   <div class="col col-right" bind:this={rightColEl}>
-    {#each sourceCues as cue, i (i)}
+    {#each refChapters as refChapter, i (i)}
       <!-- svelte-ignore a11y_click_events_have_key_events -->
       <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
       <label
@@ -394,7 +398,7 @@
       >
         <input type="checkbox" checked={rightChecked[i]} />
         <span class="title">
-          <span class="title-original">{cue.title}</span>
+          <span class="title-original">{refChapter.title}</span>
         </span>
       </label>
     {/each}

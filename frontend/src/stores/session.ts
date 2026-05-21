@@ -1,20 +1,20 @@
-import { writable, derived, get } from 'svelte/store';
-import { api, handleApiError } from '../utils/api';
-import { connectWebSocket, disconnectWebSocket, onWebSocketMessage, WS_MESSAGE_TYPES } from '../utils/websocket';
-import type { ChapterData, SelectionStats } from '../types/chapter';
-import type { ExistingCueSource, ExistingTitleSource } from '../types/sources';
+import { derived, get, writable } from 'svelte/store';
 import type { Book } from '../types/book';
+import type { ChapterData, SelectionStats } from '../types/chapter';
+import type { ChapterReference, TitleReference } from '../types/references';
 import type {
   ChapterUpdateData,
   ErrorData,
   HistoryUpdateData,
   ProgressUpdateData,
   SelectionStatsData,
-  SourcesUpdateData,
+  ReferencesUpdateData,
   StatusData,
   StepChangeData,
   TranscribingUpdateData,
 } from '../types/websocket';
+import { api, handleApiError } from '../utils/api';
+import { connectWebSocket, disconnectWebSocket, onWebSocketMessage, WS_MESSAGE_TYPES } from '../utils/websocket';
 
 export interface SessionProgress {
   step: string;
@@ -32,8 +32,8 @@ export interface SessionState {
   canUndo: boolean;
   canRedo: boolean;
   book: Book | null;
-  cueSources: ExistingCueSource[];
-  titleSources: ExistingTitleSource[];
+  chapterRefs: ChapterReference[];
+  titleRefs: TitleReference[];
   audioUnsupportedCodec: boolean;
   restartOptions: string[];
   transcriptionStatuses: Record<string, string>;
@@ -64,8 +64,8 @@ function initialState(): SessionState {
     canUndo: false,
     canRedo: false,
     book: null,
-    cueSources: [],
-    titleSources: [],
+    chapterRefs: [],
+    titleRefs: [],
     audioUnsupportedCodec: false,
     restartOptions: [],
     transcriptionStatuses: {},
@@ -107,8 +107,8 @@ function createSessionStore() {
         update((state) => ({
           ...state,
           step: data.new_step,
-          ...(data.cue_sources && { cueSources: data.cue_sources }),
-          ...(data.title_sources && { titleSources: data.title_sources }),
+          ...(data.chapter_refs && { chapterRefs: data.chapter_refs }),
+          ...(data.title_refs && { titleRefs: data.title_refs }),
           ...(data.restart_options && { restartOptions: data.restart_options }),
           ...(data.audio_unsupported_codec !== undefined && {
             audioUnsupportedCodec: data.audio_unsupported_codec,
@@ -164,12 +164,12 @@ function createSessionStore() {
     );
 
     unsubscribeFunctions.push(
-      onWebSocketMessage(WS_MESSAGE_TYPES.SOURCES_UPDATE, (raw) => {
-        const data = raw as SourcesUpdateData;
+      onWebSocketMessage(WS_MESSAGE_TYPES.REFERENCES_UPDATE, (raw) => {
+        const data = raw as ReferencesUpdateData;
         update((state) => ({
           ...state,
-          ...(data.cue_sources && { cueSources: data.cue_sources }),
-          ...(data.title_sources && { titleSources: data.title_sources }),
+          ...(data.chapter_refs && { chapterRefs: data.chapter_refs }),
+          ...(data.title_refs && { titleRefs: data.title_refs }),
         }));
       }),
     );
@@ -246,8 +246,8 @@ function createSessionStore() {
           selectionStats: data.selection_stats,
           canUndo: data.can_undo,
           canRedo: data.can_redo,
-          cueSources: data.cue_sources ?? [],
-          titleSources: data.title_sources ?? [],
+          chapterRefs: data.chapter_refs ?? [],
+          titleRefs: data.title_refs ?? [],
           book: data.book ?? null,
           restartOptions: data.restart_options ?? [],
           audioUnsupportedCodec: data.audio_unsupported_codec ?? false,
@@ -382,10 +382,6 @@ function createSessionStore() {
 
     updateHistoryState(canUndo: boolean, canRedo: boolean): void {
       update((state) => ({ ...state, canUndo, canRedo }));
-    },
-
-    updateCueSources(cueSources: ExistingCueSource[]): void {
-      update((state) => ({ ...state, cueSources }));
     },
 
     connectWebSocket(): void {

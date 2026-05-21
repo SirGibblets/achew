@@ -624,8 +624,8 @@
     nearbyCuesError = null;
     api.chapters
       .getNearbyCues(chapterId)
-      .then((res) => {
-        if (editingTimestampId === chapterId) nearbyCues = res.cues;
+      .then((response) => {
+        if (editingTimestampId === chapterId) nearbyCues = response.cues;
       })
       .catch((err) => {
         if (editingTimestampId === chapterId) nearbyCuesError = handleApiError(err);
@@ -908,7 +908,7 @@
                   Offset
                   <div
                     class="help-icon"
-                    data-tooltip="The time difference between the source chapter timestamp and the realigned timestamp."
+                    data-tooltip="The time difference between the reference chapter timestamp and the realigned timestamp."
                   >
                     <CircleHelp size="14" />
                   </div>
@@ -1225,10 +1225,10 @@
             </h5>
             <div class="tools-split-layout">
               <div class="tools-column">
-                {#if ($session.cueSources || []).length > 0}
+                {#if ($session.chapterRefs || []).length > 0}
                   <button
                     class="btn btn-cancel btn-sm tool-btn full-width"
-                    title="Apply titles from an existing source"
+                    title="Apply titles from a chapter reference"
                     onclick={() => (showApplyTitlesDialog = true)}
                   >
                     <BookMarked size="16" color="var(--primary-color)" />
@@ -1342,7 +1342,7 @@
 <AICleanupDialog
   bind:isOpen={showAIConfirmation}
   sessionStep={$session.step}
-  cueSources={$session.cueSources || []}
+  chapterRefs={$session.chapterRefs || []}
   onconfirm={handleAICleanupConfirm}
   oncancel={handleAICleanupCancel}
   onerror={handleAICleanupError}

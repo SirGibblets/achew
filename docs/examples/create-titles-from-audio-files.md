@@ -1,12 +1,12 @@
 # Create titles from audio files
 
-Follow these steps for a multi-file audiobook with one chapter per file and generic titles like `Track 01`, `Track 02`, etc. Achew's auto-added **File Data** source already has correct timestamps from the file durations; this workflow transcribes real titles from the audio and optionally splits the publisher intro and end credits into their own chapters.
+Follow these steps for a multi-file audiobook with one chapter per file and generic titles like `Track 01`, `Track 02`, etc. Achew's auto-added **File Data** Reference already has correct timestamps from the file durations; this workflow transcribes real titles from the audio and optionally splits the publisher intro and end credits into their own chapters.
 
 ## Run Regenerate Titles
 
 1. Select the book.
 2. Choose **Regenerate Titles** on the *Select a Workflow* screen.
-3. Pick the **File Data** source.
+3. Pick the **File Data** Reference.
 4. Click **Continue with...**
 5. On the *Transcribe Titles* screen, pick your [transcription settings](../reference/transcription.md) and click **Transcribe**. Achew transcribes the first few seconds of each file into a title.
 
@@ -44,6 +44,6 @@ If the file names already carry usable titles (just inconsistently formatted), s
 ## Related
 
 - [Regenerate Titles workflow](../workflows/regenerate-titles.md)
-- [Chapter Sources](../getting-started/chapter-sources.md)
+- [Chapter References](../getting-started/chapter-references.md)
 - [Add Chapter Dialog](../editor/add-chapter-dialog.md)
 - [AI Cleanup](../editor/ai-cleanup.md)

@@ -2,7 +2,7 @@
 
 ## Can I use Achew without Audiobookshelf?
 
-No, Achew is built specifically around Audiobookshelf. It uses ABS to find books and sources, pull audio, and write chapters back.
+No, Achew is built specifically around Audiobookshelf. It uses ABS to find books and [Reference](./getting-started/chapter-references.md) data, pull audio, and write chapters back.
 
 ## Can I use the AI Cleanup feature for free?
 

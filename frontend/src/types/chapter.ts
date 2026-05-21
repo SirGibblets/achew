@@ -4,6 +4,11 @@ export interface RealignmentData {
   is_guess: boolean;
 }
 
+export interface BasicChapter {
+  timestamp: number;
+  title: string;
+}
+
 export interface ChapterData {
   id: string;
   timestamp: number;

@@ -10,6 +10,11 @@ class RealignmentData(BaseModel):
     is_guess: bool
 
 
+class BasicChapter(BaseModel):
+    timestamp: float
+    title: str
+
+
 class ChapterData(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     timestamp: float

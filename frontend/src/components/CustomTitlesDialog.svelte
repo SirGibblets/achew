@@ -6,19 +6,23 @@
 
   interface Props {
     isOpen?: boolean;
-    sourceId?: string;
+    refId?: string;
   }
 
-  let { isOpen = $bindable(false), sourceId = '' }: Props = $props();
+  let { isOpen = $bindable(false), refId = '' }: Props = $props();
 
   let textarea = $state('');
   let saving = $state(false);
   let error = $state<string | null>(null);
 
-  /* Pre-populate textarea from the current source titles when dialog opens. */
+  /* Bound to a variable rather than inlined so Svelte sets it at runtime — a static
+     placeholder attribute would collapse the newlines to spaces during serialization. */
+  const placeholder = 'Chapter 1\nChapter 2\n…';
+
+  /* Pre-populate textarea from the current reference titles when dialog opens. */
   $effect(() => {
-    if (isOpen && sourceId) {
-      const src = ($session.titleSources || []).find((s) => s.id === sourceId);
+    if (isOpen && refId) {
+      const src = ($session.titleRefs || []).find((s) => s.id === refId);
       textarea = src ? (src.titles || []).join('\n') : '';
       error = null;
     }
@@ -58,7 +62,7 @@
         .split('\n')
         .map((l) => l.trim())
         .filter(Boolean);
-      await api.sources.updateTitles(sourceId, titles);
+      await api.references.updateTitles(refId, titles);
       isOpen = false;
     } catch (err) {
       error = handleApiError(err);
@@ -98,13 +102,7 @@
       </div>
 
       <div class="modal-body">
-        <textarea
-          class="title-input"
-          bind:value={textarea}
-          placeholder="Chapter 1&#10;Chapter 2&#10;…"
-          disabled={saving}
-          rows="16"
-          spellcheck="false"
+        <textarea class="title-input" bind:value={textarea} {placeholder} disabled={saving} rows="16" spellcheck="false"
         ></textarea>
 
         {#if error}

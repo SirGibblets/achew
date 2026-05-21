@@ -42,8 +42,8 @@ A timestamp + title. Every row in the chapter editor is a chapter.
 ## Chapter Editor
 Achew's main editing interface for chapter lists, shown at the end of every [workflow](#workflow). Each row displays a chapter's timestamp, transcript, and title alongside per-chapter controls for adding, transcribing, playing, and deleting. The [Action Bar](#action-bar) sits at the bottom of the screen. See [Chapter Editor Overview](../editor/overview.md).
 
-## Chapter Source
-See [Chapter Sources](../getting-started/chapter-sources.md).
+## Chapter Reference
+See [Chapter References](../getting-started/chapter-references.md).
 
 ## Cue
 A *candidate* chapter boundary produced by Achew's audio analysis: a detected silence or voice-activity gap. Cues have a timestamp but no title. See [Chapters vs Cues](../getting-started/chapters-and-cues.md).
@@ -62,16 +62,16 @@ Reusable formatting rules for [AI Cleanup](../editor/ai-cleanup.md). They persis
 Achew's detection mode for audiobooks with music and/or sound effects. Uses [VAD](#vad) instead of silence-threshold detection to find chapter boundaries. It's significantly slower, but also significantly more accurate for dramatized audiobooks.
 
 ## Embedded chapters
-Chapters baked into an audio file's metadata. Achew reads these from Audiobookshelf and exposes them as the **Embedded Metadata** [chapter source](../getting-started/chapter-sources.md).
+Chapters baked into an audio file's metadata. Achew reads these from Audiobookshelf and exposes them as the **Embedded Chapters** [Reference](../getting-started/chapter-references.md).
 
 ## File Data
-An auto-added [chapter source](../getting-started/chapter-sources.md) for [multi-file books](#multi-file-book). Each track becomes one chapter, with timestamps derived from the file durations and titles derived from the file names.
+An auto-added [Chapter Reference](../getting-started/chapter-references.md) for [multi-file books](#multi-file-book). Each track becomes one chapter, with timestamps derived from the file durations and titles derived from the file names.
 
 ## Initial Chapter Selection
-The screen Achew shows after Smart Detect finishes analyzing audio. You use the [Cue Selection Slider](#cue-selection-slider), Intro/Outro Sensitivity slider, and (optionally) source comparison to choose which detected cues become chapters. See [Smart Detect → Initial Chapter Selection](../workflows/smart-detect.md#initial-chapter-selection).
+The screen Achew shows after Smart Detect finishes analyzing audio. You use the [Cue Selection Slider](#cue-selection-slider), Intro/Outro Sensitivity slider, and (optionally) Reference comparison to choose which detected cues become chapters. See [Smart Detect → Initial Chapter Selection](../workflows/smart-detect.md#initial-chapter-selection).
 
 ## Library Files
-Files stored in the same folder alongside the original audiobook files, visible in the **Library Files** section of the book's detail page. Achew auto-loads [chapter sources](../getting-started/chapter-sources.md) from files named `chapters.json`, `chapters.csv`, `*.cue`, `titles.txt`, or `*.epub`.
+Files stored in the same folder alongside the original audiobook files, visible in the **Library Files** section of the book's detail page. Achew auto-loads [Chapter References](../getting-started/chapter-references.md) from files named `chapters.json`, `chapters.csv`, `*.cue`, `titles.txt`, or `*.epub`.
 
 ## LLM
 Large Language Model. The AI Cleanup feature uses one of several LLMs: OpenAI, Anthropic Claude, Google Gemini, OpenRouter, GitHub Copilot, Ollama, or LM Studio.
@@ -80,19 +80,19 @@ Large Language Model. The AI Cleanup feature uses one of several LLMs: OpenAI, A
 Apple's hardware-accelerated machine-learning framework for Apple Silicon. Achew's MLX transcription models run dramatically faster than CPU versions on M-series Macs. Only available via native install, not Docker.
 
 ## Multi-file book
-An audiobook comprised of multiple audio files (often one file per chapter), as opposed to a *single-file book* stored as one contiguous file. For multi-file books, Achew automatically includes a [File Data](#file-data) source built from the file names and durations.
+An audiobook comprised of multiple audio files (often one file per chapter), as opposed to a *single-file book* stored as one contiguous file. For multi-file books, Achew automatically includes a [File Data](#file-data) Reference built from the file names and durations.
 
 ## Parakeet
 NVIDIA's transcription model family. Achew ships with both CPU and MLX (Apple Silicon) variants, and offers two model sizes: **0.6B v2** (English only, recommended for English audio) and **0.6B v3** (multilingual, 25 languages; see [Supported Languages](../reference/supported-languages.md#parakeet)).
 
 ## Realignment
-The process of fixing misaligned chapter timestamps using audio detection. Achew runs targeted detection around each source chapter and shifts timestamps to the best-fitting cue. See the [Realign Chapters](../workflows/realign-chapters.md) workflow.
+The process of fixing misaligned chapter timestamps using audio detection. Achew runs targeted detection around each Reference chapter and shifts timestamps to the best-fitting cue. See the [Realign Chapters](../workflows/realign-chapters.md) workflow.
+
+## Reference
+See [Chapter References](../getting-started/chapter-references.md).
 
 ## Session
-Achew's working state for a single book. Begins when you select a book and click **Start**, and ends after you submit to Audiobookshelf or pick **New Audiobook** from the [Back Menu](#back-menu). The chapter list, loaded sources, and undo history are held server-side for the duration of the session, so no data is lost if you close the browser.
-
-## Source
-See [Chapter Sources](../getting-started/chapter-sources.md).
+Achew's working state for a single book. Begins when you select a book and click **Start**, and ends after you submit to Audiobookshelf or pick **New Audiobook** from the [Back Menu](#back-menu). The chapter list, loaded References, and undo history are held server-side for the duration of the session, so no data is lost if you close the browser.
 
 ## Transcription
 The process of converting an audio segment into text using an on-device speech-to-text model. Achew runs transcription locally for chapter titles using [Whisper](#whisper) or [Parakeet](#parakeet); nothing is uploaded to a third party. See [Transcription](transcription.md).

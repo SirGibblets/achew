@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
-from app.api.routes.chapters import DetectedCue, ExistingCue
+from app.api.routes.chapters import BasicChapter, DetectedCue
 
 logger = logging.getLogger(__name__)
 
@@ -15,30 +15,30 @@ class ChapterAligner:
 
     def align(
         self,
-        source_chapters: List[ExistingCue],
+        ref_chapters: List[BasicChapter],
         detected_cues: List[DetectedCue],
-        total_duration_source: float,
+        total_duration_ref: float,
         total_duration_actual: float,
     ) -> Tuple[List[Dict[str, Any]], Dict[str, float]]:
-        if not source_chapters:
+        if not ref_chapters:
             return [], {"scale": 1.0, "offset": 0.0}
 
         if not detected_cues:
-            return self._fallback_alignment(source_chapters, total_duration_source, total_duration_actual)
+            return self._fallback_alignment(ref_chapters, total_duration_ref, total_duration_actual)
 
-        src_times = np.array([cue.timestamp for cue in source_chapters])
+        src_times = np.array([chapter.timestamp for chapter in ref_chapters])
         cue_times = np.array([c.timestamp for c in detected_cues])
         cue_silences = np.array([c.gap for c in detected_cues])
 
         scale, offset = self._estimate_transform(
-            src_times, cue_times, cue_silences, total_duration_source, total_duration_actual
+            src_times, cue_times, cue_silences, total_duration_ref, total_duration_actual
         )
 
         expected_times = src_times * scale + offset
 
         matches = self._match_chapters_to_cues(expected_times, cue_times, cue_silences)
 
-        aligned_chapters = self._build_results(source_chapters, detected_cues, matches, expected_times, scale, offset)
+        aligned_chapters = self._build_results(ref_chapters, detected_cues, matches, expected_times, scale, offset)
 
         return aligned_chapters, {"scale": scale, "offset": offset}
 
@@ -47,10 +47,10 @@ class ChapterAligner:
         src_times: np.ndarray,
         cue_times: np.ndarray,
         cue_silences: np.ndarray,
-        total_duration_source: float,
+        total_duration_ref: float,
         total_duration_actual: float,
     ) -> Tuple[float, float]:
-        base_scale = total_duration_actual / total_duration_source if total_duration_source > 0 else 1.0
+        base_scale = total_duration_actual / total_duration_ref if total_duration_ref > 0 else 1.0
         base_offset = 0.0
 
         candidates_x = []
@@ -195,7 +195,7 @@ class ChapterAligner:
 
     def _build_results(
         self,
-        source_chapters: List[ExistingCue],
+        ref_chapters: List[BasicChapter],
         detected_cues: List[DetectedCue],
         matches: List[int],
         expected_times: np.ndarray,
@@ -203,13 +203,13 @@ class ChapterAligner:
         offset: float,
     ) -> List[Dict[str, Any]]:
         results = []
-        n = len(source_chapters)
+        n = len(ref_chapters)
 
         # Index of (chapter_idx, cue_idx) pairs that were successfully matched,
         # used to interpolate positions for unmatched chapters.
         matched_pairs = [(i, matches[i]) for i in range(n) if matches[i] >= 0]
 
-        for i, src_chapter in enumerate(source_chapters):
+        for i, src_chapter in enumerate(ref_chapters):
             match_idx = matches[i]
 
             if match_idx >= 0:
@@ -238,9 +238,9 @@ class ChapterAligner:
 
                 if prev_pair and next_pair:
                     # Interpolate linearly between the two surrounding anchors.
-                    src_prev = source_chapters[prev_pair[0]].timestamp
+                    src_prev = ref_chapters[prev_pair[0]].timestamp
                     actual_prev = detected_cues[prev_pair[1]].timestamp
-                    src_next = source_chapters[next_pair[0]].timestamp
+                    src_next = ref_chapters[next_pair[0]].timestamp
                     actual_next = detected_cues[next_pair[1]].timestamp
                     if src_next > src_prev:
                         t = (src_t - src_prev) / (src_next - src_prev)
@@ -249,12 +249,12 @@ class ChapterAligner:
                         timestamp = expected_times[i]
                 elif prev_pair:
                     # Extrapolate forward from the last known anchor.
-                    src_prev = source_chapters[prev_pair[0]].timestamp
+                    src_prev = ref_chapters[prev_pair[0]].timestamp
                     actual_prev = detected_cues[prev_pair[1]].timestamp
                     timestamp = actual_prev + (src_t - src_prev) * scale
                 elif next_pair:
                     # Extrapolate backward from the next known anchor.
-                    src_next = source_chapters[next_pair[0]].timestamp
+                    src_next = ref_chapters[next_pair[0]].timestamp
                     actual_next = detected_cues[next_pair[1]].timestamp
                     timestamp = actual_next + (src_t - src_next) * scale
                 else:
@@ -283,13 +283,13 @@ class ChapterAligner:
         return float(np.clip(confidence, 0.0, 1.0))
 
     def _fallback_alignment(
-        self, source_chapters: List[ExistingCue], total_duration_source: float, total_duration_actual: float
+        self, ref_chapters: List[BasicChapter], total_duration_ref: float, total_duration_actual: float
     ) -> Tuple[List[Dict[str, Any]], Dict[str, float]]:
-        scale = total_duration_actual / total_duration_source if total_duration_source > 0 else 1.0
+        scale = total_duration_actual / total_duration_ref if total_duration_ref > 0 else 1.0
         offset = 0.0
 
         results = []
-        for chapter in source_chapters:
+        for chapter in ref_chapters:
             timestamp = max(0.0, chapter.timestamp * scale + offset)
             results.append(
                 {

@@ -3,30 +3,29 @@
   import { api, handleApiError } from '../utils/api';
   import ChapterModal from './ChapterModal.svelte';
 
-  import AddSourceHelpDialog from './AddSourceHelpDialog.svelte';
+  import AddReferenceHelpDialog from './AddReferenceHelpDialog.svelte';
 
-  import X from '@lucide/svelte/icons/x';
+  import BookOpen from '@lucide/svelte/icons/book-open';
   import CircleQuestionMark from '@lucide/svelte/icons/circle-question-mark';
-  import Upload from '@lucide/svelte/icons/upload';
-  import Search from '@lucide/svelte/icons/search';
   import Eye from '@lucide/svelte/icons/eye';
   import Plus from '@lucide/svelte/icons/plus';
-  import BookOpen from '@lucide/svelte/icons/book-open';
+  import Search from '@lucide/svelte/icons/search';
+  import Upload from '@lucide/svelte/icons/upload';
+  import X from '@lucide/svelte/icons/x';
 
   import type { AudnexusProviderOption } from '../types/api';
-  import type { ExistingCueSource, ExistingTitleSource } from '../types/sources';
-
-  type NewSource = ExistingCueSource | ExistingTitleSource;
+  import type { ChapterReference, TitleReference } from '../types/references';
+  type NewReference = ChapterReference | TitleReference;
 
   interface Props {
     isOpen?: boolean;
-    /** If true, the caller expects a cue (timestamp) source. */
-    expectCues?: boolean;
-    /** Called with the newly added source object on success. */
-    onSourceAdded?: ((source: NewSource) => void) | null;
+    /** If true, the caller expects a chapter reference. */
+    expectChapterRef?: boolean;
+    /** Called with the newly added reference object on success. */
+    onReferenceAdded?: ((ref: NewReference) => void) | null;
   }
 
-  let { isOpen = $bindable(false), expectCues = false, onSourceAdded = null }: Props = $props();
+  let { isOpen = $bindable(false), expectChapterRef = false, onReferenceAdded = null }: Props = $props();
 
   let providers = $state<AudnexusProviderOption[]>([]);
 
@@ -41,9 +40,9 @@
 
   loadProviders();
 
-  const CUE_EXTS = '.json, .csv, .cue';
+  const CHAPTER_EXTS = '.json, .csv, .cue';
   const TITLE_EXTS = '.txt, .epub';
-  const ALL_EXTS = `${CUE_EXTS}, ${TITLE_EXTS}`;
+  const ALL_EXTS = `${CHAPTER_EXTS}, ${TITLE_EXTS}`;
 
   let showHelp = $state(false);
   let activeTab = $state('upload');
@@ -60,7 +59,7 @@
   let searchAuthor = $state('');
 
   let addedAsins = $derived(
-    new Set(($session.cueSources || []).map((s) => (s.metadata as Record<string, string>)?.ASIN).filter(Boolean)),
+    new Set(($session.chapterRefs || []).map((s) => (s.metadata as Record<string, string>)?.ASIN).filter(Boolean)),
   );
   let searching = $state(false);
   let searchError = $state<string | null>(null);
@@ -170,14 +169,14 @@
     formData.append('file', file);
 
     try {
-      const newSource = await api.sources.upload(formData);
-      const isTitleOnly = 'titles' in newSource;
+      const newRef = await api.references.upload(formData);
+      const isTitleRef = 'titles' in newRef;
 
-      if (expectCues && isTitleOnly) {
-        uploadInfo = `The file "${file.name}" doesn't contain timestamps, but has been added as a source for titles. You can use it when editing chapter titles later.`;
+      if (expectChapterRef && isTitleRef) {
+        uploadInfo = `The file "${file.name}" doesn't contain timestamps, but has been added as a Title Reference. You can use it when editing chapter titles later.`;
       } else {
         isOpen = false;
-        onSourceAdded?.(newSource);
+        onReferenceAdded?.(newRef);
       }
     } catch (err) {
       uploadError = handleApiError(err);
@@ -241,14 +240,14 @@
     showChapterModal = true;
   }
 
-  async function addAudnexusSource(result: SearchResultBook) {
+  async function addAudnexusReference(result: SearchResultBook) {
     if (!result.asin) return;
     addingState = { ...addingState, [result.asin]: 'adding' };
     try {
-      const newSource = await api.sources.addAudnexus(result.asin, provider);
+      const newRef = await api.references.addAudnexus(result.asin, provider);
       addingState = { ...addingState, [result.asin]: 'done' };
       isOpen = false;
-      onSourceAdded?.(newSource);
+      onReferenceAdded?.(newRef);
     } catch {
       addingState = { ...addingState, [result.asin]: 'error' };
     }
@@ -286,7 +285,7 @@
       class="dialog"
       role="dialog"
       aria-modal="true"
-      aria-label="Add Chapter Source"
+      aria-label="Add Chapter Reference"
       tabindex="-1"
       onclick={(e) => e.stopPropagation()}
       onkeydown={(e) => e.stopPropagation()}
@@ -294,8 +293,8 @@
       <!-- Header -->
       <div class="modal-header">
         <div class="header-title">
-          <h3>Add Chapter Source</h3>
-          <button class="help-btn" onclick={() => (showHelp = true)} aria-label="About sources">
+          <h3>Add Chapter Reference</h3>
+          <button class="help-btn" onclick={() => (showHelp = true)} aria-label="About References">
             <CircleQuestionMark size="16" />
           </button>
         </div>
@@ -355,8 +354,8 @@
                 >
               </p>
               <p class="supported-types">
-                {#if expectCues}
-                  Supported: {CUE_EXTS}
+                {#if expectChapterRef}
+                  Supported: {CHAPTER_EXTS}
                 {:else}
                   Supported: {ALL_EXTS}
                 {/if}
@@ -494,8 +493,8 @@
                           <button
                             class="add-btn"
                             disabled={addingState[result.asin] === 'adding'}
-                            onclick={() => addAudnexusSource(result)}
-                            title="Add as source"
+                            onclick={() => addAudnexusReference(result)}
+                            title="Add as Reference"
                           >
                             {#if addingState[result.asin] === 'adding'}
                               <div class="spinner small"></div>
@@ -521,7 +520,7 @@
 
 <ChapterModal bind:isOpen={showChapterModal} title={chapterModalTitle} chapters={chapterModalData} />
 
-<AddSourceHelpDialog bind:isOpen={showHelp} />
+<AddReferenceHelpDialog bind:isOpen={showHelp} />
 
 <style>
   .backdrop {

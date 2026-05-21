@@ -14,7 +14,7 @@
   const SENSITIVITY_FADE_DURATION = 2400; // 40 minutes in seconds
   const MAX_CUES = 500;
 
-  import type { ExistingCueSource } from '../types/sources';
+  import type { ChapterReference } from '../types/references';
 
   interface DetectedCueEntry {
     timestamp: number;
@@ -38,10 +38,10 @@
   let sliderValue = $state(0.5);
   let sensitivity = $state(0);
   let showSensitivity = $state(false);
-  let existingCueSources = $state<ExistingCueSource[]>([]);
-  let activeComparisonSource = $state<string | null>(null);
+  let chapterRefs = $state<ChapterReference[]>([]);
+  let activeComparisonRef = $state<string | null>(null);
   let showUsageHints = $state(false);
-  let includeUnalignedSources = $state<Record<string, boolean>>({});
+  let includeUnalignedRefs = $state<Record<string, boolean>>({});
   let showTooltip = $state(false);
   let showSensitivityTooltip = $state(false);
 
@@ -85,7 +85,7 @@
     await loadDetectedCues();
   });
 
-  let isComparing = $derived(activeComparisonSource !== null);
+  let isComparing = $derived(activeComparisonRef !== null);
   // Largest and smallest gaps among all detected cues
   let maxGap = $derived(allCues.length > 0 ? Math.max(...allCues.map((c) => c.gap)) : 10);
   let minGap = $derived(allCues.length > 0 ? Math.min(...allCues.map((c) => c.gap)) : 1.0);
@@ -139,19 +139,19 @@
         (a, b) => a.timestamp - b.timestamp,
       );
       bookDuration = response.book_duration ?? 0;
-      existingCueSources = response.existing_cue_sources ?? [];
+      chapterRefs = response.chapter_refs ?? [];
 
-      includeUnalignedSources = {};
-      existingCueSources.forEach((source) => {
-        includeUnalignedSources[source.id] = false;
+      includeUnalignedRefs = {};
+      chapterRefs.forEach((ref) => {
+        includeUnalignedRefs[ref.id] = false;
       });
 
       // Pre-select a threshold that produces approximately the same number of
-      // chapters as the highest chapter count among existing cue sources.
+      // chapters as the highest chapter count among existing chapter references.
       let highestExistingCount = 0;
-      existingCueSources.forEach((source) => {
-        if (source.cues && source.cues.length > 0) {
-          highestExistingCount = Math.max(highestExistingCount, source.cues.length);
+      chapterRefs.forEach((ref) => {
+        if (ref.chapters && ref.chapters.length > 0) {
+          highestExistingCount = Math.max(highestExistingCount, ref.chapters.length);
         }
       });
 
@@ -161,7 +161,7 @@
         const localMaxGap = Math.max(...allCues.map((c) => c.gap));
         const localMinGap = Math.min(...allCues.map((c) => c.gap));
         const sorted = [...allCues].sort((a, b) => b.gap - a.gap);
-        // source.cues includes t=0 as its first entry, same as selectedTimestamps.
+        // ref.chapters includes t=0 as its first entry, same as selectedTimestamps.
         // To match N total timestamps we need N-1 detected cues, so the threshold
         // should be the (N-1)th largest gap → index N-2.
         const targetIndex = Math.min(Math.max(0, highestExistingCount - 2), sorted.length - 1);
@@ -193,9 +193,9 @@
     error = null;
     try {
       const unalignedOptions: string[] = [];
-      Object.keys(includeUnalignedSources).forEach((sourceId) => {
-        if (includeUnalignedSources[sourceId]) {
-          unalignedOptions.push(sourceId);
+      Object.keys(includeUnalignedRefs).forEach((refId) => {
+        if (includeUnalignedRefs[refId]) {
+          unalignedOptions.push(refId);
         }
       });
       await api.session.selectInitialChapters(selectedTimestamps, unalignedOptions);
@@ -226,8 +226,8 @@
     return title ? `\n"${ellipsize(title)}"` : '';
   }
 
-  function toggleCueSourceDisplay(sourceId: string) {
-    activeComparisonSource = activeComparisonSource === sourceId ? null : sourceId;
+  function toggleChapterRefDisplay(refId: string) {
+    activeComparisonRef = activeComparisonRef === refId ? null : refId;
   }
 
   function isChapterAligned(existingTimestamp: number, selectedTs: number[], tolerance = 5) {
@@ -259,17 +259,17 @@
   let additionalTimestampCount = $derived.by(() => {
     let count = 0;
     const tolerance = 5.0;
-    existingCueSources.forEach((source) => {
-      if (includeUnalignedSources[source.id]) {
-        count += source.cues.filter(
-          (cue) => !selectedTimestamps.some((s) => Math.abs(cue.timestamp - s) <= tolerance),
+    chapterRefs.forEach((ref) => {
+      if (includeUnalignedRefs[ref.id]) {
+        count += ref.chapters.filter(
+          (chapter) => !selectedTimestamps.some((s) => Math.abs(chapter.timestamp - s) <= tolerance),
         ).length;
       }
     });
     return count;
   });
 
-  let hasAdditionalTimestamps = $derived(Object.values(includeUnalignedSources).some((v) => v === true));
+  let hasAdditionalTimestamps = $derived(Object.values(includeUnalignedRefs).some((v) => v === true));
   let totalChapterCount = $derived(selectedTimestamps.length + additionalTimestampCount);
   type NearestTick =
     | { type: 'new'; timestamp: number; index: number; percent: number }
@@ -279,7 +279,7 @@
         title: string;
         index: number;
         percent: number;
-        source: ExistingCueSource;
+        ref: ChapterReference;
       };
 
   function handleTimelineMouseMove(event: MouseEvent) {
@@ -304,21 +304,21 @@
       }
     });
 
-    if (activeComparisonSource) {
-      const activeSource = existingCueSources.find((s) => s.id === activeComparisonSource);
-      if (activeSource && activeSource.cues) {
-        activeSource.cues.slice(1).forEach((cue, index) => {
-          const tickPercent = (cue.timestamp / bookDuration) * 100;
+    if (activeComparisonRef) {
+      const activeRef = chapterRefs.find((s) => s.id === activeComparisonRef);
+      if (activeRef && activeRef.chapters) {
+        activeRef.chapters.slice(1).forEach((chapter, index) => {
+          const tickPercent = (chapter.timestamp / bookDuration) * 100;
           const distance = Math.abs(mousePercent - tickPercent);
           if (distance < nearestDistance) {
             nearestDistance = distance;
             nearestTick = {
               type: 'existing',
-              timestamp: cue.timestamp,
-              title: cue.title,
+              timestamp: chapter.timestamp,
+              title: chapter.title,
               index: index + 1,
               percent: tickPercent,
-              source: activeSource,
+              ref: activeRef,
             };
           }
         });
@@ -333,9 +333,9 @@
       if (isComparing) {
         if (tick.type === 'existing') {
           timelineTooltip.topContent =
-            tick.source.type === 'file_data'
+            tick.ref.type === 'file_data'
               ? `File Start: ${formatTimelineTime(tick.timestamp)}${formatCueTitle(tick.title)}`
-              : `${tick.source.short_name} Chapter: ${formatTimelineTime(tick.timestamp)}${formatCueTitle(tick.title)}`;
+              : `${tick.ref.short_name} Chapter: ${formatTimelineTime(tick.timestamp)}${formatCueTitle(tick.title)}`;
           timelineTooltip.showTop = true;
           const alignedNew = selectedTimestamps.find((ts: number) => Math.abs(ts - tick.timestamp) <= 5);
           timelineTooltip.showBottom = !!alignedNew;
@@ -343,14 +343,16 @@
         } else {
           timelineTooltip.bottomContent = formatTimelineTime(tick.timestamp);
           timelineTooltip.showBottom = true;
-          const activeSource = existingCueSources.find((s) => s.id === activeComparisonSource);
-          if (activeSource) {
-            const alignedExisting = activeSource.cues.find((cue) => Math.abs(cue.timestamp - tick.timestamp) <= 5);
+          const activeRef = chapterRefs.find((s) => s.id === activeComparisonRef);
+          if (activeRef) {
+            const alignedExisting = activeRef.chapters.find(
+              (chapter) => Math.abs(chapter.timestamp - tick.timestamp) <= 5,
+            );
             if (alignedExisting) {
               timelineTooltip.topContent =
-                activeSource.type === 'file_data'
+                activeRef.type === 'file_data'
                   ? `File Start: ${formatTimelineTime(alignedExisting.timestamp)}${formatCueTitle(alignedExisting.title)}`
-                  : `${activeSource.short_name} Chapter: ${formatTimelineTime(alignedExisting.timestamp)}${formatCueTitle(alignedExisting.title)}`;
+                  : `${activeRef.short_name} Chapter: ${formatTimelineTime(alignedExisting.timestamp)}${formatCueTitle(alignedExisting.title)}`;
               timelineTooltip.showTop = true;
             } else {
               timelineTooltip.showTop = false;
@@ -430,7 +432,7 @@
               the audiobook. You'll typically want to aim for a reasonably even distribution across the book's length.
             </li>
             <li>
-              <strong>Alignment:</strong> If existing chapter information is available from an accurate source (embedded/Audnexus/etc.),
+              <strong>Alignment:</strong> If existing chapter information is available from an accurate Reference (embedded/Audnexus/etc.),
               compare against it and aim for a high alignment percentage.
             </li>
             <li>
@@ -471,7 +473,7 @@
           Audiobook Timeline
         </h4>
         <div class="existing-chapter-toggles">
-          {#if existingCueSources.length > 0}
+          {#if chapterRefs.length > 0}
             <div class="compare-label">
               Compare to:
               <div
@@ -498,7 +500,7 @@
                           </div>
                         </div>
                         <div class="legend-text">
-                          <strong>Red ticks:</strong> Unaligned source chapter
+                          <strong>Red ticks:</strong> Unaligned Reference chapter
                         </div>
                       </div>
 
@@ -530,9 +532,9 @@
                         </div>
                         <div class="legend-text">
                           {#if isDarkMode}
-                            <strong>Yellow/Green ticks:</strong> Selected cue aligned with source chapter
+                            <strong>Yellow/Green ticks:</strong> Selected cue aligned with Reference chapter
                           {:else}
-                            <strong>Blue/Purple ticks:</strong> Selected cue aligned with source chapter
+                            <strong>Blue/Purple ticks:</strong> Selected cue aligned with Reference chapter
                           {/if}
                         </div>
                       </div>
@@ -542,14 +544,14 @@
               </div>
             </div>
           {/if}
-          {#each existingCueSources as source}
+          {#each chapterRefs as ref}
             <button
               class="toggle-btn"
-              class:active={activeComparisonSource === source.id}
-              onclick={() => toggleCueSourceDisplay(source.id)}
-              title="Show/hide {source.name} ({source.cues.length} chapters)"
+              class:active={activeComparisonRef === ref.id}
+              onclick={() => toggleChapterRefDisplay(ref.id)}
+              title="Show/hide {ref.name} ({ref.chapters.length} chapters)"
             >
-              {source.short_name} ({source.cues.length})
+              {ref.short_name} ({ref.chapters.length})
             </button>
           {/each}
         </div>
@@ -567,14 +569,16 @@
           {/if}
           <div class="timeline-line {isComparing ? 'compared' : ''}"></div>
 
-          <!-- Existing chapters ticks for active comparison source -->
-          {#if activeComparisonSource}
-            {@const activeSource = existingCueSources.find((s) => s.id === activeComparisonSource)}
-            {#if activeSource && activeSource.cues}
-              {#each activeSource.cues.slice(1) as cue}
+          <!-- Existing chapters ticks for active comparison reference -->
+          {#if activeComparisonRef}
+            {@const activeRef = chapterRefs.find((s) => s.id === activeComparisonRef)}
+            {#if activeRef && activeRef.chapters}
+              {#each activeRef.chapters.slice(1) as chapter}
                 <div
-                  class="existing-timeline-tick {isChapterAligned(cue.timestamp, selectedTimestamps) ? 'aligned' : ''}"
-                  style="left: {(cue.timestamp / bookDuration) * 100}%"
+                  class="existing-timeline-tick {isChapterAligned(chapter.timestamp, selectedTimestamps)
+                    ? 'aligned'
+                    : ''}"
+                  style="left: {(chapter.timestamp / bookDuration) * 100}%"
                 ></div>
               {/each}
             {/if}
@@ -583,10 +587,8 @@
           <!-- Selected chapter ticks -->
           <div class="timeline-ticks">
             {#each selectedTimestamps as timestamp}
-              {@const activeSource = activeComparisonSource
-                ? existingCueSources.find((s) => s.id === activeComparisonSource)
-                : null}
-              {@const existingTs = activeSource ? activeSource.cues.map((c) => c.timestamp) : []}
+              {@const activeRef = activeComparisonRef ? chapterRefs.find((s) => s.id === activeComparisonRef) : null}
+              {@const existingTs = activeRef ? activeRef.chapters.map((c) => c.timestamp) : []}
               <div
                 class="timeline-tick {isComparing ? 'compared' : ''} {isChapterAligned(timestamp, existingTs)
                   ? 'aligned'
@@ -613,14 +615,14 @@
         <div class="timeline-labels">
           <span class="timeline-start">0:00</span>
 
-          {#if activeComparisonSource}
-            {@const activeSource = existingCueSources.find((s) => s.id === activeComparisonSource)}
-            {#if activeSource && activeSource.cues}
-              {@const existingTs = activeSource.cues.map((c) => c.timestamp)}
+          {#if activeComparisonRef}
+            {@const activeRef = chapterRefs.find((s) => s.id === activeComparisonRef)}
+            {#if activeRef && activeRef.chapters}
+              {@const existingTs = activeRef.chapters.map((c) => c.timestamp)}
               {@const alignmentPct = calculateAlignmentPercentage(existingTs, selectedTimestamps)}
               <span class="alignment-text" style="color: {getAlignmentColor(alignmentPct)}">
                 {#if innerWidth > 480}
-                  Alignment with {activeSource.name}: {alignmentPct}%
+                  Alignment with {activeRef.name}: {alignmentPct}%
                 {:else}
                   Alignment: {alignmentPct}%
                 {/if}
@@ -765,21 +767,21 @@
     </div>
 
     <!-- Include Unaligned Timestamps Options -->
-    {#if existingCueSources.length > 0}
+    {#if chapterRefs.length > 0}
       <div class="unaligned-options" style:background={isDarkMode ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.03)'}>
         <p class="unaligned-label">Include unaligned chapters from:</p>
         <div class="unaligned-checkboxes">
-          {#each existingCueSources as source}
-            {@const unalignedCount = source.cues.filter(
-              (cue) => !selectedTimestamps.some((s) => Math.abs(cue.timestamp - s) <= 5),
+          {#each chapterRefs as ref}
+            {@const unalignedCount = ref.chapters.filter(
+              (chapter) => !selectedTimestamps.some((s) => Math.abs(chapter.timestamp - s) <= 5),
             ).length}
             <label class="checkbox-option">
               <input
                 type="checkbox"
-                bind:checked={includeUnalignedSources[source.id]}
+                bind:checked={includeUnalignedRefs[ref.id]}
                 disabled={loading || unalignedCount === 0}
               />
-              <span>{source.name} ({unalignedCount})</span>
+              <span>{ref.name} ({unalignedCount})</span>
             </label>
           {/each}
         </div>

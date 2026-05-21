@@ -126,7 +126,7 @@
   // Export functionality
   let exportExpanded = $state(false);
   let exportLoading = $state(false);
-  let sourceExportInfo = $state<string | null>(null);
+  let referenceExportInfo = $state<string | null>(null);
   let exportSection = $state<HTMLElement | undefined>();
 
   function toggleExportSection() {
@@ -167,10 +167,10 @@
     if (selectedChapters.length === 0) return;
 
     exportLoading = true;
-    sourceExportInfo = null;
+    referenceExportInfo = null;
     try {
-      const newSource = (await api.chapters.exportAsSnapshot()) as { name: string };
-      sourceExportInfo = `Created chapter source "${newSource.name}" with ${selectedChapters.length} chapter${selectedChapters.length === 1 ? '' : 's'}`;
+      const newRef = (await api.chapters.exportAsSnapshot()) as { name: string };
+      referenceExportInfo = `Created Chapter Reference "${newRef.name}" with ${selectedChapters.length} chapter${selectedChapters.length === 1 ? '' : 's'}`;
     } catch (err) {
       error = handleApiError(err);
       console.error('Error exporting as snapshot:', err);
@@ -372,7 +372,7 @@
 
           <div class="export-group">
             <p class="export-group-label">
-              Save as Chapter Source &nbsp;<DocLink
+              Save as Chapter Reference &nbsp;<DocLink
                 path="/editor/review-submit-export/#snapshot"
                 featureName="Snapshot"
               />
@@ -382,7 +382,7 @@
                 class="btn btn-cancel export-button"
                 onclick={exportAsSnapshot}
                 disabled={exportLoading}
-                title="Save a snapshot of these chapters as an in-session chapter source"
+                title="Save a snapshot of these chapters as an in-session Chapter Reference"
               >
                 <BookmarkPlus size="16" />
                 Create Snapshot
@@ -390,11 +390,11 @@
             </div>
           </div>
 
-          {#if sourceExportInfo}
+          {#if referenceExportInfo}
             <div class="export-info">
               <Check size="16" />
-              <span>{sourceExportInfo}</span>
-              <button class="dismiss-btn" onclick={() => (sourceExportInfo = null)} aria-label="Dismiss">
+              <span>{referenceExportInfo}</span>
+              <button class="dismiss-btn" onclick={() => (referenceExportInfo = null)} aria-label="Dismiss">
                 <X size="14" />
               </button>
             </div>

@@ -18,7 +18,7 @@ Both single-file and multi-file audiobooks are supported.
 
     Achew automatically detects these files and shows a warning banner during workflow selection.
 
-## Chapter source formats
+## Chapter/Title Reference formats
 
 - **JSON**
 - **CSV**
@@ -26,7 +26,7 @@ Both single-file and multi-file audiobooks are supported.
 - **TXT**
 - **EPUB**
 
-See [Chapter Sources](../getting-started/chapter-sources.md) for more details.
+See [Chapter References](../getting-started/chapter-references.md) for more details.
 
 ## Export formats
 

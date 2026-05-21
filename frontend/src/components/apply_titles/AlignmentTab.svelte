@@ -4,7 +4,7 @@
   import Play from '@lucide/svelte/icons/play';
   import { audio, currentSegmentId, isPlaying } from '../../stores/audio';
   import { chapters } from '../../stores/session';
-  import type { ExistingCueSource } from '../../types/sources';
+  import type { ChapterReference } from '../../types/references';
   import { alignByTimestamp } from '../../utils/alignment';
 
   interface TitleMapping {
@@ -13,11 +13,11 @@
   }
 
   interface Props {
-    source?: ExistingCueSource | null;
+    ref?: ChapterReference | null;
     mappings?: TitleMapping[];
   }
 
-  let { source = null, mappings = $bindable([]) }: Props = $props();
+  let { ref = null, mappings = $bindable([]) }: Props = $props();
 
   async function playChapter(chapterId: string): Promise<void> {
     try {
@@ -34,12 +34,12 @@
 
   let allChapters = $derived($chapters.filter((c) => !c.deleted));
 
-  let alignedMap = $derived(alignByTimestamp(allChapters, source?.cues ?? []));
+  let alignedMap = $derived(alignByTimestamp(allChapters, ref?.chapters ?? []));
 
   let alignedCount = $derived(alignedMap.size);
 
   let checked = $state<Record<string, boolean>>({});
-  let lastSourceId = $state<string | null>(null);
+  let lastRefId = $state<string | null>(null);
 
   let lastClickedIdx = $state<number | null>(null);
 
@@ -65,15 +65,15 @@
   }
 
   $effect(() => {
-    const sourceId = source?.id ?? null;
+    const refId = ref?.id ?? null;
     const pairs = alignedMap;
-    if (sourceId !== lastSourceId) {
+    if (refId !== lastRefId) {
       const next: Record<string, boolean> = {};
       for (const [id] of pairs) {
         next[id] = true;
       }
       checked = next;
-      lastSourceId = sourceId;
+      lastRefId = refId;
     }
   });
 
@@ -83,7 +83,7 @@
       if (checked[chapterId]) {
         result.push({
           chapter_id: chapterId,
-          new_title: pair.sourceTitle,
+          new_title: pair.refTitle,
         });
       }
     }
@@ -104,9 +104,9 @@
 
 <p class="tab-explanation">
   {#if alignedCount === 0}
-    No chapters with matching timestamps were found in the selected source.
+    No chapters with matching timestamps were found in the selected Reference.
   {:else}
-    {alignedCount} of {allChapters.length} chapters have a matching (timestamp-aligned) chapter in the selected source.<br
+    {alignedCount} of {allChapters.length} chapters have a matching (timestamp-aligned) chapter in the selected Reference.<br
     />Uncheck any titles you don't want to apply.
   {/if}
 </p>
@@ -148,12 +148,12 @@
             <span class="title-original-superscript" class:fallback={!chapter.title}>
               {chapter.title || 'No Title'}
             </span>
-            <span class="title-new" class:unchanged={pair.sourceTitle === chapter.title}>
+            <span class="title-new" class:unchanged={pair.refTitle === chapter.title}>
               &nbsp;<CornerDownRight
                 size="14"
                 style="margin-right: 0.15rem;"
-                color={pair.sourceTitle === chapter.title ? 'var(--text-muted)' : 'var(--primary-color)'}
-              />{pair.sourceTitle}
+                color={pair.refTitle === chapter.title ? 'var(--text-muted)' : 'var(--primary-color)'}
+              />{pair.refTitle}
             </span>
           {:else}
             <span class="title-original" class:fallback={!chapter.title}>{chapter.title || 'No Title'}</span>

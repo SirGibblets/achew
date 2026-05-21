@@ -63,12 +63,12 @@ Then, configure the other options:
 
 ## Using aligned titles
 
-If you have one or more full [chapter sources](../getting-started/chapter-sources.md) whose timestamps line up with the chapters you're about to transcribe, you can use those titles directly instead of transcribing them from scratch.
+If you have one or more [Chapter References](../getting-started/chapter-references.md) whose timestamps line up with the chapters you're about to transcribe, you can use those titles directly instead of transcribing them from scratch.
 
 ![Aligned Titles](../img/aligned-titles-dark.webp#only-dark)
 ![Aligned Titles](../img/aligned-titles-light.webp#only-light)
 
-On the **Transcribe Titles** screen, check the box labeled **Use aligned titles from** and pick a source from the dropdown. A list shows each chapter from the selected source that aligns with any chapter pending transcription. From here you can select or deselect the titles you wish to use. Checking the **Show unaligned chapters** box (if available) will also show chapters from the selected source that *do not* align with any pending chapters.
+On the **Transcribe Titles** screen, check the box labeled **Use aligned titles from** and pick a Reference from the dropdown. A list shows each chapter from the selected Reference that aligns with any chapter pending transcription. From here you can select or deselect the titles you wish to use. Checking the **Show unaligned chapters** box (if available) will also show chapters from the selected Reference that *do not* align with any pending chapters.
 
 When one or more aligned titles are selected, clicking **Transcribe Titles** will use those selected titles and only the remaining titles will be transcribed. Clicking **Skip Transcription** will also use the selected titles, but will leave the remaining titles blank.
 

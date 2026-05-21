@@ -22,18 +22,18 @@ from ..models.chapter import ChapterData, RealignmentData
 from ..models.chapter_operation import AICleanupOperation, BatchChapterOperation, ChapterOperation
 from ..models.enums import RestartStep, Step
 from ..models.progress import ProgressCallback
-from ..models.sources import (
-    CueSourceType,
-    ExistingCue,
-    ExistingCueSource,
-    ExistingTitleSource,
-    TitleSourceType,
+from ..models.references import (
+    BasicChapter,
+    ChapterReference,
+    ChapterRefType,
+    TitleReference,
+    TitleRefType,
 )
 from .abs_service import ABSService
 from .asr_service_options import get_asr_buffer
 from .audio_service import AudioProcessingService, audio_uses_xhe_aac, pick_segment_extension, probe_segment_extension
 from .chapter_aligner import ChapterAligner
-from .source_parsers import csv_parser, cue_parser, epub_parser, json_parser, text_parser
+from .reference_parsers import csv_parser, cue_parser, epub_parser, json_parser, text_parser
 from .vad_detection_service import VadDetectionService
 
 logger = logging.getLogger(__name__)
@@ -94,8 +94,8 @@ class ProcessingPipeline:
         self.audio_unsupported_codec: bool = False
         self.segment_extension: Optional[str] = None
         self.file_starts: Optional[List[float]] = None
-        self.existing_cue_sources: List[ExistingCueSource] = []
-        self.existing_title_sources: List[ExistingTitleSource] = []
+        self.chapter_refs: List[ChapterReference] = []
+        self.title_refs: List[TitleReference] = []
 
         self.cues: List[float] = []
         self.segment_files: List[str] = []
@@ -413,9 +413,9 @@ class ProcessingPipeline:
         """
         return get_app_state().progress_dispatcher.scoped_callback()
 
-    def _get_existing_cue_source(self, id: str) -> Optional[ExistingCueSource]:
-        """Get an existing cue source by ID"""
-        return next((source for source in self.existing_cue_sources if source.id == id), None)
+    def _get_chapter_ref(self, id: str) -> Optional[ChapterReference]:
+        """Get a chapter reference by ID"""
+        return next((ref for ref in self.chapter_refs if ref.id == id), None)
 
     @property
     def book_duration(self) -> float:
@@ -557,7 +557,7 @@ class ProcessingPipeline:
             raise
 
     async def _scan_library_files(self, abs_service: "ABSService") -> None:
-        """Scan book.libraryFiles and create ExistingCueSource / ExistingTitleSource objects."""
+        """Scan book.libraryFiles and create Reference objects."""
         if not self.book or not self.book.libraryFiles:
             return
 
@@ -568,14 +568,14 @@ class ProcessingPipeline:
             ext = lib_file.metadata.ext.lower()  # already includes leading dot, e.g. ".json"
             stem = filename[: -len(ext)] if filename.endswith(ext) else filename
 
-            is_cue_candidate = (
+            is_chapter_ref_candidate = (
                 (ext == ".json" and filename == "chapters.json")
                 or (ext == ".csv" and filename == "chapters.csv")
                 or ext == ".cue"
             )
-            is_title_candidate = ext == ".epub" or (ext == ".txt" and stem in _TITLE_STEMS)
+            is_title_ref_candidate = ext == ".epub" or (ext == ".txt" and stem in _TITLE_STEMS)
 
-            if not is_cue_candidate and not is_title_candidate:
+            if not is_chapter_ref_candidate and not is_title_ref_candidate:
                 continue
 
             # Download to a temp file
@@ -588,21 +588,21 @@ class ProcessingPipeline:
             original_name = lib_file.metadata.filename
             try:
                 if ext == ".json":
-                    self.existing_cue_sources.append(
-                        json_parser.parse(tmp_path, source_name=original_name, duration=self.book_duration)
+                    self.chapter_refs.append(
+                        json_parser.parse(tmp_path, ref_name=original_name, duration=self.book_duration)
                     )
                 elif ext == ".csv":
-                    self.existing_cue_sources.append(
-                        csv_parser.parse(tmp_path, source_name=original_name, duration=self.book_duration)
+                    self.chapter_refs.append(
+                        csv_parser.parse(tmp_path, ref_name=original_name, duration=self.book_duration)
                     )
                 elif ext == ".cue":
-                    self.existing_cue_sources.append(
-                        cue_parser.parse(tmp_path, source_name=original_name, duration=self.book_duration)
+                    self.chapter_refs.append(
+                        cue_parser.parse(tmp_path, ref_name=original_name, duration=self.book_duration)
                     )
                 elif ext == ".txt":
-                    self.existing_title_sources.append(text_parser.parse(tmp_path, source_name=original_name))
+                    self.title_refs.append(text_parser.parse(tmp_path, ref_name=original_name))
                 elif ext == ".epub":
-                    self.existing_title_sources.append(epub_parser.parse(tmp_path, source_name=original_name))
+                    self.title_refs.append(epub_parser.parse(tmp_path, ref_name=original_name))
 
             except ValueError as e:
                 logger.warning(f"Failed to parse library file {original_name}: {e}")
@@ -615,10 +615,10 @@ class ProcessingPipeline:
                 except Exception:
                     pass
 
-        # Always add the CUSTOM title source (singleton — only one allowed)
-        self.existing_title_sources.append(
-            ExistingTitleSource(
-                type=TitleSourceType.CUSTOM,
+        # Always add the CUSTOM title reference (singleton — only one allowed)
+        self.title_refs.append(
+            TitleReference(
+                type=TitleRefType.CUSTOM,
                 name="Custom Titles",
                 short_name="Custom",
                 description="Manually entered list of chapter titles",
@@ -670,110 +670,110 @@ class ProcessingPipeline:
                         f"Book must have at least one supported audio file. Found {len(audio_files)} supported files. Available MIME types: {available_types}"
                     )
 
-                self._notify_progress(Step.VALIDATING, 0, "Checking chapter sources…")
+                self._notify_progress(Step.VALIDATING, 0, "Checking Chapter References…")
 
-                # Check for existing Audiobookshelf cues
+                # Check for existing Audiobookshelf chapters
                 if book.media.chapters:
-                    abs_cues: List[ExistingCue] = []
+                    abs_chapters: List[BasicChapter] = []
                     for chapter in book.media.chapters:
-                        abs_cues.append(
-                            ExistingCue(
+                        abs_chapters.append(
+                            BasicChapter(
                                 timestamp=chapter.start,
                                 title=chapter.title,
                             )
                         )
-                    if abs_cues:
-                        self.existing_cue_sources.append(
-                            ExistingCueSource(
-                                type=CueSourceType.ABS,
+                    if abs_chapters:
+                        self.chapter_refs.append(
+                            ChapterReference(
+                                type=ChapterRefType.ABS,
                                 name="Audiobookshelf Chapters",
                                 short_name="ABS",
                                 description="Uses the existing Audiobookshelf chapter data for this book",
-                                cues=abs_cues,
+                                chapters=abs_chapters,
                                 duration=book.duration,
                             )
                         )
 
-                # Check for existing embedded cues
+                # Check for existing embedded chapters
                 if audio_files:
-                    embedded_cues: List[ExistingCue] = []
+                    embedded_chapters: List[BasicChapter] = []
                     for audio_file in audio_files:
                         if audio_file.chapters:
                             for chapter in audio_file.chapters:
-                                embedded_cues.append(
-                                    ExistingCue(
+                                embedded_chapters.append(
+                                    BasicChapter(
                                         timestamp=chapter.start,
                                         title=chapter.title,
                                     )
                                 )
-                    if embedded_cues:
-                        self.existing_cue_sources.append(
-                            ExistingCueSource(
-                                type=CueSourceType.EMBEDDED,
+                    if embedded_chapters:
+                        self.chapter_refs.append(
+                            ChapterReference(
+                                type=ChapterRefType.EMBEDDED,
                                 name="Embedded Chapters",
                                 short_name="Embedded",
-                                description="Uses chapter data from the book's embedded metadata",
-                                cues=embedded_cues,
+                                description="Uses data from the book's embedded chapters",
+                                chapters=embedded_chapters,
                                 duration=book.duration,
                             )
                         )
 
-                # Check for existing Audnexus cues
+                # Check for existing Audnexus chapters
                 audnexus_chapter_data = None
                 if book.media.metadata.asin:
                     audnexus_chapter_data = await abs_service.find_audnexus_chapters(book)
                 if audnexus_chapter_data:
-                    audnexus_cues: List[ExistingCue] = []
+                    audnexus_chapters: List[BasicChapter] = []
                     for chapter in audnexus_chapter_data.chapters:
-                        audnexus_cues.append(
-                            ExistingCue(
+                        audnexus_chapters.append(
+                            BasicChapter(
                                 timestamp=chapter.startOffsetMs / 1000,
                                 title=chapter.title,
                             )
                         )
-                    if audnexus_cues:
+                    if audnexus_chapters:
                         audnexus_duration_sec = float(audnexus_chapter_data.runtimeLengthMs) / 1000
                         audnexus_meta: Dict[str, str] = {
                             "ASIN": book.media.metadata.asin or "",
                             "Duration": f"{int(audnexus_duration_sec // 60)}m",
                         }
-                        self.existing_cue_sources.append(
-                            ExistingCueSource(
-                                type=CueSourceType.AUDNEXUS,
+                        self.chapter_refs.append(
+                            ChapterReference(
+                                type=ChapterRefType.AUDNEXUS,
                                 name="Audnexus Chapters",
                                 short_name="Audnexus",
                                 description="Uses the Audnexus chapter data associated with the ASIN assigned to this book",
                                 metadata=audnexus_meta,
-                                cues=audnexus_cues,
+                                chapters=audnexus_chapters,
                                 duration=audnexus_duration_sec,
                             )
                         )
 
-                # Check for file start cues
+                # Check for file data
                 if audio_files and len(audio_files) > 1:
-                    file_start_cues: List[ExistingCue] = []
+                    file_data_chapters: List[BasicChapter] = []
                     current_start = 0.0
                     for audio_file in audio_files:
-                        file_start_cues.append(
-                            ExistingCue(
+                        file_data_chapters.append(
+                            BasicChapter(
                                 timestamp=current_start,
                                 title=audio_file.metadata.filename,
                             )
                         )
                         current_start += audio_file.duration
-                    if file_start_cues:
-                        self.existing_cue_sources.append(
-                            ExistingCueSource(
-                                type=CueSourceType.FILE_DATA,
+                    if file_data_chapters:
+                        self.chapter_refs.append(
+                            ChapterReference(
+                                type=ChapterRefType.FILE_DATA,
                                 name="Audio File Info",
                                 short_name="Files",
                                 description="Uses the audiobook file names and start times as chapter data",
-                                cues=file_start_cues,
+                                chapters=file_data_chapters,
                                 duration=book.duration,
                             )
                         )
 
-                # Scan library files for additional sources
+                # Scan library files for additional references
                 await self._scan_library_files(abs_service)
 
                 self._notify_progress(Step.VALIDATING, 0, "Validation complete")
@@ -859,66 +859,74 @@ class ProcessingPipeline:
             await self.restart_at_step(RestartStep.IDLE, f"Fetching item failed: {str(e)}")
             raise
 
-    async def create_cues_from_source(self, cue_source: str):
-        """Create cues from the user-selected source"""
+    async def start_workflow(self, workflow: str, ref_id: Optional[str] = None, dramatized: Optional[bool] = False):
+        """Run the user-selected workflow."""
 
         try:
-            # Quick Edit: skip all processing and go straight to chapter editor
-            if cue_source.startswith("quick_edit:"):
-                source_id = cue_source.split(":", 1)[1]
-                await self._quick_edit(source_id)
-                return
+            if workflow == "quick_edit":
+                if not ref_id:
+                    raise ValueError("Reference ID is required for quick edit workflow")
+                await self._quick_edit(ref_id)
 
-            # Step 4: Determine chapter breaks based on user selection
-            if cue_source == "smart_detect":
-                # Smart Detect (regular) - detect cues and pause for user selection
-                await self._detect_cues()
-            elif cue_source == "smart_detect_vad":
-                # VAD-based smart detection - detect cues and pause for user selection
-                await self._detect_cues_vad()
-            else:
-                # Create cues from an existing source
-                existing_source = next((src for src in self.existing_cue_sources if src.id == cue_source), None)
+            elif workflow == "smart_detect":
+                if dramatized:
+                    await self._detect_cues_vad()
+                else:
+                    await self._detect_cues()
 
-                if not existing_source:
-                    raise ValueError(f"Invalid cue source: {cue_source}")
+            elif workflow == "regenerate":
+                if not ref_id:
+                    raise ValueError("Reference ID is required for regenerate titles workflow")
 
-                self.cues = self._filter_cues_by_duration([c.timestamp for c in existing_source.cues])
+                chapter_ref = next((src for src in self.chapter_refs if src.id == ref_id), None)
+                if not chapter_ref:
+                    raise ValueError(f"Invalid Chapter Reference: {ref_id}")
+
+                self.cues = self._filter_cues_by_duration([c.timestamp for c in chapter_ref.chapters])
                 self._notify_progress(Step.CONFIGURE_ASR, 0, "Ready for transcription configuration")
 
+            elif workflow == "realign":
+                if not ref_id:
+                    raise ValueError("Reference ID is required for realign workflow")
+                await self.realign_chapters(ref_id, dramatized=dramatized or False)
+
+            else:
+                raise ValueError(f"Invalid workflow: {workflow}")
+
         except Exception as e:
-            logger.error(f"Failed to create cues: {e}", exc_info=True)
+            logger.error(f"Failed to start workflow: {e}", exc_info=True)
             await self.restart_at_step(RestartStep.SELECT_WORKFLOW, f"Processing failed: {str(e)}")
             raise
 
-    async def _quick_edit(self, source_id: str):
+    async def _quick_edit(self, ref_id: str):
         """Skip all processing and load chapters directly into the editor"""
-        existing_source = next((src for src in self.existing_cue_sources if src.id == source_id), None)
+        chapter_ref = next((src for src in self.chapter_refs if src.id == ref_id), None)
 
-        if not existing_source:
-            raise ValueError(f"Invalid quick edit source: {source_id}")
+        if not chapter_ref:
+            raise ValueError(f"Invalid quick edit Reference: {ref_id}")
 
         self.is_quick_edit = True
         self.chapters = []
 
-        for cue in existing_source.cues:
-            chapter = ChapterData(
-                timestamp=cue.timestamp,
-                title=cue.title,
+        for ref_chapter in chapter_ref.chapters:
+            self.chapters.append(
+                ChapterData(
+                    timestamp=ref_chapter.timestamp,
+                    title=ref_chapter.title,
+                )
             )
-            self.chapters.append(chapter)
 
-        logger.info(f"Quick edit: loaded {len(self.chapters)} chapters from {existing_source.short_name}")
+        logger.info(f"Quick edit: loaded {len(self.chapters)} chapters from {chapter_ref.short_name}")
         self._notify_progress(Step.CHAPTER_EDITING, 0)
 
-    async def realign_chapters(self, source_id: str, dramatized: bool = False):
-        """Realign chapter timestamps from the user-selected source"""
+    async def realign_chapters(self, ref_id: str, dramatized: bool = False):
+        """Realign chapter timestamps from the user-selected reference"""
 
         try:
-            existing_source = next((src for src in self.existing_cue_sources if src.id == source_id), None)
+            chapter_ref = next((src for src in self.chapter_refs if src.id == ref_id), None)
 
-            if not existing_source:
-                raise ValueError(f"Invalid realignment source: {source_id}")
+            if not chapter_ref:
+                raise ValueError(f"Invalid realignment Reference: {ref_id}")
 
             self.is_realignment = True
 
@@ -928,10 +936,10 @@ class ProcessingPipeline:
                 "Calculating audio extraction targets…",
             )
 
-            padding: float = max(30, abs(self.book_duration - existing_source.duration) * 1.5)
+            padding: float = max(30, abs(self.book_duration - chapter_ref.duration) * 1.5)
 
             raw_segments = []
-            for chapter in existing_source.cues:
+            for chapter in chapter_ref.chapters:
                 start = max(0, chapter.timestamp - padding)
                 end = min(self.book_duration, chapter.timestamp + padding)
 
@@ -977,15 +985,15 @@ class ProcessingPipeline:
                 # Detection was canceled
                 return
 
-            await self._realign_chapters(existing_source, padding)
+            await self._realign_chapters(chapter_ref, padding)
 
         except Exception as e:
             logger.error(f"Failed to align chapters: {e}", exc_info=True)
             await self.restart_at_step(RestartStep.SELECT_WORKFLOW, f"Processing failed: {str(e)}")
             raise
 
-    async def _realign_chapters(self, source: ExistingCueSource, ransac_threshold: float):
-        """Realign chapters using the detected silences and the source chapters"""
+    async def _realign_chapters(self, ref: ChapterReference, ransac_threshold: float):
+        """Realign chapters using the detected silences and the reference chapters"""
         self._notify_progress(Step.AUDIO_ANALYSIS, 100, "Aligning chapters…")
 
         try:
@@ -994,9 +1002,9 @@ class ProcessingPipeline:
             )
 
             aligned_chapters, _ = aligner.align(
-                source.cues.copy(),
+                ref.chapters.copy(),
                 self.detected_cues.copy() if self.detected_cues else [],
-                source.duration,
+                ref.duration,
                 self.book_duration,
             )
 
@@ -1011,7 +1019,7 @@ class ProcessingPipeline:
                     confidence = 1.0
                     is_guess = False
 
-                original_chapter = source.cues[i]
+                original_chapter = ref.chapters[i]
 
                 chapter_data = ChapterData(
                     timestamp=timestamp,
@@ -1552,23 +1560,23 @@ class ProcessingPipeline:
     def _merge_unaligned_timestamps(
         self,
         selected_timestamps: List[float],
-        cue_sources: List[ExistingCueSource],
+        chapter_refs: List[ChapterReference],
         include_unaligned: List[str],
     ) -> List[float]:
         """Merge unaligned timestamps from existing chapter sets with selected timestamps"""
-        if not include_unaligned or not cue_sources:
+        if not include_unaligned or not chapter_refs:
             return selected_timestamps
 
         all_unaligned_timestamps = []
         tolerance = 5.0
 
-        for source_id in include_unaligned:
-            cue_source = self._get_existing_cue_source(source_id)
-            if not cue_source:
-                logger.warning(f"No existing source found for include_unaligned: {source_id}")
+        for ref_id in include_unaligned:
+            chapter_ref = self._get_chapter_ref(ref_id)
+            if not chapter_ref:
+                logger.warning(f"No Chapter Reference found for include_unaligned: {ref_id}")
                 continue
 
-            existing_timestamps = [c.timestamp for c in cue_source.cues]
+            existing_timestamps = [c.timestamp for c in chapter_ref.chapters]
 
             # Find unaligned timestamps for this chapter set
             unaligned_timestamps = []
@@ -1582,7 +1590,7 @@ class ProcessingPipeline:
                     unaligned_timestamps.append(existing_timestamp)
 
             all_unaligned_timestamps.extend(unaligned_timestamps)
-            logger.info(f"Found {len(unaligned_timestamps)} unaligned timestamps from {source_id} chapters")
+            logger.info(f"Found {len(unaligned_timestamps)} unaligned timestamps from {ref_id} chapters")
 
         # Merge all timestamps and remove near-duplicates within tolerance
         all_timestamps = selected_timestamps + all_unaligned_timestamps
@@ -1603,11 +1611,11 @@ class ProcessingPipeline:
             # Set the selected cues directly from provided timestamps
             self.cues = sorted(timestamps)
 
-            # Add unaligned cues if specified
+            # Add unaligned chapters if specified
             if include_unaligned:
                 self.cues = self._merge_unaligned_timestamps(
                     self.cues,
-                    self.existing_cue_sources,
+                    self.chapter_refs,
                     include_unaligned,
                 )
 
@@ -1708,18 +1716,18 @@ class ProcessingPipeline:
             preferred_titles: Optional[List[str]] = None
 
             # Get preferred titles
-            if self.ai_options.usePreferredTitles and self.ai_options.preferredTitlesSource:
-                cue_source: Optional[ExistingCueSource] = next(
-                    (s for s in self.existing_cue_sources if s.id == self.ai_options.preferredTitlesSource), None
+            if self.ai_options.usePreferredTitles and self.ai_options.preferredTitlesRef:
+                chapter_ref: Optional[ChapterReference] = next(
+                    (s for s in self.chapter_refs if s.id == self.ai_options.preferredTitlesRef), None
                 )
-                if cue_source:
-                    preferred_titles = [ch.title for ch in cue_source.cues if ch.title]
+                if chapter_ref:
+                    preferred_titles = [ch.title for ch in chapter_ref.chapters if ch.title]
                 else:
-                    title_source: Optional[ExistingTitleSource] = next(
-                        (s for s in self.existing_title_sources if s.id == self.ai_options.preferredTitlesSource), None
+                    title_ref: Optional[TitleReference] = next(
+                        (s for s in self.title_refs if s.id == self.ai_options.preferredTitlesRef), None
                     )
-                    if title_source:
-                        preferred_titles = [t for t in title_source.titles if t]
+                    if title_ref:
+                        preferred_titles = [t for t in title_ref.titles if t]
 
             # Prepare additional instructions list
             instructions_list = []

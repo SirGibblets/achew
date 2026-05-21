@@ -1,6 +1,6 @@
 # Quick Edit
 
-Quick Edit skips detection and transcription and loads a chapter source directly into the editor.
+Quick Edit skips detection and transcription and loads a Chapter Reference directly into the editor.
 
 ![Quick Edit workflow](../img/select-workflow-quickedit-light.webp#only-light)
 ![Quick Edit workflow](../img/select-workflow-quickedit-dark.webp#only-dark)
@@ -15,7 +15,7 @@ Quick Edit skips detection and transcription and loads a chapter source directly
 
 1. [**Select a book**](../getting-started/finding-a-book.md) from Achew's main screen.
 2. Choose **Quick Edit** on the *Select a Workflow* screen.
-3. **Pick a chapter source.** If there are no sources, or you wish to include additional sources, click the **Add Chapter Source** button near the bottom.
+3. **Pick a Chapter Reference.** If there are no References, or you wish to use another Reference, click the **Add Chapter Reference** button near the bottom.
 4. Click **Open in Editor.**
 5. Use the [Chapter Editor](../editor/index.md) to review and polish the chapters.
 

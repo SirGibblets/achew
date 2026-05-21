@@ -1,7 +1,7 @@
 import type {
+  ABSLibrary,
   AddOptionsResponse,
   AIOptions,
-  ABSLibrary,
   ApplyTitleMapping,
   ASROptions,
   ASROptionsResponse,
@@ -18,8 +18,7 @@ import type {
   DetectedCuesResponse,
   EditorSettings,
   EditorSettingsUpdateResponse,
-  ExistingCueSource,
-  ExistingTitleSource,
+  ChapterReference,
   LLMModelsResponse,
   LLMProviderResponse,
   LLMProvidersResponse,
@@ -29,8 +28,9 @@ import type {
   PreassignedTitle,
   SelectedCuesResponse,
   ShiftOperation,
-  SourcesResponse,
+  ReferencesResponse,
   StatusResponse,
+  TitleReference,
   ValidateItemResponse,
 } from '../types';
 import type { ChapterData } from '../types/chapter';
@@ -138,17 +138,10 @@ export const session = {
     return apiRequest<StatusResponse>('/status');
   },
 
-  selectWorkflow(option: string) {
-    return apiRequest<unknown>('/pipeline/select-workflow', {
+  startWorkflow(workflow: string, refId?: string, dramatized?: boolean) {
+    return apiRequest<unknown>('/pipeline/start-workflow', {
       method: 'POST',
-      body: { option },
-    });
-  },
-
-  realignChapter(sourceId: string, dramatized: boolean) {
-    return apiRequest<unknown>('/pipeline/realign', {
-      method: 'POST',
-      body: { source_id: sourceId, dramatized },
+      body: { workflow, ref_id: refId, dramatized },
     });
   },
 
@@ -175,10 +168,6 @@ export const session = {
       method: 'POST',
       body: { restart_step: restartAtStep },
     });
-  },
-
-  getCueSources() {
-    return apiRequest<ExistingCueSource[]>('/pipeline/cue-sources');
   },
 
   getASROptions() {
@@ -272,7 +261,7 @@ export const chapters = {
   },
 
   exportAsSnapshot() {
-    return apiRequest<ExistingCueSource>('/chapters/export/snapshot', { method: 'POST', body: {} });
+    return apiRequest<ChapterReference>('/chapters/export/snapshot', { method: 'POST', body: {} });
   },
 
   getAddOptions(chapterId: string) {
@@ -496,33 +485,33 @@ export const audiobookshelf = {
   },
 };
 
-export const sources = {
+export const references = {
   getAll() {
-    return apiRequest<SourcesResponse>('/pipeline/sources');
+    return apiRequest<ReferencesResponse>('/pipeline/references');
   },
 
   upload(formData: FormData) {
-    return apiRequest<ExistingCueSource | ExistingTitleSource>('/pipeline/sources/upload', {
+    return apiRequest<ChapterReference | TitleReference>('/pipeline/references/upload', {
       method: 'POST',
       body: formData,
     });
   },
 
   addAudnexus(asin: string, provider: string) {
-    return apiRequest<ExistingCueSource>('/pipeline/sources/audnexus', {
+    return apiRequest<ChapterReference>('/pipeline/references/audnexus', {
       method: 'POST',
       body: { asin, provider },
     });
   },
 
-  delete(sourceId: string) {
-    return apiRequest<unknown>(`/pipeline/sources/${encodeURIComponent(sourceId)}`, {
+  delete(refId: string) {
+    return apiRequest<unknown>(`/pipeline/references/${encodeURIComponent(refId)}`, {
       method: 'DELETE',
     });
   },
 
-  updateTitles(sourceId: string, titles: string[]) {
-    return apiRequest<ExistingTitleSource>(`/pipeline/sources/${encodeURIComponent(sourceId)}/titles`, {
+  updateTitles(refId: string, titles: string[]) {
+    return apiRequest<TitleReference>(`/pipeline/references/${encodeURIComponent(refId)}/titles`, {
       method: 'PUT',
       body: { titles },
     });
@@ -562,7 +551,7 @@ export const api = {
   config,
   llm,
   audiobookshelf,
-  sources,
+  references,
   abs,
 };
 

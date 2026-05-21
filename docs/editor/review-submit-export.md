@@ -6,7 +6,7 @@
 
 # Review and Submit
 
-Once you are happy with your chapters in the editor, click the **Review Selected** button to proceed to the Review screen. Here you can review the final chapter list, submit the chapters back to Audiobookshelf, or export chapters to a file, or create a [snapshot](../getting-started/chapter-sources.md#snapshot).
+Once you are happy with your chapters in the editor, click the **Review Selected** button to proceed to the Review screen. Here you can review the final chapter list, submit the chapters back to Audiobookshelf, or export chapters to a file, or create a [snapshot](../getting-started/chapter-references.md#snapshot).
 
 ![Review and submit](../img/review-and-submit-light.webp#only-light)
 ![Review and submit](../img/review-and-submit-dark.webp#only-dark)
@@ -22,7 +22,7 @@ After submission, you'll return to the main screen where you can find another bo
 Below the submit button, you can expand the **Export** section to view your export options:
 
 - **Download to file**: Writes the chapters to a file you can save and reuse later (CSV, JSON, CUE).
-- **Save as Chapter Source**: Creates a [snapshot](#snapshot) chapter source you can use for this session.
+- **Save as Chapter Reference**: Creates a [Snapshot](#snapshot) Chapter Reference you can use for this session.
 
 !!! tip "Exporting without submitting"
     Exporting does not end your current session. If you don't plan on submitting to Audiobookshelf, you can open the [Back Menu](../reference/glossary.md#back-menu) and pick **New Audiobook** to end the session and return to book selection.
@@ -58,7 +58,7 @@ Standard CUE sheet format, using `MM:SS:FF` (75 frames/sec).
 
 ### Snapshot
 
-Click **Create Snapshot** to save the selected chapters as a new [chapter source](../getting-started/chapter-sources.md). This snapshot can be used like any other [full chapter source](../getting-started/chapter-sources.md#full-chapter-sources) and is useful for referencing the current chapters in later edits or workflows. See [Working with snapshots](../examples/working-with-snapshots.md) for some examples.
+Click **Create Snapshot** to save the selected chapters as a new [Chapter Reference](../getting-started/chapter-references.md). This snapshot can be used like any other [Chapter Reference](../getting-started/chapter-references.md#chapter-references) and is useful for referencing the current chapters in later edits or workflows. See [Working with snapshots](../examples/working-with-snapshots.md) for some examples.
 
 The first snapshot you make will be named **Snapshot**. Subsequent snapshots will be named **Snapshot 2**, **Snapshot 3**, **Snapshot 4**, etc.
 

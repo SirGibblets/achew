@@ -1,17 +1,17 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { session } from '../stores/session';
+  import type { PreassignedTitle } from '../types/api';
   import { api } from '../utils/api';
   import ASRSettings from './ASRSettings.svelte';
   import DocLink from './DocLink.svelte';
   import AlignedTitlesPanel from './configure_asr/AlignedTitlesPanel.svelte';
-  import type { PreassignedTitle } from '../types/api';
 
   let loading = $state(false);
   let cues = $state<number[]>([]);
   let preassignedTitles = $state<PreassignedTitle[]>([]);
 
-  let cueSources = $derived($session.cueSources ?? []);
+  let chapterRefs = $derived($session.chapterRefs ?? []);
   let toTranscribeCount = $derived(cues.length - preassignedTitles.length);
 
   async function loadCues() {
@@ -99,8 +99,8 @@
     </button>
   </div>
 
-  {#if cueSources.length > 0 && cues.length > 0}
-    <AlignedTitlesPanel {cues} {cueSources} bind:preassignedTitles />
+  {#if chapterRefs.length > 0 && cues.length > 0}
+    <AlignedTitlesPanel {cues} {chapterRefs} bind:preassignedTitles />
   {/if}
 </div>
 

@@ -103,7 +103,7 @@ default = "latest"
   "getting-started/index.md",
   { "Achew Basics" = "getting-started/achew-basics.md" },
   { "Chapters vs Cues" = "getting-started/chapters-and-cues.md" },
-  { "Chapter Sources" = "getting-started/chapter-sources.md" },
+  { "Chapter References" = "getting-started/chapter-references.md" },
   { "Finding a Book" = "getting-started/finding-a-book.md" },
   { "Choosing a Workflow" = "getting-started/workflows-overview.md" },
   { "Set up LLM Providers" = "getting-started/setup-llm-providers.md" },

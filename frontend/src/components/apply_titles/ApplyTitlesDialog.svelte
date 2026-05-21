@@ -11,9 +11,9 @@
   import Pencil from '@lucide/svelte/icons/pencil';
   import Plus from '@lucide/svelte/icons/plus';
   import ChapterModal from '../ChapterModal.svelte';
-  import AddSourceDialog from '../AddSourceDialog.svelte';
+  import AddReferenceDialog from '../AddReferenceDialog.svelte';
   import CustomTitlesDialog from '../CustomTitlesDialog.svelte';
-  import type { ExistingCueSource, ExistingTitleSource } from '../../types/sources';
+  import type { Reference, ChapterReference, TitleReference } from '../../types/references';
 
   interface Props {
     isOpen?: boolean;
@@ -26,22 +26,13 @@
     new_title: string;
   }
 
-  interface NormalizedSource {
-    id: string;
-    name: string;
-    type: string;
-    _isCue: boolean;
-    cues: { timestamp: number | null; title: string }[];
-    titles?: string[];
-  }
-
   interface ChapterModalRow {
     timestamp: number | null;
     title: string;
   }
 
   let activeTab = $state<'alignment' | 'selection'>('alignment');
-  let selectedSourceId = $state<string | null>(null);
+  let selectedRefId = $state<string | null>(null);
   let loading = $state(false);
   let error = $state<string | null>(null);
 
@@ -53,37 +44,29 @@
   let chapterTitlesModalData = $state<ChapterModalRow[]>([]);
   let chapterTitlesModalLoading = false;
 
-  let cueSources = $derived<ExistingCueSource[]>($session.cueSources || []);
-  let titleSources = $derived<ExistingTitleSource[]>($session.titleSources || []);
+  let chapterRefs = $derived<ChapterReference[]>($session.chapterRefs || []);
+  let titleRefs = $derived<TitleReference[]>($session.titleRefs || []);
 
-  /** All sources available for title mapping, cue first then title. */
-  let allSources = $derived<NormalizedSource[]>([
-    ...cueSources.map((s) => ({
-      ...s,
-      _isCue: true,
-      cues: s.cues.map((c) => ({ timestamp: c.timestamp as number | null, title: c.title })),
-    })),
-    ...titleSources.map((s) => ({
-      ...s,
-      _isCue: false,
-      // Normalise to cues shape so tabs work positionally
-      cues: (s.titles || []).map((t) => ({ timestamp: null, title: t })),
-    })),
-  ]);
+  /** All references available for title mapping, chapter references first then title references. */
+  let allRefs = $derived<Reference[]>([...chapterRefs, ...titleRefs]);
 
-  let selectedSource = $derived(allSources.find((s) => s.id === selectedSourceId) ?? null);
-  let selectedSourceIsCustom = $derived(selectedSource?.type === 'custom');
-  let selectedSourceIsCue = $derived(selectedSource?._isCue ?? true);
+  function isChapterReference(s: Reference): s is ChapterReference {
+    return 'chapters' in s;
+  }
 
-  // Custom title source id for the edit dialog
-  let customTitlesSourceId = $derived(titleSources.find((s) => s.type === 'custom')?.id ?? '');
+  let selectedRef = $derived<Reference | null>(allRefs.find((s) => s.id === selectedRefId) ?? null);
+  let selectedRefIsCustom = $derived(selectedRef?.type === 'custom');
+  let selectedRefIsChapter = $derived(selectedRef ? isChapterReference(selectedRef) : false);
+
+  // Custom title reference id for the edit dialog
+  let customTitlesRefId = $derived(titleRefs.find((s) => s.type === 'custom')?.id ?? '');
 
   // Add / edit dialog state
-  let showAddSource = $state(false);
+  let showAddReference = $state(false);
   let showCustomTitles = $state(false);
 
   let currentMappings = $derived<TitleMapping[]>(
-    selectedSourceIsCue && activeTab === 'alignment' ? alignmentMappings : selectionMappings,
+    selectedRefIsChapter && activeTab === 'alignment' ? alignmentMappings : selectionMappings,
   );
 
   let canApply = $derived.by(() => {
@@ -95,12 +78,12 @@
   });
 
   $effect(() => {
-    if (isOpen && allSources.length > 0 && !selectedSourceId) {
-      selectedSourceId = allSources[0].id;
+    if (isOpen && allRefs.length > 0 && !selectedRefId) {
+      selectedRefId = allRefs[0].id;
     }
     if (!isOpen) {
       audio.stop();
-      selectedSourceId = null;
+      selectedRefId = null;
       activeTab = 'alignment';
       alignmentMappings = [];
       selectionMappings = [];
@@ -170,13 +153,20 @@
   }
 
   function viewChapterTitles(): void {
-    if (!selectedSource) return;
+    if (!selectedRef) return;
 
-    chapterTitlesModalTitle = selectedSource.name;
-    chapterTitlesModalData = selectedSource.cues.map((cue, index) => ({
-      timestamp: cue.timestamp,
-      title: cue.title || `Chapter ${index + 1}`,
-    }));
+    chapterTitlesModalTitle = selectedRef.name;
+    if (isChapterReference(selectedRef)) {
+      chapterTitlesModalData = selectedRef.chapters.map((chapter) => ({
+        timestamp: chapter.timestamp,
+        title: chapter.title || `No Title`,
+      }));
+    } else {
+      chapterTitlesModalData = selectedRef.titles.map((title) => ({
+        timestamp: null,
+        title: title || `No Title`,
+      }));
+    }
     showChapterTitlesModal = true;
   }
 
@@ -218,13 +208,15 @@
             <div class="alert alert-danger">{error}</div>
           {/if}
 
-          <div class="source-row">
-            <span class="source-label">Apply titles from:</span>
-            <div class="source-select-group">
-              <select class="source-select" bind:value={selectedSourceId}>
-                {#each allSources as src (src.id)}
+          <div class="reference-row">
+            <span class="reference-label">Apply titles from:</span>
+            <div class="reference-select-group">
+              <select class="reference-select" bind:value={selectedRefId}>
+                {#each allRefs as src (src.id)}
                   <option value={src.id}>
-                    {src.name} ({src._isCue ? src.cues.length + ' chapters' : (src.titles?.length ?? 0) + ' titles'})
+                    {src.name} ({isChapterReference(src)
+                      ? src.chapters.length + ' chapters'
+                      : src.titles.length + ' titles'})
                   </option>
                 {/each}
               </select>
@@ -232,11 +224,11 @@
             <button
               type="button"
               class="view-titles-btn"
-              onclick={() => (selectedSourceIsCustom ? (showCustomTitles = true) : viewChapterTitles())}
-              disabled={!selectedSourceId}
-              title={selectedSourceIsCustom ? 'Edit custom titles' : 'View chapter titles from selected source'}
+              onclick={() => (selectedRefIsCustom ? (showCustomTitles = true) : viewChapterTitles())}
+              disabled={!selectedRefId}
+              title={selectedRefIsCustom ? 'Edit custom titles' : 'View chapter titles from selected Reference'}
             >
-              {#if selectedSourceIsCustom}
+              {#if selectedRefIsCustom}
                 <Pencil size="20" />
               {:else}
                 <Eye size="20" />
@@ -245,14 +237,14 @@
             <button
               type="button"
               class="view-titles-btn"
-              onclick={() => (showAddSource = true)}
-              title="Add Chapter Source"
+              onclick={() => (showAddReference = true)}
+              title="Add Chapter Reference"
             >
               <Plus size="20" />
             </button>
           </div>
 
-          {#if selectedSourceIsCue}
+          {#if selectedRefIsChapter}
             <div class="mode-selector">
               <button class="mode-btn" class:active={activeTab === 'alignment'} onclick={() => switchTab('alignment')}>
                 By Alignment
@@ -263,10 +255,10 @@
             </div>
           {/if}
 
-          {#if selectedSourceIsCue && activeTab === 'alignment'}
-            <AlignmentTab source={selectedSource as unknown as ExistingCueSource} bind:mappings={alignmentMappings} />
+          {#if selectedRefIsChapter && activeTab === 'alignment'}
+            <AlignmentTab ref={selectedRef as ChapterReference} bind:mappings={alignmentMappings} />
           {:else}
-            <SelectionTab source={selectedSource as unknown as ExistingCueSource} bind:mappings={selectionMappings} />
+            <SelectionTab ref={selectedRef} bind:mappings={selectionMappings} />
           {/if}
         </div>
 
@@ -289,15 +281,15 @@
   onclose={closeChapterTitlesModal}
 />
 
-<AddSourceDialog
-  bind:isOpen={showAddSource}
-  expectCues={false}
-  onSourceAdded={(src) => {
-    selectedSourceId = src.id;
+<AddReferenceDialog
+  bind:isOpen={showAddReference}
+  expectChapterRef={false}
+  onReferenceAdded={(src) => {
+    selectedRefId = src.id;
   }}
 />
 
-<CustomTitlesDialog bind:isOpen={showCustomTitles} sourceId={customTitlesSourceId} />
+<CustomTitlesDialog bind:isOpen={showCustomTitles} refId={customTitlesRefId} />
 
 <style>
   .modal-backdrop {
@@ -346,7 +338,7 @@
     text-align: center;
   }
 
-  .source-row {
+  .reference-row {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -354,13 +346,13 @@
     margin-bottom: 0.75rem;
   }
 
-  .source-label {
+  .reference-label {
     white-space: nowrap;
     font-size: 0.875rem;
     color: var(--text-secondary);
   }
 
-  .source-select-group {
+  .reference-select-group {
     flex: 1;
     display: flex;
     flex-direction: column;
@@ -368,7 +360,7 @@
     max-width: 360px;
   }
 
-  .source-select {
+  .reference-select {
     width: 100%;
     padding: 0.5rem 0.75rem;
     border: 1px solid var(--border-color);
@@ -379,12 +371,12 @@
     transition: border-color 0.2s ease;
   }
 
-  .source-select:focus {
+  .reference-select:focus {
     outline: none;
     border-color: var(--primary-color);
   }
 
-  .source-select:disabled {
+  .reference-select:disabled {
     opacity: 0.4;
     cursor: not-allowed;
   }

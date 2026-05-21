@@ -1,5 +1,5 @@
 import type { ChapterData } from './chapter';
-import type { ExistingCueSource, ExistingTitleSource } from './sources';
+import type { ChapterReference, TitleReference } from './references';
 
 export const WSMessageType = {
   STATUS: 'status',
@@ -9,7 +9,7 @@ export const WSMessageType = {
   HISTORY_UPDATE: 'history_update',
   BATCH_OPERATION: 'batch_operation',
   TRANSCRIBING_UPDATE: 'transcribing_update',
-  SOURCES_UPDATE: 'sources_update',
+  REFERENCES_UPDATE: 'references_update',
   ERROR: 'error',
   SELECTION_STATS: 'selection_stats',
 } as const;
@@ -26,8 +26,8 @@ export interface ProgressUpdateData {
 export interface StepChangeData {
   old_step: string;
   new_step: string;
-  cue_sources?: ExistingCueSource[];
-  title_sources?: ExistingTitleSource[];
+  chapter_refs?: ChapterReference[];
+  title_refs?: TitleReference[];
   restart_options?: string[];
   audio_unsupported_codec?: boolean;
   chapter_id?: string;
@@ -52,9 +52,9 @@ export interface SelectionStatsData {
   unselected: number;
 }
 
-export interface SourcesUpdateData {
-  cue_sources?: ExistingCueSource[];
-  title_sources?: ExistingTitleSource[];
+export interface ReferencesUpdateData {
+  chapter_refs?: ChapterReference[];
+  title_refs?: TitleReference[];
 }
 
 export interface TranscribingUpdateData {

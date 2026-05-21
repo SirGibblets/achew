@@ -4,8 +4,10 @@ from typing import Dict, List, Union
 
 from pydantic import BaseModel, Field
 
+from app.models.chapter import BasicChapter
 
-class CueSourceType(str, Enum):
+
+class ChapterRefType(str, Enum):
     ABS = "abs"
     EMBEDDED = "embedded"
     AUDNEXUS = "audnexus"
@@ -16,18 +18,13 @@ class CueSourceType(str, Enum):
     SNAPSHOT = "snapshot"
 
 
-class TitleSourceType(str, Enum):
+class TitleRefType(str, Enum):
     TEXT = "text"
     EPUB = "epub"
     CUSTOM = "custom"
 
 
-class ExistingCue(BaseModel):
-    timestamp: float
-    title: str
-
-
-class ExistingSourceBase(BaseModel):
+class ReferenceBase(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
     short_name: str
@@ -35,15 +32,15 @@ class ExistingSourceBase(BaseModel):
     metadata: Dict[str, str] = Field(default_factory=dict)
 
 
-class ExistingCueSource(ExistingSourceBase):
-    type: CueSourceType
-    cues: List[ExistingCue]
+class ChapterReference(ReferenceBase):
+    type: ChapterRefType
+    chapters: List[BasicChapter]
     duration: float
 
 
-class ExistingTitleSource(ExistingSourceBase):
-    type: TitleSourceType
+class TitleReference(ReferenceBase):
+    type: TitleRefType
     titles: List[str]
 
 
-ExistingSource = Union[ExistingCueSource, ExistingTitleSource]
+Reference = Union[ChapterReference, TitleReference]

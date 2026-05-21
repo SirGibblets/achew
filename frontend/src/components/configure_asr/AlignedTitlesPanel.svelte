@@ -1,22 +1,22 @@
 <script lang="ts">
-  import { slide } from 'svelte/transition';
-  import { SvelteSet } from 'svelte/reactivity';
-  import { audio, currentSegmentId, isPlaying } from '../../stores/audio';
   import CircleQuestionMark from '@lucide/svelte/icons/circle-question-mark';
   import Pause from '@lucide/svelte/icons/pause';
   import Play from '@lucide/svelte/icons/play';
-  import type { ExistingCueSource } from '../../types/sources';
-  import type { PreassignedTitle } from '../../types/api';
-  import { alignByTimestamp } from '../../utils/alignment';
   import { onDestroy } from 'svelte';
+  import { SvelteSet } from 'svelte/reactivity';
+  import { slide } from 'svelte/transition';
+  import { audio, currentSegmentId, isPlaying } from '../../stores/audio';
+  import type { PreassignedTitle } from '../../types/api';
+  import type { ChapterReference } from '../../types/references';
+  import { alignByTimestamp } from '../../utils/alignment';
 
   interface Props {
     cues: number[];
-    cueSources: ExistingCueSource[];
+    chapterRefs: ChapterReference[];
     preassignedTitles: PreassignedTitle[];
   }
 
-  let { cues, cueSources, preassignedTitles = $bindable([]) }: Props = $props();
+  let { cues, chapterRefs, preassignedTitles = $bindable([]) }: Props = $props();
 
   interface CueTarget {
     id: string;
@@ -25,39 +25,39 @@
   }
 
   let enabled = $state(false);
-  let selectedSourceId = $state<string | null>(null);
+  let selectedRefId = $state<string | null>(null);
   let showUnaligned = $state(false);
 
   let checked = $state<Record<string, boolean>>({});
-  let lastSourceId = $state<string | null>(null);
+  let lastRefId = $state<string | null>(null);
   let lastClickedIdx = $state<number | null>(null);
 
   let targets = $derived<CueTarget[]>(cues.map((ts, i) => ({ id: `cue-${i}`, timestamp: ts, idx: i })));
 
-  let selectedSource = $derived(cueSources.find((s) => s.id === selectedSourceId) ?? null);
+  let selectedRef = $derived(chapterRefs.find((s) => s.id === selectedRefId) ?? null);
 
-  let alignedMap = $derived(alignByTimestamp(targets, selectedSource?.cues ?? []));
+  let alignedMap = $derived(alignByTimestamp(targets, selectedRef?.chapters ?? []));
   let alignedTargetIds = $derived(targets.map((t) => t.id).filter((id) => alignedMap.has(id)));
 
-  /* Source chapters whose timestamps don't line up with any selected cue, in source order. */
-  let unalignedSourceChapters = $derived.by(() => {
+  /* Reference chapters whose timestamps don't line up with any selected cue, in reference order. */
+  let unalignedRefChapters = $derived.by(() => {
     const used = new SvelteSet<number>();
-    for (const pair of alignedMap.values()) used.add(pair.sourceChapterIndex);
-    return (selectedSource?.cues ?? [])
-      .map((sourceChapter, i) => ({
+    for (const pair of alignedMap.values()) used.add(pair.refChapterIndex);
+    return (selectedRef?.chapters ?? [])
+      .map((refChapter, i) => ({
         id: `src-${i}`,
-        timestamp: sourceChapter.timestamp,
-        title: sourceChapter.title,
+        timestamp: refChapter.timestamp,
+        title: refChapter.title,
         idx: i,
       }))
       .filter((c) => !used.has(c.idx));
   });
 
-  let unalignedCount = $derived(unalignedSourceChapters.length);
+  let unalignedCount = $derived(unalignedRefChapters.length);
 
   /* Unified, timeline-ordered render list:
    *   - 'aligned' rows positioned at the selected cue's timestamp
-   *   - 'unaligned' rows for source chapters that weren't matched, at the source chapter's timestamp
+   *   - 'unaligned' rows for reference chapters that weren't matched, at the reference chapter's timestamp
    */
   type AlignedRow = { kind: 'aligned'; id: string; timestamp: number; target: (typeof targets)[number] };
   type UnalignedRow = { kind: 'unaligned'; id: string; timestamp: number; title: string };
@@ -69,12 +69,12 @@
       }
     }
     if (showUnaligned) {
-      for (const sourceChapter of unalignedSourceChapters) {
+      for (const refChapter of unalignedRefChapters) {
         rows.push({
           kind: 'unaligned',
-          id: sourceChapter.id,
-          timestamp: sourceChapter.timestamp,
-          title: sourceChapter.title,
+          id: refChapter.id,
+          timestamp: refChapter.timestamp,
+          title: refChapter.title,
         });
       }
     }
@@ -82,29 +82,29 @@
     return rows;
   });
 
-  /* Pick the first source as default; if the selected one disappears (e.g. SOURCES_UPDATE), fall back. */
+  /* Pick the first reference as default; if the selected one disappears (e.g. REFERENCES_UPDATE), fall back. */
   $effect(() => {
-    if (cueSources.length === 0) {
-      selectedSourceId = null;
+    if (chapterRefs.length === 0) {
+      selectedRefId = null;
       return;
     }
-    if (!selectedSourceId || !cueSources.some((s) => s.id === selectedSourceId)) {
-      selectedSourceId = cueSources[0].id;
+    if (!selectedRefId || !chapterRefs.some((s) => s.id === selectedRefId)) {
+      selectedRefId = chapterRefs[0].id;
     }
   });
 
-  /* When the source changes, reset selections (all aligned rows re-check). */
+  /* When the reference changes, reset selections (all aligned rows re-check). */
   $effect(() => {
-    const sourceId = selectedSource?.id ?? null;
+    const refId = selectedRef?.id ?? null;
     const pairs = alignedMap;
-    if (sourceId !== lastSourceId) {
+    if (refId !== lastRefId) {
       const next: Record<string, boolean> = {};
       for (const [id] of pairs) {
         next[id] = true;
       }
       checked = next;
       lastClickedIdx = null;
-      lastSourceId = sourceId;
+      lastRefId = refId;
     }
   });
 
@@ -117,7 +117,7 @@
     const result: PreassignedTitle[] = [];
     for (const [targetId, pair] of alignedMap) {
       if (checked[targetId]) {
-        result.push({ cue_index: pair.target.idx, title: pair.sourceTitle });
+        result.push({ cue_index: pair.target.idx, title: pair.refTitle });
       }
     }
     preassignedTitles = result;
@@ -188,14 +188,14 @@
         {/if}
       </span>
     </label>
-    <select class="source-select" bind:value={selectedSourceId} disabled={!enabled}>
-      {#each cueSources as src (src.id)}
-        <option value={src.id}>{src.name} ({src.cues.length} chapters)</option>
+    <select class="reference-select" bind:value={selectedRefId} disabled={!enabled}>
+      {#each chapterRefs as src (src.id)}
+        <option value={src.id}>{src.name} ({src.chapters.length} chapters)</option>
       {/each}
     </select>
     <div
       class="help-icon"
-      data-tooltip="Use titles from a chapter source whose timestamps line up with pending chapters. Selected titles are applied directly, while the remaining titles will be transcribed."
+      data-tooltip="Use titles from a Chapter Reference whose timestamps line up with pending chapters. Selected titles are applied directly, while the remaining titles will be transcribed."
     >
       <CircleQuestionMark size="14" />
     </div>
@@ -210,7 +210,7 @@
     >
       {#if renderRows.length === 0}
         <p class="empty-state">
-          No chapters from <strong>{selectedSource?.name ?? 'the selected source'}</strong> align with your selected cues.
+          No chapters from <strong>{selectedRef?.name ?? 'the selected Reference'}</strong> align with your selected cues.
         </p>
       {:else}
         <div class="chapter-list">
@@ -246,8 +246,8 @@
                   {/if}
                 </button>
                 <span class="chapter-title">
-                  <span class="title-aligned" class:fallback={!pair.sourceTitle}>
-                    {pair.sourceTitle || 'No Title'}
+                  <span class="title-aligned" class:fallback={!pair.refTitle}>
+                    {pair.refTitle || 'No Title'}
                   </span>
                 </span>
               </label>
@@ -296,7 +296,7 @@
     margin: 2.5rem auto 1.5rem;
   }
 
-  .aligned-titles-panel.disabled .source-select {
+  .aligned-titles-panel.disabled .reference-select {
     opacity: 0.4;
   }
 
@@ -322,7 +322,7 @@
     cursor: pointer;
   }
 
-  .source-select {
+  .reference-select {
     padding: 0.4rem 0.6rem;
     border: 1px solid var(--border-color);
     border-radius: 0.375rem;
@@ -335,12 +335,12 @@
     max-width: 360px;
   }
 
-  .source-select:focus {
+  .reference-select:focus {
     outline: none;
     border-color: var(--primary-color);
   }
 
-  .source-select:disabled {
+  .reference-select:disabled {
     cursor: not-allowed;
   }
 

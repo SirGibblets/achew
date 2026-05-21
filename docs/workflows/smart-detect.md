@@ -15,7 +15,7 @@
 </style>
 # Smart Detect
 
-The Smart Detect workflow finds chapter cues by analyzing the audio itself. This is the recommended workflow when your book has no usable [Sources](../getting-started/chapter-sources.md).
+The Smart Detect workflow finds chapter cues by analyzing the audio itself. This is the recommended workflow when your book has no usable [References](../getting-started/chapter-references.md).
 
 ![Smart Detect](../img/select-workflow-detect-light.webp#only-light)
 ![Smart Detect](../img/select-workflow-detect-dark.webp#only-dark)
@@ -31,10 +31,10 @@ The Smart Detect workflow finds chapter cues by analyzing the audio itself. This
 1. [**Select a book**](../getting-started/finding-a-book.md) from Achew's main screen.
 2. Choose **Smart Detect** on the *Select a Workflow* screen.
 3. Toggle the **Dramatized** checkbox for books that contain music or sound effects. Note that dramatized detection takes significantly longer than regular detection, so it is recommended to leave this unchecked for regular audiobooks.
-4. *(Optional)* Add or inspect existing [Chapter Sources](../getting-started/chapter-sources.md) from this screen. These can be used as a comparison reference once detection finishes.
+4. *(Optional)* Add or inspect existing [Chapter References](../getting-started/chapter-references.md) from this screen. These can be used for comparison once detection finishes.
 5. Click **Start Smart Detect**, and Achew will begin analyzing the audio. This process can take anywhere from a few seconds to several minutes depending on the length of the book, how powerful your machine is, and whether **Dramatized** was checked.
 6. After detection has finished, use the **Initial Chapter Selection** screen (see below) to decide which cues will become chapters, then click **Create Chapters**.
-7. On the **Transcribe Titles** screen, choose your [transcription settings](../reference/transcription.md). If you have a [source](../getting-started/chapter-sources.md) whose chapter timestamps line up with any of your chosen cues, you can optionally enable **Use aligned titles from** to pick and choose titles to use directly without transcribing them. See [Using aligned titles](../reference/transcription.md#using-aligned-titles) for details.
+7. On the **Transcribe Titles** screen, choose your [transcription settings](../reference/transcription.md). If you have a [Reference](../getting-started/chapter-references.md) whose chapter timestamps line up with any of your chosen cues, you can optionally enable **Use aligned titles from** to pick and choose titles to use directly without transcribing them. See [Using aligned titles](../reference/transcription.md#using-aligned-titles) for details.
 8. Click **Transcribe Titles**. The first few seconds of audio at each chapter timestamp will be transcribed into a title.
 9. After transcription has finished, use the [Chapter Editor](../editor/index.md) to review and polish the chapters.
 
@@ -76,7 +76,7 @@ Later on you'll be able to both add and delete chapters, but deleting extraneous
 
 ### Comparing Alignment
 
-If an [existing source](../getting-started/chapter-sources.md) (e.g. embedded metadata or Audnexus), has accurate chapter timing, you can compare it to your selected cues by toggling that source in the "Compare to" section of the timeline.
+If a [Chapter Reference](../getting-started/chapter-references.md) has accurate timestamps, you can compare it to your selected cues by toggling that Reference in the **Compare to** section of the timeline.
 
 ![Compare Alignment](../img/compare-alignment-light.webp#only-light)
 ![Compare Alignment](../img/compare-alignment-dark.webp#only-dark)
@@ -98,6 +98,6 @@ Example timeline comparison between low and high sensitivity
 
 ### Including Unaligned Chapters
 
-If there are one or more [Chapter Sources](../getting-started/chapter-sources.md), you'll see a section titled **Include unaligned chapters** near the bottom of the page, with a checkbox for each source. The count in parentheses next to each source is the number of source chapters that don't line up with any of the selected cues.
+If there are one or more [Chapter References](../getting-started/chapter-references.md), you'll see a section titled **Include unaligned chapters** near the bottom of the page, with a checkbox for each Reference. The count in parentheses next to each Reference is the number of chapters that don't line up with any of the selected cues.
 
-Checking the box for a source will cause its timestamps to be included when chapters are created, on top of the cues already selected by the slider. This is helpful when a source has accurate chapter breaks that Smart Detect couldn't find on its own.
+Checking the box for a Reference will cause its timestamps to be included when chapters are created, on top of the cues already selected by the slider. This is helpful when a Reference has accurate chapter breaks that Smart Detect couldn't find on its own.

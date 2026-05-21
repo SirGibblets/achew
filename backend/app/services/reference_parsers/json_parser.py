@@ -2,8 +2,8 @@ import json
 import logging
 from typing import Any, Optional
 
-from ...models.sources import CueSourceType, ExistingCue, ExistingCueSource
-from .base_parser import BaseCueParser
+from ...models.references import BasicChapter, ChapterReference, ChapterRefType
+from .base_parser import BaseChapterRefParser
 from .timestamp_utils import normalize_timestamps, parse_timestamp, score_timestamp
 from .title_utils import score_title
 
@@ -89,11 +89,11 @@ def _collect_arrays(obj: Any) -> list[list]:
     return results
 
 
-class JsonParser(BaseCueParser):
+class JsonParser(BaseChapterRefParser):
     short_name = "JSON"
 
-    def parse(self, file_path: str, source_name: str, duration: float = 0.0) -> ExistingCueSource:
-        """Parse a JSON file for chapter cue data using heuristic field scoring."""
+    def parse(self, file_path: str, ref_name: str, duration: float = 0.0) -> ChapterReference:
+        """Parse a JSON file for chapter data using heuristic field scoring."""
         try:
             with open(file_path, encoding="utf-8") as f:
                 data = json.load(f)
@@ -133,16 +133,16 @@ class JsonParser(BaseCueParser):
             raise ValueError("No parseable timestamps found in the best array")
 
         normalised = normalize_timestamps(raw_timestamps)
-        cues = list(zip(normalised, titles))
+        chapters = list(zip(normalised, titles))
 
-        name = self.ellipsize_name(source_name)
-        logger.info(f"Parsed {source_name} as JSON cue source ({len(cues)} cues)")
-        return ExistingCueSource(
-            type=CueSourceType.JSON,
+        name = self.ellipsize_name(ref_name)
+        logger.info(f"Parsed {ref_name} as JSON Chapter Reference ({len(chapters)} chapters)")
+        return ChapterReference(
+            type=ChapterRefType.JSON,
             name=f"JSON File ({name})",
             short_name=self.short_name,
             description=f'Chapter data parsed from JSON file "{name}"',
-            metadata={"File": source_name},
-            cues=[ExistingCue(timestamp=ts, title=t) for ts, t in cues],
+            metadata={"File": ref_name},
+            chapters=[BasicChapter(timestamp=ts, title=t) for ts, t in chapters],
             duration=duration,
         )
