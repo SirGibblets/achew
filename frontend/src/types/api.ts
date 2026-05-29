@@ -31,6 +31,13 @@ export interface StatusResponse {
   build_meta?: string | null;
 }
 
+export interface ABSConfigResponse {
+  url: string;
+  api_key: string;
+  validated: boolean;
+  last_validated?: string | null;
+}
+
 export interface ChaptersResponse {
   chapters: ChapterData[];
   selection_stats: SelectionStats;

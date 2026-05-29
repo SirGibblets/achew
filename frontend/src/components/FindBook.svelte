@@ -8,7 +8,6 @@
 
   // Icons
   import ArrowRight from '@lucide/svelte/icons/arrow-right';
-  import Check from '@lucide/svelte/icons/check';
   import CircleQuestionMark from '@lucide/svelte/icons/circle-question-mark';
 
   interface LibraryInfo {
@@ -260,19 +259,6 @@
     inputMode = 'chapterSearch';
   }
 
-  function clearAllState() {
-    // Clear search state
-    searchQuery = '';
-    searchResults = [];
-    searchError = '';
-    // Clear item ID state
-    itemId = '';
-    validationError = '';
-    bookInfo = null;
-    isValidItem = false;
-    api.audiobookshelf.clearAllCache().catch(console.error);
-  }
-
   // Load libraries on component mount if starting in search mode
   import { onMount } from 'svelte';
 
@@ -281,141 +267,194 @@
       loadLibraries();
     }
   });
-
-  // Show different content based on session state
-  let showCompletedMessage = $derived($session.step === 'completed');
 </script>
 
 <div class="session-start">
-  {#if showCompletedMessage}
-    <div class="success-card">
-      <div class="card-body text-center">
-        <div class="success-icon">
-          <Check size="72" color="var(--success)" />
-        </div>
-
-        <h2 class="text-success">Chapters Submitted!</h2>
-        <p>Your audiobook chapters have been successfully saved to Audiobookshelf.</p>
-        <div class="actions">
-          <button
-            class="btn btn-verify"
-            onclick={() => {
-              session.deleteSession();
-              clearAllState();
-              inputMode = 'search';
-            }}
-          >
-            New Audiobook
-          </button>
+  <div class="start-content">
+    {#if !isChapterSearch}
+      <div class="header-area" transition:slide={{ duration: 200 }}>
+        <div class="header-section" transition:fade={{ duration: 33 }}>
+          <img class="header-image header-image-light" src="/img/hero-light.webp" alt="Achew header" />
+          <img class="header-image header-image-dark" src="/img/hero-dark.webp" alt="Achew header" />
         </div>
       </div>
+    {/if}
+
+    <!-- Mode Selector -->
+    <div class="mode-selector">
+      <button class="mode-btn {inputMode === 'search' ? 'active' : ''}" onclick={switchToSearchMode} type="button">
+        Title Search
+      </button>
+      <button class="mode-btn {inputMode === 'itemId' ? 'active' : ''}" onclick={switchToItemIdMode} type="button">
+        Item ID
+      </button>
+      <button
+        class="mode-btn {inputMode === 'chapterSearch' ? 'active' : ''}"
+        onclick={switchToChapterSearchMode}
+        type="button"
+      >
+        Chapter Search
+      </button>
     </div>
-  {:else}
-    <div class="start-content">
-      {#if !isChapterSearch}
-        <div class="header-area" transition:slide={{ duration: 200 }}>
-          <div class="header-section" transition:fade={{ duration: 33 }}>
-            <img class="header-image header-image-light" src="/img/hero-light.webp" alt="Achew header" />
-            <img class="header-image header-image-dark" src="/img/hero-dark.webp" alt="Achew header" />
-          </div>
-        </div>
-      {/if}
 
-      <!-- Mode Selector -->
-      <div class="mode-selector">
-        <button class="mode-btn {inputMode === 'search' ? 'active' : ''}" onclick={switchToSearchMode} type="button">
-          Title Search
-        </button>
-        <button class="mode-btn {inputMode === 'itemId' ? 'active' : ''}" onclick={switchToItemIdMode} type="button">
-          Item ID
-        </button>
-        <button
-          class="mode-btn {inputMode === 'chapterSearch' ? 'active' : ''}"
-          onclick={switchToChapterSearchMode}
-          type="button"
-        >
-          Chapter Search
-        </button>
-      </div>
+    {#if inputMode === 'itemId'}
+      <!-- Item ID Input Form -->
+      <form
+        onsubmit={(e) => {
+          e.preventDefault();
+          void handleSubmit();
+        }}
+        class="item-form"
+      >
+        <div class="form-group">
+          <div class="input-container">
+            <input
+              id="itemId"
+              type="text"
+              class="form-control {validationError ? 'is-invalid' : ''} {isDebouncing
+                ? 'is-debouncing'
+                : ''} {isValidating ? 'is-validating' : ''}"
+              bind:value={itemId}
+              bind:this={itemIdInput}
+              onkeydown={handleKeyDown}
+              onpaste={handlePaste}
+              placeholder="Enter an Audiobookshelf item ID"
+              disabled={$session.loading}
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <button
+              type="button"
+              class="help-icon"
+              onclick={() => (showHelp = !showHelp)}
+              onmouseenter={() => (showHelp = true)}
+              onmouseleave={() => (showHelp = false)}
+              aria-label="Where to find the Item ID"
+            >
+              <CircleQuestionMark size="16" color="var(--text-muted)" />
+            </button>
 
-      {#if inputMode === 'itemId'}
-        <!-- Item ID Input Form -->
-        <form
-          onsubmit={(e) => {
-            e.preventDefault();
-            void handleSubmit();
-          }}
-          class="item-form"
-        >
-          <div class="form-group">
-            <div class="input-container">
-              <input
-                id="itemId"
-                type="text"
-                class="form-control {validationError ? 'is-invalid' : ''} {isDebouncing
-                  ? 'is-debouncing'
-                  : ''} {isValidating ? 'is-validating' : ''}"
-                bind:value={itemId}
-                bind:this={itemIdInput}
-                onkeydown={handleKeyDown}
-                onpaste={handlePaste}
-                placeholder="Enter an Audiobookshelf item ID"
-                disabled={$session.loading}
-                autocomplete="off"
-                spellcheck="false"
-              />
-              <button
-                type="button"
-                class="help-icon"
-                onclick={() => (showHelp = !showHelp)}
-                onmouseenter={() => (showHelp = true)}
-                onmouseleave={() => (showHelp = false)}
-                aria-label="Where to find the Item ID"
-              >
-                <CircleQuestionMark size="16" color="var(--text-muted)" />
-              </button>
-
-              {#if showHelp}
-                <div class="help-tooltip">
-                  <div class="help-tooltip-content">
-                    <p>
-                      When viewing a book in Audiobookshelf, the Item ID can be found in the URL after <em>"/item/"</em>
-                    </p>
-                    <code
-                      >https://your-abs-server.com/library/item/<span class="url-id-highlight"
-                        >6f0aa6e5-684a-4823-aaeb-1a15c7084902</span
-                      ></code
-                    >
-                  </div>
+            {#if showHelp}
+              <div class="help-tooltip">
+                <div class="help-tooltip-content">
+                  <p>
+                    When viewing a book in Audiobookshelf, the Item ID can be found in the URL after <em>"/item/"</em>
+                  </p>
+                  <code
+                    >https://your-abs-server.com/library/item/<span class="url-id-highlight"
+                      >6f0aa6e5-684a-4823-aaeb-1a15c7084902</span
+                    ></code
+                  >
                 </div>
-              {/if}
-            </div>
-            {#if validationError}
-              <div class="invalid-feedback">
-                {validationError}
               </div>
             {/if}
           </div>
-        </form>
+          {#if validationError}
+            <div class="invalid-feedback">
+              {validationError}
+            </div>
+          {/if}
+        </div>
+      </form>
 
-        <!-- Item ID Result -->
-        {#if bookInfo && isValidItem}
-          <div class="item-result">
-            <div class="results-list">
+      <!-- Item ID Result -->
+      {#if bookInfo && isValidItem}
+        <div class="item-result">
+          <div class="results-list">
+            <AudiobookCard
+              title={bookInfo.title}
+              duration={bookInfo.duration}
+              coverImageUrl={bookInfo.coverUrl}
+              fileCount={bookInfo.fileCount || 1}
+              size="compact"
+            >
+              {#snippet actions()}
+                <div class="search-result-actions">
+                  <button
+                    type="submit"
+                    class="btn btn-verify start-btn"
+                    disabled={$session.loading}
+                    onclick={handleSubmit}
+                  >
+                    {#if isValidating || $session.loading}
+                      <span class="btn-spinner"></span>
+                      Processing…
+                    {:else}
+                      Start
+                      <ArrowRight size="14" />
+                    {/if}
+                  </button>
+                </div>
+              {/snippet}
+            </AudiobookCard>
+          </div>
+        </div>
+      {/if}
+    {:else if inputMode === 'search'}
+      <!-- Search Interface -->
+      <div class="search-form">
+        <div class="search-input-container">
+          <!-- Library Dropdown -->
+          <select
+            class="library-select"
+            bind:value={selectedLibrary}
+            onchange={handleLibraryChange}
+            disabled={isLoadingLibraries || $session.loading}
+          >
+            {#if isLoadingLibraries}
+              <option>Loading libraries…</option>
+            {:else if libraries.length === 0}
+              <option>No libraries found</option>
+            {:else}
+              {#each libraries as library}
+                <option value={library}>{library.name}</option>
+              {/each}
+            {/if}
+          </select>
+
+          <!-- Search Input -->
+          <input
+            type="text"
+            class="search-input {searchError ? 'is-invalid' : ''} {isSearching ? 'is-searching' : ''}"
+            bind:value={searchQuery}
+            bind:this={searchInput}
+            placeholder="Search for audiobooks…"
+            disabled={!selectedLibrary || $session.loading}
+            autocomplete="off"
+            spellcheck="false"
+          />
+        </div>
+
+        {#if searchError}
+          <div class="invalid-feedback">
+            {searchError}
+          </div>
+        {/if}
+      </div>
+
+      <!-- Search Results -->
+      {#if searchResults.length > 0}
+        <div class="search-results">
+          <div class="results-list">
+            {#each searchResults as bookRaw}
+              {@const book = bookRaw as {
+                id: string;
+                duration: number;
+                media: { metadata: { title: string }; coverPath: string; audioFiles?: unknown[] };
+              }}
               <AudiobookCard
-                title={bookInfo.title}
-                duration={bookInfo.duration}
-                coverImageUrl={bookInfo.coverUrl}
-                fileCount={bookInfo.fileCount || 1}
+                title={book.media.metadata.title}
+                duration={book.duration}
+                coverImageUrl={book.media.coverPath}
+                fileCount={book.media.audioFiles?.length || 0}
                 size="compact"
               >
                 {#snippet actions()}
                   <div class="search-result-actions">
                     <button
-                      type="submit"
                       class="btn btn-verify start-btn"
                       disabled={$session.loading}
-                      onclick={handleSubmit}
+                      onclick={() => startSessionFromBook(book)}
                     >
                       {#if isValidating || $session.loading}
                         <span class="btn-spinner"></span>
@@ -428,101 +467,20 @@
                   </div>
                 {/snippet}
               </AudiobookCard>
-            </div>
+            {/each}
           </div>
-        {/if}
-      {:else if inputMode === 'search'}
-        <!-- Search Interface -->
-        <div class="search-form">
-          <div class="search-input-container">
-            <!-- Library Dropdown -->
-            <select
-              class="library-select"
-              bind:value={selectedLibrary}
-              onchange={handleLibraryChange}
-              disabled={isLoadingLibraries || $session.loading}
-            >
-              {#if isLoadingLibraries}
-                <option>Loading libraries…</option>
-              {:else if libraries.length === 0}
-                <option>No libraries found</option>
-              {:else}
-                {#each libraries as library}
-                  <option value={library}>{library.name}</option>
-                {/each}
-              {/if}
-            </select>
-
-            <!-- Search Input -->
-            <input
-              type="text"
-              class="search-input {searchError ? 'is-invalid' : ''} {isSearching ? 'is-searching' : ''}"
-              bind:value={searchQuery}
-              bind:this={searchInput}
-              placeholder="Search for audiobooks…"
-              disabled={!selectedLibrary || $session.loading}
-              autocomplete="off"
-              spellcheck="false"
-            />
-          </div>
-
-          {#if searchError}
-            <div class="invalid-feedback">
-              {searchError}
-            </div>
-          {/if}
         </div>
-
-        <!-- Search Results -->
-        {#if searchResults.length > 0}
-          <div class="search-results">
-            <div class="results-list">
-              {#each searchResults as bookRaw}
-                {@const book = bookRaw as {
-                  id: string;
-                  duration: number;
-                  media: { metadata: { title: string }; coverPath: string; audioFiles?: unknown[] };
-                }}
-                <AudiobookCard
-                  title={book.media.metadata.title}
-                  duration={book.duration}
-                  coverImageUrl={book.media.coverPath}
-                  fileCount={book.media.audioFiles?.length || 0}
-                  size="compact"
-                >
-                  {#snippet actions()}
-                    <div class="search-result-actions">
-                      <button
-                        class="btn btn-verify start-btn"
-                        disabled={$session.loading}
-                        onclick={() => startSessionFromBook(book)}
-                      >
-                        {#if isValidating || $session.loading}
-                          <span class="btn-spinner"></span>
-                          Processing…
-                        {:else}
-                          Start
-                          <ArrowRight size="14" />
-                        {/if}
-                      </button>
-                    </div>
-                  {/snippet}
-                </AudiobookCard>
-              {/each}
-            </div>
-          </div>
-        {/if}
-      {:else if inputMode === 'chapterSearch'}
-        <ChapterSearch />
       {/if}
+    {:else if inputMode === 'chapterSearch'}
+      <ChapterSearch />
+    {/if}
 
-      <div class="start-docs">
-        <DocLink path="/getting-started/" text="Getting Started" featureName="Getting Started" />
-        &nbsp;·&nbsp;
-        <DocLink path="/getting-started/finding-a-book/" text="Finding a Book" featureName="Finding a Book" />
-      </div>
+    <div class="start-docs">
+      <DocLink path="/getting-started/" text="Getting Started" featureName="Getting Started" />
+      &nbsp;·&nbsp;
+      <DocLink path="/getting-started/finding-a-book/" text="Finding a Book" featureName="Finding a Book" />
     </div>
-  {/if}
+  </div>
 </div>
 
 <style>
@@ -530,12 +488,6 @@
     max-width: 800px;
     margin: 0 auto;
     width: 100%;
-  }
-
-  .actions {
-    display: flex;
-    justify-content: center;
-    margin-top: 1.5rem;
   }
 
   .start-content {
@@ -559,21 +511,10 @@
     width: 100%;
   }
 
-  .success-card p {
-    margin-bottom: 4rem;
-    max-width: 360px;
-    margin-left: auto;
-    margin-right: auto;
-  }
-
   .start-docs {
     margin-top: 1.5rem;
     font-size: 0.85rem;
     text-align: center;
-  }
-
-  .success-card .card-body {
-    padding: 3rem;
   }
 
   .item-form {
@@ -888,10 +829,6 @@
 
     .search-input {
       min-width: auto;
-    }
-
-    .success-card .card-body {
-      padding: 2rem 1rem;
     }
   }
 

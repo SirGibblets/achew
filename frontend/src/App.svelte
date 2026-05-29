@@ -17,6 +17,7 @@
   import LLMSetup from './components/LLMSetup.svelte';
   import ProgressDisplay from './components/ProgressDisplay.svelte';
   import SelectWorkflow from './components/SelectWorkflow.svelte';
+  import SubmitSuccess from './components/SubmitSuccess.svelte';
   import Welcome from './components/Welcome.svelte';
 
   import BookOpen from '@lucide/svelte/icons/book-open';
@@ -101,6 +102,7 @@
     | 'chapter_editing'
     | 'ai_cleanup'
     | 'reviewing'
+    | 'submit_success'
     | 'find_book';
 
   let currentView = $derived.by<ViewKey>(() => {
@@ -143,7 +145,7 @@
       case 'reviewing':
         return 'reviewing';
       case 'completed':
-        return 'find_book';
+        return 'submit_success';
       default:
         return $session.step ? 'find_book' : 'connecting';
     }
@@ -561,6 +563,8 @@
         <AICleanup />
       {:else if currentView === 'reviewing'}
         <ChapterReview />
+      {:else if currentView === 'submit_success'}
+        <SubmitSuccess />
       {:else if currentView === 'find_book'}
         <FindBook />
       {/if}

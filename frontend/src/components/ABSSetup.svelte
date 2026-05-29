@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { api } from '../utils/api';
   import DocLink from './DocLink.svelte';
 
   import Check from '@lucide/svelte/icons/check';
@@ -19,12 +20,6 @@
     message: string;
   }
 
-  interface ABSConfigResponse {
-    url?: string;
-    api_key?: string;
-    validated?: boolean;
-  }
-
   interface ABSSetupResponse {
     success: boolean;
     message?: string;
@@ -41,23 +36,20 @@
   async function loadConfig() {
     try {
       loading = true;
-      const response = await fetch('/api/config/abs');
-      const data = (await response.json()) as ABSConfigResponse;
+      const data = await api.config.getABS();
 
-      if (response.ok) {
-        isInitialSetup = !(data.validated && data.url && data.api_key === '***');
+      isInitialSetup = !(data.validated && data.url && data.api_key === '***');
 
-        absUrl = data.url ?? '';
-        if (data.api_key === '***') {
-          absApiKey = '••••••••••••••••••••••••••••••••••••••••••••••••••••';
-          validationStatus = {
-            valid: !!data.validated,
-            message: data.validated ? 'Configured' : 'Not Configured',
-          };
-        } else {
-          absApiKey = '';
-          validationStatus = { valid: false, message: 'Not Configured' };
-        }
+      absUrl = data.url;
+      if (data.api_key === '***') {
+        absApiKey = '••••••••••••••••••••••••••••••••••••••••••••••••••••';
+        validationStatus = {
+          valid: data.validated,
+          message: data.validated ? 'Configured' : 'Not Configured',
+        };
+      } else {
+        absApiKey = '';
+        validationStatus = { valid: false, message: 'Not Configured' };
       }
     } catch (error) {
       console.error('Failed to load ABS config:', error);
