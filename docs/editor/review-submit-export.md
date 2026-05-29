@@ -15,7 +15,16 @@ Once you are happy with your chapters in the editor, click the **Review Selected
 
 Writes the chapters for this book back to your Audiobookshelf server, replacing whatever was there before. All chapters must have non-empty titles. If any are blank, submission will be disabled.
 
-After submission, you'll return to the main screen where you can find another book to process.
+
+![Submit Success](../img/submit-success-light.webp#only-light)
+![Submit Success](../img/submit-success-dark.webp#only-dark)
+
+After submitting, you'll see a confirmation screen with a couple of options:
+
+- **Embed Metadata**: Opens Audiobookshelf's *Embed Metadata* page for the audiobook, allowing you to quickly embed your chapter changes into the original audio file. 
+- **New Audiobook**: Ends the current session and returns you to book selection.
+
+You can also click the cover image to open the book details in Audiobookshelf.
 
 ## Export
 

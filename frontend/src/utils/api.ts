@@ -1,4 +1,5 @@
 import type {
+  ABSConfigResponse,
   ABSLibrary,
   AddOptionsResponse,
   AIOptions,
@@ -397,6 +398,10 @@ export function handleApiError(error: unknown): string {
 }
 
 export const config = {
+  getABS() {
+    return apiRequest<ABSConfigResponse>('/config/abs');
+  },
+
   getASRPreferences() {
     return apiRequest<ASRPreferencesResponse>('/asr/preferences');
   },
