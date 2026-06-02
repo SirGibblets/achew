@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { tooltip } from '../actions/tooltip';
   import { api } from '../utils/api';
 
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
@@ -362,7 +363,7 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
                 {#if currentASRLanguage === 'auto' && availableLanguages.length > 1}
                   <div
                     class="warning-icon"
-                    data-tooltip="Transcription tends to be faster and more accurate when the audio language is specified."
+                    use:tooltip={'Transcription tends to be faster and more accurate when the audio language is specified.'}
                   >
                     <TriangleAlert size="14" />
                   </div>
@@ -418,7 +419,7 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
             Trim segments
             <div
               class="help-icon"
-              data-tooltip="Trimming can help increase transcription speed and accuracy by removing excess speech from chapter audio segments. Disable this if transcripts are frequently blank, nonsensical, or missing desired portions of the chapter title."
+              use:tooltip={'Trimming can help increase transcription speed and accuracy by removing excess speech from chapter audio segments. Disable this if transcripts are frequently blank, nonsensical, or missing desired portions of the chapter title.'}
             >
               <CircleQuestionMark size="14" />
             </div>
@@ -428,7 +429,7 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
         <label
           class="checkbox-label"
           class:disabled={!currentServiceSupportsBiasWords}
-          data-tooltip={!currentServiceSupportsBiasWords ? 'Not available for this transcription service' : null}
+          use:tooltip={!currentServiceSupportsBiasWords ? 'Not available for this transcription service' : null}
         >
           <input
             type="checkbox"
@@ -442,7 +443,7 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
             {#if currentServiceSupportsBiasWords}
               <div
                 class="help-icon"
-                data-tooltip="Bias words can help guide the transcription model toward more consistent results. For example, providing numerical digits helps the model produce chapter numbers as digits instead of words. Providing a list of uncommon words or names can help the model spell those correctly. You'll want to ensure that the bias words are in the same language as the audiobook."
+                use:tooltip={"Bias words can help guide the transcription model toward more consistent results. For example, providing numerical digits helps the model produce chapter numbers as digits instead of words. Providing a list of uncommon words or names can help the model spell those correctly. You'll want to ensure that the bias words are in the same language as the audiobook."}
               >
                 <CircleQuestionMark size="14" />
               </div>
@@ -494,7 +495,7 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
               <label for="segment-length">Transcription Length</label>
               <div
                 class="help-icon"
-                data-tooltip="The length of audio to be transcribed for each chapter title. Increase this if your audiobook has unusually long titles."
+                use:tooltip={'The length of audio to be transcribed for each chapter title. Increase this if your audiobook has unusually long titles.'}
               >
                 <CircleQuestionMark size="14" />
               </div>
@@ -726,39 +727,6 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
     background: var(--bg-tertiary);
   }
 
-  .warning-icon[data-tooltip]:hover::after {
-    content: attr(data-tooltip);
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    margin-bottom: 8px;
-    padding: 8px 12px;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    font-size: 0.875rem;
-    line-height: 1.4;
-    white-space: normal;
-    min-width: 280px;
-    max-width: 480px;
-    z-index: 1000;
-    animation: tooltipFadeIn 0.2s ease-out;
-  }
-
-  .warning-icon[data-tooltip]:hover::before {
-    content: '';
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    margin-bottom: -3px;
-    border: 6px solid transparent;
-    border-top-color: var(--border-color);
-    z-index: 1001;
-  }
-
   .asr-descriptions {
     display: flex;
     flex-direction: column;
@@ -830,42 +798,6 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
 
   .checkbox-label.disabled {
     position: relative;
-  }
-
-  .checkbox-label.disabled:hover::after {
-    content: attr(data-tooltip);
-    position: absolute;
-    top: -40px;
-    left: 50%;
-    transform: translateX(-50%);
-    padding: 8px 12px;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    font-size: 0.875rem;
-    line-height: 1.4;
-    white-space: nowrap;
-    z-index: 1000;
-    animation: tooltipFadeIn 0.2s ease-out;
-    pointer-events: none;
-  }
-
-  .checkbox-label.disabled:hover::before {
-    content: '';
-    position: absolute;
-    top: -3px;
-    left: 50%;
-    transform: translateX(-50%);
-    border: 6px solid transparent;
-    border-top-color: var(--border-color);
-    z-index: 1001;
-    pointer-events: none;
-  }
-
-  .checkbox-label:not(.disabled):hover::after,
-  .checkbox-label:not(.disabled):hover::before {
-    display: none;
   }
 
   .bias-words-input-container {
@@ -945,50 +877,6 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
   .help-icon:hover {
     color: var(--primary-color);
     background: var(--bg-tertiary);
-  }
-
-  .help-icon[data-tooltip]:hover::after {
-    content: attr(data-tooltip);
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    margin-bottom: 8px;
-    padding: 8px 12px;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    font-size: 0.875rem;
-    line-height: 1.4;
-    white-space: normal;
-    min-width: 280px;
-    max-width: 480px;
-    z-index: 1000;
-    animation: tooltipFadeIn 0.2s ease-out;
-  }
-
-  .help-icon[data-tooltip]:hover::before {
-    content: '';
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    margin-bottom: -3px;
-    border: 6px solid transparent;
-    border-top-color: var(--border-color);
-    z-index: 1001;
-  }
-
-  @keyframes tooltipFadeIn {
-    from {
-      opacity: 0;
-      transform: translateX(-50%) translateY(4px);
-    }
-    to {
-      opacity: 1;
-      transform: translateX(-50%) translateY(0);
-    }
   }
 
   .mini-spinner {

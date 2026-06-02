@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 from app.api.routes.chapters import DetectedCue
 from app.app import get_app_state
-from app.models.abs import AudioFile, Book
+from app.models.abs import AudioFile, AudioInfo, Book
 
 from ..core.config import get_app_config
 from ..core.constants import BOOK_END_IGNORE_WINDOW
@@ -31,7 +31,7 @@ from ..models.references import (
 )
 from .abs_service import ABSService
 from .asr_service_options import get_asr_buffer
-from .audio_service import AudioProcessingService, audio_uses_xhe_aac, pick_segment_extension, probe_segment_extension
+from .audio_service import AudioProcessingService, pick_segment_extension, probe_audio_info, probe_segment_extension
 from .chapter_aligner import ChapterAligner
 from .reference_parsers import csv_parser, cue_parser, epub_parser, json_parser, text_parser
 from .vad_detection_service import VadDetectionService
@@ -92,6 +92,7 @@ class ProcessingPipeline:
         self.book: Optional[Book] = None
         self.audio_file_path: str = ""
         self.audio_unsupported_codec: bool = False
+        self.audio_info: Optional[AudioInfo] = None
         self.segment_extension: Optional[str] = None
         self.file_starts: Optional[List[float]] = None
         self.chapter_refs: List[ChapterReference] = []
@@ -795,6 +796,8 @@ class ProcessingPipeline:
                     logger.info("Download was cancelled, stopping fetch process")
                     return {"success": False, "message": "Download was cancelled"}
 
+                first_original_file = audio_file_paths[0]
+
                 # Get file durations and start positions for multi-file processing
                 if len(audio_files) > 1:
                     file_durations, self.file_starts = await self._get_file_durations_and_starts(audio_files)
@@ -803,6 +806,21 @@ class ProcessingPipeline:
                     self.file_starts = None
 
                 self._notify_progress(Step.DOWNLOADING, 100, f"Downloaded {len(audio_files)} audio file(s)")
+
+                # Capture audio info from first original file
+                codec, ffmpeg_output, uses_xhe_aac = await asyncio.get_event_loop().run_in_executor(
+                    None, probe_audio_info, first_original_file
+                )
+                self.audio_info = AudioInfo(
+                    codec=codec,
+                    container=audio_files[0].metadata.ext.lower().lstrip(".") if audio_files else None,
+                    ffmpeg_output=ffmpeg_output,
+                )
+                if uses_xhe_aac:
+                    logger.warning(
+                        f"Audio file uses xHE-AAC codec which is not currently supported: {first_original_file}"
+                    )
+                    self.audio_unsupported_codec = True
 
                 # Concat multi-file audio if needed
                 if len(audio_file_paths) > 1:
@@ -833,13 +851,6 @@ class ProcessingPipeline:
                     self.audio_file_path = concatenated_file
 
                     logger.info(f"Successfully concatenated {original_file_count} files into: {concatenated_file}")
-
-                # Probe for unsupported audio codecs (e.g. xHE-AAC)
-                if self.audio_file_path and audio_uses_xhe_aac(self.audio_file_path):
-                    logger.warning(
-                        f"Audio file uses xHE-AAC codec which is not currently supported: {self.audio_file_path}"
-                    )
-                    self.audio_unsupported_codec = True
 
                 if self.audio_file_path:
                     # Probe once for a compatible segment extension

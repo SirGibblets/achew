@@ -19,6 +19,12 @@ export interface AudioFile {
   chapters: BookChapter[];
 }
 
+export interface AudioInfo {
+  codec?: string | null;
+  container?: string | null;
+  ffmpeg_output?: string | null;
+}
+
 export interface AuthorEntry {
   id?: string | null;
   name: string;
@@ -32,9 +38,11 @@ export interface SeriesDetails {
 
 export interface BookMetadata {
   title: string;
+  subtitle?: string | null;
   authorName?: string;
   authors?: AuthorEntry[] | null;
   narratorName?: string;
+  narrators?: string[] | null;
   seriesName?: string | null;
   seriesTitle?: string | null;
   series?: SeriesDetails[] | null;

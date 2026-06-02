@@ -576,6 +576,54 @@ input[type='checkbox'] {
   accent-color: var(--primary-contrast);
 }
 
+/* Tooltip */
+.app-tooltip {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 10010;
+  max-width: 360px;
+  padding: 8px 12px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
+}
+
+.app-tooltip--visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.app-tooltip__arrow {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+}
+
+.app-tooltip__arrow[data-placement='top'] {
+  top: 100%;
+  border-top: 6px solid var(--border-color);
+}
+
+.app-tooltip__arrow[data-placement='bottom'] {
+  bottom: 100%;
+  border-bottom: 6px solid var(--border-color);
+}
+
 /* Responsive design */
 @media (max-width: 768px) {
   .table {

@@ -5,6 +5,7 @@
 
   import ABSSetup from './components/ABSSetup.svelte';
   import ASRSetup from './components/ASRSetup.svelte';
+  import BookInfoDialog from './components/BookInfoDialog.svelte';
   import MigrationFailed from './components/MigrationFailed.svelte';
   import AICleanup from './components/AICleanup.svelte';
   import ChapterEditor from './components/ChapterEditor.svelte';
@@ -26,6 +27,7 @@
   import CircleQuestionMark from '@lucide/svelte/icons/circle-question-mark';
   import Download from '@lucide/svelte/icons/download';
   import Headphones from '@lucide/svelte/icons/headphones';
+  import Info from '@lucide/svelte/icons/info';
   import Lightbulb from '@lucide/svelte/icons/lightbulb';
   import Mic from '@lucide/svelte/icons/mic';
   import Moon from '@lucide/svelte/icons/moon';
@@ -43,6 +45,7 @@
   let mounted = $state(false);
   let darkMode = $state(false);
   let showRestartOptions = $state(false);
+  let showBookInfo = $state(false);
   let showSettingsMenu = $state(false);
   let checkingConfig = $state(true);
   let previousStep = $state<string | null>(null);
@@ -316,17 +319,6 @@
     ].includes($session.step);
   }
 
-  function formatDuration(seconds: number | null | undefined): string {
-    if (!seconds) return '';
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-
-    if (hours > 0) {
-      return `${hours}h ${minutes}m`;
-    }
-    return `${minutes}m`;
-  }
-
   // Settings menu functions
   function toggleSettingsMenu() {
     showSettingsMenu = !showSettingsMenu;
@@ -443,12 +435,16 @@
         {/if}
 
         {#if !isConnectingView && $session.book && $session.book.media && $session.book.media.metadata && $session.book.media.metadata.title}
-          <div class="audiobook-info-pill">
+          <button
+            class="audiobook-info-pill"
+            type="button"
+            onclick={() => (showBookInfo = true)}
+            title="View book info"
+          >
             <span class="audiobook-title">{$session.book.media.metadata.title}</span>
-            {#if $session.book.duration > 0}
-              <span class="audiobook-duration">{formatDuration($session.book.duration)}</span>
-            {/if}
-          </div>
+            <span class="audiobook-info-icon"><Info size="16" /></span>
+          </button>
+          <BookInfoDialog bind:isOpen={showBookInfo} />
         {/if}
       </div>
       <div class="header-info">
@@ -828,11 +824,25 @@
     );
     border: 1px solid color-mix(in srgb, var(--accent-1) 15%, transparent);
     border-radius: 60px;
-    padding: 0.45rem 0.6rem 0.45rem 1rem;
+    padding: 0.45rem 0.7rem 0.45rem 1rem;
     display: inline-flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.6rem;
     max-width: 50vw;
+    cursor: pointer;
+    font: inherit;
+    transition:
+      background 0.15s ease,
+      border-color 0.15s ease;
+  }
+
+  .audiobook-info-pill:hover {
+    background: linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--accent-1) 18%, transparent) 0%,
+      color-mix(in srgb, var(--accent-2) 14%, transparent) 100%
+    );
+    border-color: color-mix(in srgb, var(--accent-1) 30%, transparent);
   }
 
   .audiobook-title {
@@ -846,13 +856,15 @@
     max-width: 30vw;
   }
 
-  .audiobook-duration {
-    background: color-mix(in srgb, var(--bg-primary) 50%, transparent);
-    padding: 0.125rem 0.5rem;
-    border-radius: 100px;
-    font-size: 0.75rem;
+  .audiobook-info-icon {
+    display: inline-flex;
+    align-items: center;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+  }
+
+  .audiobook-info-pill:hover .audiobook-info-icon {
     color: var(--text-primary);
-    white-space: nowrap;
   }
 
   .restart-container {

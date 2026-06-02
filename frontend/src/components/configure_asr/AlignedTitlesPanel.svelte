@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tooltip } from '../../actions/tooltip';
   import CircleQuestionMark from '@lucide/svelte/icons/circle-question-mark';
   import Pause from '@lucide/svelte/icons/pause';
   import Play from '@lucide/svelte/icons/play';
@@ -195,7 +196,7 @@
     </select>
     <div
       class="help-icon"
-      data-tooltip="Use titles from a Chapter Reference whose timestamps line up with pending chapters. Selected titles are applied directly, while the remaining titles will be transcribed."
+      use:tooltip={'Use titles from a Chapter Reference whose timestamps line up with pending chapters. Selected titles are applied directly, while the remaining titles will be transcribed.'}
     >
       <CircleQuestionMark size="14" />
     </div>
@@ -511,49 +512,5 @@
   .help-icon:hover {
     color: var(--primary-color);
     background: var(--bg-tertiary);
-  }
-
-  .help-icon[data-tooltip]:hover::after {
-    content: attr(data-tooltip);
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    margin-bottom: 8px;
-    padding: 8px 12px;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    font-size: 0.875rem;
-    line-height: 1.4;
-    white-space: normal;
-    min-width: 280px;
-    max-width: 480px;
-    z-index: 1000;
-    animation: tooltipFadeIn 0.2s ease-out;
-  }
-
-  .help-icon[data-tooltip]:hover::before {
-    content: '';
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    margin-bottom: -3px;
-    border: 6px solid transparent;
-    border-top-color: var(--border-color);
-    z-index: 1001;
-  }
-
-  @keyframes tooltipFadeIn {
-    from {
-      opacity: 0;
-      transform: translateX(-50%) translateY(4px);
-    }
-    to {
-      opacity: 1;
-      transform: translateX(-50%) translateY(0);
-    }
   }
 </style>

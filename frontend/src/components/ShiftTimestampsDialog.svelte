@@ -1,5 +1,6 @@
 <script lang="ts">
   import { api, handleApiError } from '../utils/api';
+  import { tooltip } from '../actions/tooltip';
   import { audio, currentSegmentId, isPlaying } from '../stores/audio';
   import { chapters, session } from '../stores/session';
   import DocLink from './DocLink.svelte';
@@ -357,7 +358,7 @@
                   Between first and last selected
                   <div
                     class="help-icon"
-                    data-tooltip="Shifts all chapters — including unselected ones — that fall between your first and last selected chapter"
+                    use:tooltip={'Shifts all chapters — including unselected ones — that fall between your first and last selected chapter'}
                   >
                     <CircleHelp size="14" />
                   </div>
@@ -372,7 +373,7 @@
               {driftEnabled ? 'Start Offset' : 'Offset'}
               <div
                 class="help-icon"
-                data-tooltip="How far the timestamps should be shifted, in seconds. Positive values shift chapters later, negative values shift them earlier. Use the arrow keys or +/- buttons to adjust by 1 second, or press Space to preview."
+                use:tooltip={'How far the timestamps should be shifted, in seconds. Positive values shift chapters later, negative values shift them earlier. Use the arrow keys or +/- buttons to adjust by 1 second, or press Space to preview.'}
               >
                 <CircleHelp size="14" />
               </div>
@@ -417,7 +418,7 @@
                     End Offset
                     <div
                       class="help-icon"
-                      data-tooltip="The offset applied to the last affected chapter. The offset gradually changes from the start value to this value across all affected chapters. Useful when timing drift accumulates over the course of the book."
+                      use:tooltip={'The offset applied to the last affected chapter. The offset gradually changes from the start value to this value across all affected chapters. Useful when timing drift accumulates over the course of the book.'}
                     >
                       <CircleHelp size="14" />
                     </div>
@@ -462,7 +463,7 @@
                         Chapter
                         <div
                           class="help-icon"
-                          data-tooltip="Drift is distributed evenly across the chapter list. Useful when each chapter contributes a fixed offset (e.g. silence added at each chapter start)."
+                          use:tooltip={'Drift is distributed evenly across the chapter list. Useful when each chapter contributes a fixed offset (e.g. silence added at each chapter start).'}
                         >
                           <CircleHelp size="14" />
                         </div>
@@ -472,7 +473,7 @@
                         Time
                         <div
                           class="help-icon"
-                          data-tooltip="Drift is distributed proportionally to each chapter's timestamp. Useful when offset accumulates over the audio duration (e.g. clock drift, encoding rate mismatch)."
+                          use:tooltip={"Drift is distributed proportionally to each chapter's timestamp. Useful when offset accumulates over the audio duration (e.g. clock drift, encoding rate mismatch)."}
                         >
                           <CircleHelp size="14" />
                         </div>
@@ -890,35 +891,6 @@
   .help-icon:hover {
     color: var(--primary-color);
     background: var(--bg-tertiary);
-  }
-
-  .help-icon[data-tooltip]:hover::after {
-    content: attr(data-tooltip);
-    position: fixed;
-    transform: translate(-50%, calc(-100% - 8px));
-    padding: 8px 12px;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    font-size: 0.875rem;
-    line-height: 1.4;
-    white-space: pre-line;
-    max-width: 360px;
-    z-index: 10001;
-    font-weight: normal;
-  }
-
-  .help-icon[data-tooltip]:hover::before {
-    content: '';
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    margin-bottom: -5px;
-    border: 6px solid transparent;
-    border-top-color: var(--border-color);
-    z-index: 10002;
   }
 
   /* Buttons */

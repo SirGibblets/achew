@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { tooltip } from '../actions/tooltip';
   import { api } from '../utils/api';
   import { dndzone, type DndEvent } from 'svelte-dnd-action';
 
@@ -134,7 +135,7 @@
       Custom Instructions
       <div
         class="help-icon"
-        data-tooltip="A persisted library of instructions that can be reused across audiobooks. Check the items you wish to enable for this cleanup."
+        use:tooltip={'A persisted library of instructions that can be reused across audiobooks. Check the items you wish to enable for this cleanup.'}
       >
         <CircleQuestionMark size="14" />
       </div>
@@ -411,34 +412,5 @@
   .help-icon:hover {
     color: var(--primary-color);
     background: var(--bg-tertiary);
-  }
-
-  .help-icon[data-tooltip]:hover::after {
-    content: attr(data-tooltip);
-    position: fixed;
-    transform: translate(-50%, calc(-100% - 8px));
-    padding: 8px 12px;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    font-size: 0.875rem;
-    line-height: 1.4;
-    white-space: pre-line;
-    max-width: 360px;
-    z-index: 10001;
-    font-weight: normal;
-  }
-
-  .help-icon[data-tooltip]:hover::before {
-    content: '';
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    margin-bottom: -5px;
-    border: 6px solid transparent;
-    border-top-color: var(--border-color);
-    z-index: 10002;
   }
 </style>
