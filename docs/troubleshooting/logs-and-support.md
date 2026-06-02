@@ -36,6 +36,15 @@
 - The part of the app you were in when the problem occurred.
 - The full, exact text of any error message.
 - Any relevant logs.
+- For audio or processing issues, the *audio file info* from the **Audiobook Info** dialog.
+
+??? info "How to find your book's audio file info"
+    To get audio file info, click the book title near the top left of the page to open the **Audiobook Info** dialog:
+
+    ![Book Info Dialog](../img/book-info-light.webp#only-light){ width="480" .center }
+    ![Book Info Dialog](../img/book-info-dark.webp#only-dark){ width="480" .center }
+    
+    Clicking the small arrow next to the **Codec** row will show the audio file info. You can then use the copy button (near the top right of the info section) to grab the data for a bug report. Be sure to redact any personal or otherwise sensitive information before sharing the data.
 
 ## Filing a bug report
 

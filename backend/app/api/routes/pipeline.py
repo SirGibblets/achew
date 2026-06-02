@@ -10,7 +10,7 @@ from app.services.processing_pipeline import PipelineProgress
 
 from ...app import get_app_state
 from ...core.config import is_abs_configured
-from ...models.abs import Book
+from ...models.abs import AudioInfo, Book
 from ...models.enums import RestartStep, Step
 
 logger = logging.getLogger(__name__)
@@ -61,6 +61,7 @@ class PipelineStateResponse(BaseModel):
     title_refs: List[TitleReference] = []
     restart_options: List[str] = []
     audio_unsupported_codec: bool = False
+    audio_info: Optional[AudioInfo] = None
 
 
 @router.post("/pipeline", response_model=dict)
@@ -91,6 +92,7 @@ async def create_pipeline(request: CreatePipelineRequest, background_tasks: Back
                         "chapter_refs": pipeline.chapter_refs,
                         "title_refs": pipeline.title_refs,
                         "audio_unsupported_codec": pipeline.audio_unsupported_codec,
+                        "audio_info": pipeline.audio_info,
                     },
                 )
 
@@ -143,6 +145,7 @@ async def get_pipeline_state():
             title_refs=pipeline.title_refs,
             restart_options=pipeline.get_restart_options(),
             audio_unsupported_codec=pipeline.audio_unsupported_codec,
+            audio_info=pipeline.audio_info,
         )
 
     except HTTPException:

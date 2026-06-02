@@ -45,6 +45,10 @@ MIN_DURATION_FOR_PARALLEL = 30 * 60  # 30 minutes
 _AUDIO_STREAM_RE = re.compile(r"Stream #\d+[:.\d\[\]\w()]*: Audio:\s+([\w\-]+)")
 
 
+# Trailing message to strip from `ffmpeg -i`
+_FFMPEG_FILE_WARNING = "At least one output file must be specified"
+
+
 @functools.lru_cache(maxsize=32)
 def _ffmpeg_probe_stderr(audio_file: str) -> str:
     """Run `ffmpeg -i` and return stderr. ffmpeg exits non-zero because no output
@@ -63,6 +67,25 @@ def _ffmpeg_probe_stderr(audio_file: str) -> str:
         return ""
 
 
+@functools.lru_cache(maxsize=1)
+def _ffmpeg_version() -> str:
+    """Return the first line of `ffmpeg -version` (e.g. "ffmpeg version 6.1.1 …"),
+    or an empty string if the probe failed."""
+    try:
+        result = subprocess.run(
+            ["ffmpeg", "-version"],
+            capture_output=True,
+            timeout=10,
+            encoding="utf-8",
+            errors="replace",
+        )
+        lines = result.stdout.splitlines()
+        return lines[0].strip() if lines else ""
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
+        logger.warning(f"Failed to get ffmpeg version: {e}")
+        return ""
+
+
 def audio_uses_xhe_aac(audio_file: str) -> bool:
     """Return True if ffmpeg reports the audio stream as xHE-AAC."""
     return "xhe-aac" in _ffmpeg_probe_stderr(audio_file).lower()
@@ -73,6 +96,30 @@ def get_audio_codec(audio_file: str) -> Optional[str]:
     or None if the probe failed or no audio stream was found."""
     match = _AUDIO_STREAM_RE.search(_ffmpeg_probe_stderr(audio_file))
     return match.group(1).lower() if match else None
+
+
+def probe_audio_info(audio_file: str) -> Tuple[Optional[str], str, bool]:
+    """Probe a file once and derive everything from the single cached ffmpeg output.
+
+    Returns (codec, diagnostic ffmpeg output, uses_xhe_aac). The diagnostic blob is
+    prefixed with the ffmpeg version and has ffmpeg's trailing "no output file"
+    complaint stripped.
+    """
+    output = _ffmpeg_probe_stderr(audio_file)
+    match = _AUDIO_STREAM_RE.search(output)
+    codec = match.group(1).lower() if match else None
+    uses_xhe_aac = "xhe-aac" in output.lower()
+
+    # Drop trailing blank lines and ffmpeg's expected "no output file" complaint.
+    lines = output.splitlines()
+    while lines and (not lines[-1].strip() or lines[-1].strip() == _FFMPEG_FILE_WARNING):
+        lines.pop()
+    cleaned = "\n".join(lines)
+
+    version = _ffmpeg_version()
+    diagnostic = f"{version}\n\n{cleaned}" if version else cleaned
+
+    return codec, diagnostic, uses_xhe_aac
 
 
 # Containers where the default ffmpeg muxer (inferred from extension) can reject

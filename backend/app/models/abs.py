@@ -30,6 +30,12 @@ class AudioFile(BaseModel):
     chapters: List[BookChapter] = []
 
 
+class AudioInfo(BaseModel):
+    codec: Optional[str] = None
+    container: Optional[str] = None
+    ffmpeg_output: Optional[str] = None  # full `ffmpeg -i` stderr, for diagnostics
+
+
 class AuthorEntry(BaseModel):
     id: Optional[str] = None
     name: str
@@ -39,15 +45,21 @@ class AuthorEntry(BaseModel):
 
 class BookMetadata(BaseModel):
     title: str
+    subtitle: Optional[str] = None
     authorName: Optional[str] = ""
     authors: Optional[List[AuthorEntry]] = None
     narratorName: Optional[str] = ""
+    narrators: Optional[List[str]] = None
 
     @model_validator(mode="after")
-    def _coerce_authors(self) -> "BookMetadata":
-        """Normalise the new `authors` list format into `authorName` for backward compat."""
+    def _coerce_names(self) -> "BookMetadata":
+        """Normalise the list formats (`authors`, `narrators`) into the flat
+        `authorName` / `narratorName` strings. The non-expanded ABS item response
+        only populates the list forms, leaving the flat strings null."""
         if self.authors and not self.authorName:
             self.authorName = self.authors[0].name
+        if self.narrators and not self.narratorName:
+            self.narratorName = ", ".join(n for n in self.narrators if n)
         return self
 
     seriesName: Optional[str] = None

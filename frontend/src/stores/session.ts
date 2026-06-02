@@ -1,5 +1,5 @@
 import { derived, get, writable } from 'svelte/store';
-import type { Book } from '../types/book';
+import type { AudioInfo, Book } from '../types/book';
 import type { ChapterData, SelectionStats } from '../types/chapter';
 import type { ChapterReference, TitleReference } from '../types/references';
 import type {
@@ -35,6 +35,7 @@ export interface SessionState {
   chapterRefs: ChapterReference[];
   titleRefs: TitleReference[];
   audioUnsupportedCodec: boolean;
+  audioInfo: AudioInfo | null;
   restartOptions: string[];
   transcriptionStatuses: Record<string, string>;
   version: string | null;
@@ -67,6 +68,7 @@ function initialState(): SessionState {
     chapterRefs: [],
     titleRefs: [],
     audioUnsupportedCodec: false,
+    audioInfo: null,
     restartOptions: [],
     transcriptionStatuses: {},
     version: null,
@@ -113,6 +115,7 @@ function createSessionStore() {
           ...(data.audio_unsupported_codec !== undefined && {
             audioUnsupportedCodec: data.audio_unsupported_codec,
           }),
+          ...(data.audio_info !== undefined && { audioInfo: data.audio_info }),
         }));
         if (data.new_step === 'chapter_editing' && data.chapter_id) {
           pendingAddChapterDialog.set({
@@ -251,6 +254,7 @@ function createSessionStore() {
           book: data.book ?? null,
           restartOptions: data.restart_options ?? [],
           audioUnsupportedCodec: data.audio_unsupported_codec ?? false,
+          audioInfo: data.audio_info ?? null,
           loading: false,
         }));
 

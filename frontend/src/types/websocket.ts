@@ -1,3 +1,4 @@
+import type { AudioInfo } from './book';
 import type { ChapterData } from './chapter';
 import type { ChapterReference, TitleReference } from './references';
 
@@ -30,6 +31,7 @@ export interface StepChangeData {
   title_refs?: TitleReference[];
   restart_options?: string[];
   audio_unsupported_codec?: boolean;
+  audio_info?: AudioInfo | null;
   chapter_id?: string;
   open_tab?: string;
 }

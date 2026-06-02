@@ -16,7 +16,7 @@ Both single-file and multi-file audiobooks are supported.
 
     Due to ffmpeg's limited support, Achew cannot reliably process audiobooks encoded as **xHE-AAC**. Smart Detect, chapter realignment, title transcription, and audio playback may all fail or produce incorrect results for these audiobooks.
 
-    Achew automatically detects these files and shows a warning banner during workflow selection.
+    Achew automatically detects these files and shows a warning banner during workflow selection. You can also view a book's codec at any time from the **Book Info** dialog (click the book title at the top-left of the page).
 
 ## Chapter/Title Reference formats
 

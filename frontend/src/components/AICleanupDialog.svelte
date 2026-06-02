@@ -1,5 +1,6 @@
 <script lang="ts">
   import { slide } from 'svelte/transition';
+  import { tooltip } from '../actions/tooltip';
   import { selectionStats, session } from '../stores/session';
   import { api } from '../utils/api';
   import ChapterModal from './ChapterModal.svelte';
@@ -528,7 +529,7 @@
                 <span>Infer opening credits/intro</span>
                 <div
                   class="help-icon"
-                  data-tooltip="When enabled, the first selected chapter is more likely to be titled as an intro section, e.g. 'Opening Credits', 'Intro', etc."
+                  use:tooltip={"When enabled, the first selected chapter is more likely to be titled as an intro section, e.g. 'Opening Credits', 'Intro', etc."}
                 >
                   <CircleQuestionMark size="14" />
                 </div>
@@ -539,7 +540,7 @@
                 <span>Infer end credits/outro</span>
                 <div
                   class="help-icon"
-                  data-tooltip="When enabled, the last selected chapter is more likely to be titled as an outro section, e.g. 'End Credits', 'Outro', etc."
+                  use:tooltip={"When enabled, the last selected chapter is more likely to be titled as an outro section, e.g. 'End Credits', 'Outro', etc."}
                 >
                   <CircleQuestionMark size="14" />
                 </div>
@@ -550,7 +551,7 @@
                 <span>Deselect Non-Chapters</span>
                 <div
                   class="help-icon"
-                  data-tooltip="When enabled, items that do not appear to be the start of a chapter or section will be automatically deselected during cleanup."
+                  use:tooltip={'When enabled, items that do not appear to be the start of a chapter or section will be automatically deselected during cleanup.'}
                 >
                   <CircleQuestionMark size="14" />
                 </div>
@@ -565,7 +566,7 @@
                 <span>Preserve Titles</span>
                 <div
                   class="help-icon"
-                  data-tooltip="When enabled, the titles of deselected chapters will be preserved instead of being cleared."
+                  use:tooltip={'When enabled, the titles of deselected chapters will be preserved instead of being cleared.'}
                 >
                   <CircleQuestionMark size="14" />
                 </div>
@@ -581,7 +582,7 @@
                   <span>Prefer existing titles from:</span>
                   <div
                     class="help-icon"
-                    data-tooltip="When enabled, chapter titles from the selected Reference will be used during cleanup."
+                    use:tooltip={'When enabled, chapter titles from the selected Reference will be used during cleanup.'}
                   >
                     <CircleQuestionMark size="14" />
                   </div>
@@ -653,7 +654,7 @@
                 Additional instructions:
                 <div
                   class="help-icon"
-                  data-tooltip="Enter custom instructions for this specific audiobook cleanup. These won't be saved for future use."
+                  use:tooltip={"Enter custom instructions for this specific audiobook cleanup. These won't be saved for future use."}
                 >
                   <CircleQuestionMark size="14" />
                 </div>
@@ -1160,35 +1161,6 @@
   .help-icon:hover {
     color: var(--primary-color);
     background: var(--bg-tertiary);
-  }
-
-  .help-icon[data-tooltip]:hover::after {
-    content: attr(data-tooltip);
-    position: fixed;
-    transform: translate(-50%, calc(-100% - 8px));
-    padding: 8px 12px;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    font-size: 0.875rem;
-    line-height: 1.4;
-    white-space: pre-line;
-    max-width: 360px;
-    z-index: 10001;
-  }
-
-  /* Tooltip arrow */
-  .help-icon[data-tooltip]:hover::before {
-    content: '';
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    margin-bottom: -5px;
-    border: 6px solid transparent;
-    border-top-color: var(--border-color);
-    z-index: 10002;
   }
 
   .no-providers-message {

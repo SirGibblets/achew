@@ -1,4 +1,4 @@
-import type { Book } from './book';
+import type { AudioInfo, Book } from './book';
 import type { BasicChapter, ChapterData, SelectionStats } from './chapter';
 import type { ChapterReference, TitleReference } from './references';
 
@@ -21,6 +21,7 @@ export interface PipelineState {
   book?: Book | null;
   restart_options?: string[];
   audio_unsupported_codec?: boolean;
+  audio_info?: AudioInfo | null;
 }
 
 export interface StatusResponse {

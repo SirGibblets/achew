@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { tooltip } from '../actions/tooltip';
   import { session } from '../stores/session';
   import { api } from '../utils/api';
   import AddReferenceDialog from './AddReferenceDialog.svelte';
@@ -243,7 +244,7 @@
           </label>
           <div
             class="help-icon"
-            data-tooltip="Select this if your audiobook contains non-speech elements like music and sound effects. Detection will be slower but more accurate."
+            use:tooltip={'Select this if your audiobook contains non-speech elements like music and sound effects. Detection will be slower but more accurate.'}
           >
             <CircleQuestionMark size="14" />
           </div>
@@ -305,7 +306,7 @@
             </label>
             <div
               class="help-icon"
-              data-tooltip="Select this if your audiobook contains non-speech elements like music and sound effects. Detection will be slower but more accurate."
+              use:tooltip={'Select this if your audiobook contains non-speech elements like music and sound effects. Detection will be slower but more accurate.'}
             >
               <CircleQuestionMark size="14" />
             </div>
@@ -640,52 +641,6 @@
   .help-icon:hover {
     color: var(--primary-color);
     background: var(--bg-tertiary);
-  }
-
-  /* Tooltip on hover */
-  .help-icon[data-tooltip]:hover::after {
-    content: attr(data-tooltip);
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    margin-bottom: 8px;
-    padding: 8px 12px;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    font-size: 0.875rem;
-    line-height: 1.4;
-    white-space: normal;
-    min-width: 280px;
-    max-width: 480px;
-    z-index: 1000;
-    animation: tooltipFadeIn 0.2s ease-out;
-  }
-
-  /* Tooltip arrow */
-  .help-icon[data-tooltip]:hover::before {
-    content: '';
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    margin-bottom: -3px;
-    border: 6px solid transparent;
-    border-top-color: var(--border-color);
-    z-index: 1001;
-  }
-
-  @keyframes tooltipFadeIn {
-    from {
-      opacity: 0;
-      transform: translateX(-50%) translateY(4px);
-    }
-    to {
-      opacity: 1;
-      transform: translateX(-50%) translateY(0);
-    }
   }
 
   @media (max-width: 768px) {
