@@ -358,7 +358,10 @@
                   Between first and last selected
                   <div
                     class="help-icon"
-                    use:tooltip={'Shifts all chapters — including unselected ones — that fall between your first and last selected chapter'}
+                    use:tooltip={{
+                      text: 'Shifts all chapters — including unselected ones — that fall between your first and last selected chapter',
+                      delay: 0,
+                    }}
                   >
                     <CircleHelp size="14" />
                   </div>
@@ -373,13 +376,21 @@
               {driftEnabled ? 'Start Offset' : 'Offset'}
               <div
                 class="help-icon"
-                use:tooltip={'How far the timestamps should be shifted, in seconds. Positive values shift chapters later, negative values shift them earlier. Use the arrow keys or +/- buttons to adjust by 1 second, or press Space to preview.'}
+                use:tooltip={{
+                  text: 'How far the timestamps should be shifted, in seconds. Positive values shift chapters later, negative values shift them earlier. Use the arrow keys or +/- buttons to adjust by 1 second, or press Space to preview.',
+                  delay: 0,
+                }}
               >
                 <CircleHelp size="14" />
               </div>
             </label>
             <div class="offset-input-row">
-              <button class="adj-btn" onclick={() => adjustOffset(-1)} title="Decrease by 1 second">
+              <button
+                class="adj-btn"
+                onclick={() => adjustOffset(-1)}
+                aria-label="Decrease by 1 second"
+                use:tooltip={'Decrease by 1 second'}
+              >
                 <Minus size="16" />
               </button>
               <input
@@ -390,13 +401,19 @@
                 onkeydown={handleOffsetKeydown}
                 oninput={handleOffsetInput}
               />
-              <button class="adj-btn" onclick={() => adjustOffset(1)} title="Increase by 1 second">
+              <button
+                class="adj-btn"
+                onclick={() => adjustOffset(1)}
+                aria-label="Increase by 1 second"
+                use:tooltip={'Increase by 1 second'}
+              >
                 <Plus size="16" />
               </button>
               <button
                 class="play-btn"
                 onclick={togglePlayOffset}
-                title="Preview at shifted position of first affected chapter"
+                aria-label="Preview at shifted position of first affected chapter"
+                use:tooltip={'Preview at shifted position of first affected chapter'}
                 disabled={!firstAffected}
               >
                 {#if $isPlaying && $currentSegmentId === 'shift-preview-first'}
@@ -418,14 +435,22 @@
                     End Offset
                     <div
                       class="help-icon"
-                      use:tooltip={'The offset applied to the last affected chapter. The offset gradually changes from the start value to this value across all affected chapters. Useful when timing drift accumulates over the course of the book.'}
+                      use:tooltip={{
+                        text: 'The offset applied to the last affected chapter. The offset gradually changes from the start value to this value across all affected chapters. Useful when timing drift accumulates over the course of the book.',
+                        delay: 0,
+                      }}
                     >
                       <CircleHelp size="14" />
                     </div>
                   </label>
                   {#if driftEnabled}
                     <div class="offset-input-row">
-                      <button class="adj-btn" onclick={() => adjustDrift(-1)} title="Decrease by 1 second">
+                      <button
+                        class="adj-btn"
+                        onclick={() => adjustDrift(-1)}
+                        aria-label="Decrease by 1 second"
+                        use:tooltip={'Decrease by 1 second'}
+                      >
                         <Minus size="16" />
                       </button>
                       <input
@@ -436,13 +461,19 @@
                         onkeydown={handleDriftKeydown}
                         oninput={handleDriftInput}
                       />
-                      <button class="adj-btn" onclick={() => adjustDrift(1)} title="Increase by 1 second">
+                      <button
+                        class="adj-btn"
+                        onclick={() => adjustDrift(1)}
+                        aria-label="Increase by 1 second"
+                        use:tooltip={'Increase by 1 second'}
+                      >
                         <Plus size="16" />
                       </button>
                       <button
                         class="play-btn"
                         onclick={togglePlayDrift}
-                        title="Preview at shifted position of last affected chapter"
+                        aria-label="Preview at shifted position of last affected chapter"
+                        use:tooltip={'Preview at shifted position of last affected chapter'}
                         disabled={!lastAffected}
                       >
                         {#if $isPlaying && $currentSegmentId === 'shift-preview-last'}
@@ -463,7 +494,10 @@
                         Chapter
                         <div
                           class="help-icon"
-                          use:tooltip={'Drift is distributed evenly across the chapter list. Useful when each chapter contributes a fixed offset (e.g. silence added at each chapter start).'}
+                          use:tooltip={{
+                            text: 'Drift is distributed evenly across the chapter list. Useful when each chapter contributes a fixed offset (e.g. silence added at each chapter start).',
+                            delay: 0,
+                          }}
                         >
                           <CircleHelp size="14" />
                         </div>
@@ -473,7 +507,10 @@
                         Time
                         <div
                           class="help-icon"
-                          use:tooltip={"Drift is distributed proportionally to each chapter's timestamp. Useful when offset accumulates over the audio duration (e.g. clock drift, encoding rate mismatch)."}
+                          use:tooltip={{
+                            text: "Drift is distributed proportionally to each chapter's timestamp. Useful when offset accumulates over the audio duration (e.g. clock drift, encoding rate mismatch).",
+                            delay: 0,
+                          }}
                         >
                           <CircleHelp size="14" />
                         </div>
@@ -499,7 +536,8 @@
                     <button
                       class="preview-play-btn"
                       onclick={() => togglePlayPreviewItem(item.id, item.newTimestamp)}
-                      title="Preview at shifted position"
+                      aria-label="Preview at shifted position"
+                      use:tooltip={'Preview at shifted position'}
                     >
                       {#if $isPlaying && $currentSegmentId === `shift-preview-item-${item.id}`}
                         <Pause size="12" fill="currentColor" stroke="none" />

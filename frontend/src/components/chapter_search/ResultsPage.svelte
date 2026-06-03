@@ -4,6 +4,7 @@
   import ArrowLeft from '@lucide/svelte/icons/arrow-left';
   import ArrowRight from '@lucide/svelte/icons/arrow-right';
   import RotateCw from '@lucide/svelte/icons/rotate-cw';
+  import { tooltip } from '../../actions/tooltip';
   import { chapterSearch } from '../../stores/chapterSearch';
   import { session } from '../../stores/session';
   import { autoRuleName, autoRuleSetName } from './ruleUtils';
@@ -132,7 +133,7 @@
       <button
         class="refresh-btn"
         onclick={() => chapterSearch.refreshResults()}
-        title="Re-sync these books from Audiobookshelf and re-run the search"
+        use:tooltip={'Re-sync these books from Audiobookshelf and re-run the search'}
         aria-label="Refresh results"
       >
         <RotateCw size="12" />

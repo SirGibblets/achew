@@ -6,6 +6,7 @@
    * Accepts callbacks: onchange(ruleset), onresetToDefaults(), ondeleteSelf()
    */
   import { onMount } from 'svelte';
+  import { tooltip } from '../../actions/tooltip';
   import { DragDropProvider, DragOverlay } from '@dnd-kit-svelte/svelte';
   import { CollisionPriority } from '@dnd-kit/abstract';
   import { move } from '@dnd-kit/helpers';
@@ -320,7 +321,7 @@
     <!-- Ruleset header -->
     <div class="ruleset-header" class:is-root={isRoot}>
       {#if !isRoot}
-        <label class="enable-toggle" title={ruleset.enabled ? 'Disable ruleset' : 'Enable ruleset'}>
+        <label class="enable-toggle" use:tooltip={ruleset.enabled ? 'Disable ruleset' : 'Enable ruleset'}>
           <input
             type="checkbox"
             checked={ruleset.enabled}
@@ -336,7 +337,12 @@
         <span class="ruleset-name">{autoRuleSetName(ruleset)}</span>
         <span class="match-badge">{ruleset.match_any ? 'Match Any' : 'Match All'}</span>
       </span>
-      <button class="edit-btn" onclick={() => openEditRuleSet(ruleset)} aria-label="Edit ruleset">
+      <button
+        class="edit-btn"
+        onclick={() => openEditRuleSet(ruleset)}
+        aria-label="Edit ruleset"
+        use:tooltip={'Edit ruleset'}
+      >
         <Pencil size="14" />
       </button>
     </div>
@@ -371,11 +377,16 @@
               />
             {:else}
               <div class="rule-row" class:disabled={!item.enabled && !ancestorDisabled}>
-                <label class="enable-toggle" title={item.enabled ? 'Disable' : 'Enable'}>
+                <label class="enable-toggle" use:tooltip={item.enabled ? 'Disable' : 'Enable'}>
                   <input type="checkbox" checked={item.enabled} onchange={() => handleToggle(item as Rule)} />
                 </label>
                 <span class="rule-name" title={autoRuleName(item as Rule)}>{autoRuleName(item as Rule)}</span>
-                <button class="edit-btn" onclick={() => openEditRule(item as Rule)} aria-label="Edit rule">
+                <button
+                  class="edit-btn"
+                  onclick={() => openEditRule(item as Rule)}
+                  aria-label="Edit rule"
+                  use:tooltip={'Edit rule'}
+                >
                   <Pencil size="14" />
                 </button>
               </div>

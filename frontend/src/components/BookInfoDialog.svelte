@@ -123,7 +123,7 @@
                 {#if authors.display}
                   <div class="meta-row">
                     <span class="meta-label">Author</span>
-                    <span class="meta-value" use:tooltip={authors.count > 1 ? authors.full : null}>
+                    <span class="meta-value" use:tooltip={{ text: authors.count > 1 ? authors.full : null, delay: 0 }}>
                       {authors.display}
                     </span>
                   </div>
@@ -131,7 +131,10 @@
                 {#if narrators.display}
                   <div class="meta-row">
                     <span class="meta-label">Narrator</span>
-                    <span class="meta-value" use:tooltip={narrators.count > 1 ? narrators.full : null}>
+                    <span
+                      class="meta-value"
+                      use:tooltip={{ text: narrators.count > 1 ? narrators.full : null, delay: 0 }}
+                    >
                       {narrators.display}
                     </span>
                   </div>

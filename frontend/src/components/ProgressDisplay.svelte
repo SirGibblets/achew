@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Component } from 'svelte';
+  import { tooltip } from '../actions/tooltip';
   import { session, progress } from '../stores/session';
   import { isConnected } from '../stores/websocket';
   import { api } from '../utils/api';
@@ -244,7 +245,7 @@
           }
         : undefined}
       aria-label={!chimeEnabled ? 'Enable Chime' : 'Chime settings'}
-      title={!chimeEnabled ? 'Click to enable chime' : undefined}
+      use:tooltip={!chimeEnabled ? 'Click to enable chime' : null}
     >
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <svelte:element

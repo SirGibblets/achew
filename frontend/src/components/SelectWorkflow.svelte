@@ -244,7 +244,10 @@
           </label>
           <div
             class="help-icon"
-            use:tooltip={'Select this if your audiobook contains non-speech elements like music and sound effects. Detection will be slower but more accurate.'}
+            use:tooltip={{
+              text: 'Select this if your audiobook contains non-speech elements like music and sound effects. Detection will be slower but more accurate.',
+              delay: 0,
+            }}
           >
             <CircleQuestionMark size="14" />
           </div>
@@ -281,7 +284,7 @@
                         <button
                           class="chapter-count clickable"
                           onclick={() => handleChapterCountClick(ref.id)}
-                          title="Click to view chapter details"
+                          use:tooltip={'Click to view chapter details'}
                         >
                           {ref.chapters.length} chapters
                           <ExternalLink size="12" />
@@ -306,7 +309,10 @@
             </label>
             <div
               class="help-icon"
-              use:tooltip={'Select this if your audiobook contains non-speech elements like music and sound effects. Detection will be slower but more accurate.'}
+              use:tooltip={{
+                text: 'Select this if your audiobook contains non-speech elements like music and sound effects. Detection will be slower but more accurate.',
+                delay: 0,
+              }}
             >
               <CircleQuestionMark size="14" />
             </div>
@@ -351,7 +357,7 @@
                         <button
                           class="chapter-count clickable"
                           onclick={() => handleChapterCountClick(ref.id)}
-                          title="Click to view chapter details"
+                          use:tooltip={'Click to view chapter details'}
                         >
                           {ref.chapters.length} chapters
                           <ExternalLink size="12" />
@@ -409,7 +415,7 @@
                         <button
                           class="chapter-count clickable"
                           onclick={() => handleChapterCountClick(ref.id)}
-                          title="Click to view chapter details"
+                          use:tooltip={'Click to view chapter details'}
                         >
                           {ref.chapters.length} chapters
                           <ExternalLink size="12" />

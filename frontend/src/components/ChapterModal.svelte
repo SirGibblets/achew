@@ -4,6 +4,7 @@
   import Play from '@lucide/svelte/icons/play';
   import Pause from '@lucide/svelte/icons/pause';
 
+  import { tooltip } from '../actions/tooltip';
   import { audio, currentSegmentId, isPlaying } from '../stores/audio';
 
   interface ChapterRow {
@@ -114,7 +115,8 @@
                       e.preventDefault();
                       previewAudio(Number(chapter.timestamp), index);
                     }}
-                    title="Preview audio"
+                    aria-label="Preview audio"
+                    use:tooltip={'Preview audio'}
                   >
                     {#if $isPlaying && $currentSegmentId === `chapter-modal-${index}`}
                       <Pause size="14" />

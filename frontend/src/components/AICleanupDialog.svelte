@@ -529,7 +529,10 @@
                 <span>Infer opening credits/intro</span>
                 <div
                   class="help-icon"
-                  use:tooltip={"When enabled, the first selected chapter is more likely to be titled as an intro section, e.g. 'Opening Credits', 'Intro', etc."}
+                  use:tooltip={{
+                    text: "When enabled, the first selected chapter is more likely to be titled as an intro section, e.g. 'Opening Credits', 'Intro', etc.",
+                    delay: 0,
+                  }}
                 >
                   <CircleQuestionMark size="14" />
                 </div>
@@ -540,7 +543,10 @@
                 <span>Infer end credits/outro</span>
                 <div
                   class="help-icon"
-                  use:tooltip={"When enabled, the last selected chapter is more likely to be titled as an outro section, e.g. 'End Credits', 'Outro', etc."}
+                  use:tooltip={{
+                    text: "When enabled, the last selected chapter is more likely to be titled as an outro section, e.g. 'End Credits', 'Outro', etc.",
+                    delay: 0,
+                  }}
                 >
                   <CircleQuestionMark size="14" />
                 </div>
@@ -551,7 +557,10 @@
                 <span>Deselect Non-Chapters</span>
                 <div
                   class="help-icon"
-                  use:tooltip={'When enabled, items that do not appear to be the start of a chapter or section will be automatically deselected during cleanup.'}
+                  use:tooltip={{
+                    text: 'When enabled, items that do not appear to be the start of a chapter or section will be automatically deselected during cleanup.',
+                    delay: 0,
+                  }}
                 >
                   <CircleQuestionMark size="14" />
                 </div>
@@ -566,7 +575,10 @@
                 <span>Preserve Titles</span>
                 <div
                   class="help-icon"
-                  use:tooltip={'When enabled, the titles of deselected chapters will be preserved instead of being cleared.'}
+                  use:tooltip={{
+                    text: 'When enabled, the titles of deselected chapters will be preserved instead of being cleared.',
+                    delay: 0,
+                  }}
                 >
                   <CircleQuestionMark size="14" />
                 </div>
@@ -582,7 +594,10 @@
                   <span>Prefer existing titles from:</span>
                   <div
                     class="help-icon"
-                    use:tooltip={'When enabled, chapter titles from the selected Reference will be used during cleanup.'}
+                    use:tooltip={{
+                      text: 'When enabled, chapter titles from the selected Reference will be used during cleanup.',
+                      delay: 0,
+                    }}
                   >
                     <CircleQuestionMark size="14" />
                   </div>
@@ -623,7 +638,12 @@
                       }
                     }}
                     disabled={!aiOptions.preferredTitlesRef || !aiOptions.usePreferredTitles}
-                    title={selectedRefIsCustom ? 'Edit custom titles' : 'View chapter titles from selected Reference'}
+                    aria-label={selectedRefIsCustom
+                      ? 'Edit custom titles'
+                      : 'View chapter titles from selected Reference'}
+                    use:tooltip={selectedRefIsCustom
+                      ? 'Edit custom titles'
+                      : 'View chapter titles from selected Reference'}
                   >
                     {#if selectedRefIsCustom}
                       <Pencil size="20" />
@@ -637,7 +657,8 @@
                     class="view-titles-btn"
                     onclick={() => (showAddReference = true)}
                     disabled={!aiOptions.usePreferredTitles}
-                    title="Add Chapter Reference"
+                    aria-label="Add Chapter Reference"
+                    use:tooltip={'Add Chapter Reference'}
                   >
                     <Plus size="20" />
                   </button>
@@ -654,7 +675,10 @@
                 Additional instructions:
                 <div
                   class="help-icon"
-                  use:tooltip={"Enter custom instructions for this specific audiobook cleanup. These won't be saved for future use."}
+                  use:tooltip={{
+                    text: "Enter custom instructions for this specific audiobook cleanup. These won't be saved for future use.",
+                    delay: 0,
+                  }}
                 >
                   <CircleQuestionMark size="14" />
                 </div>

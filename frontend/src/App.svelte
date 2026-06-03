@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
+  import { tooltip } from './actions/tooltip';
   import { session } from './stores/session';
   import { isConnected, websocket } from './stores/websocket';
 
@@ -404,8 +405,8 @@
               class="restart-toggle"
               onclick={handleRestartClick}
               disabled={$session.loading || shouldDisableRestartButton($session.restartOptions)}
-              title="Go back to…"
               aria-label="Go back to…"
+              use:tooltip={'Go back to…'}
             >
               <ChevronLeft size="20" />
             </button>
@@ -439,7 +440,7 @@
             class="audiobook-info-pill"
             type="button"
             onclick={() => (showBookInfo = true)}
-            title="View book info"
+            use:tooltip={'View book info'}
           >
             <span class="audiobook-title">{$session.book.media.metadata.title}</span>
             <span class="audiobook-info-icon"><Info size="16" /></span>
@@ -450,12 +451,17 @@
       <div class="header-info">
         <div
           class="connection-status {getConnectionStatusClass($isConnected, $session.step)}"
-          title="WebSocket connection status"
+          use:tooltip={'WebSocket connection status'}
         >
           {getConnectionStatusText($isConnected, $session.step)}
         </div>
 
-        <button class="theme-toggle" onclick={toggleTheme} title="Toggle {darkMode ? 'light' : 'dark'} mode">
+        <button
+          class="theme-toggle"
+          onclick={toggleTheme}
+          aria-label="Toggle {darkMode ? 'light' : 'dark'} mode"
+          use:tooltip={`Toggle ${darkMode ? 'light' : 'dark'} mode`}
+        >
           {#if darkMode}
             <Sun size="18" class="theme-toggle-icon" />
           {:else}
@@ -464,7 +470,7 @@
         </button>
 
         <div class="settings-container">
-          <button class="settings-toggle" onclick={toggleSettingsMenu} title="Settings">
+          <button class="settings-toggle" onclick={toggleSettingsMenu} aria-label="Settings" use:tooltip={'Settings'}>
             <Settings size="18" />
           </button>
 
@@ -581,7 +587,7 @@
           target="_blank"
           rel="noopener noreferrer"
           class="version-display"
-          title="View commit on GitHub"
+          use:tooltip={'View commit on GitHub'}
         >
           v{$session.version} · {buildMeta.branch} ({buildMeta.commit_short})
         </a>
@@ -591,7 +597,7 @@
           target="_blank"
           rel="noopener noreferrer"
           class="version-display"
-          title="View release notes on GitHub"
+          use:tooltip={'View release notes on GitHub'}
         >
           v{$session.version}
         </a>
@@ -601,7 +607,8 @@
             target="_blank"
             rel="noopener noreferrer"
             class="update-button"
-            title="New version available: v{latestVersion}"
+            aria-label="New version available: v{latestVersion}"
+            use:tooltip={`New version available: v${latestVersion}`}
           >
             <Download size={14} />
           </a>

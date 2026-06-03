@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tooltip } from '../actions/tooltip';
   import { session } from '../stores/session';
   import { api, handleApiError } from '../utils/api';
   import ChapterModal from './ChapterModal.svelte';
@@ -294,7 +295,12 @@
       <div class="modal-header">
         <div class="header-title">
           <h3>Add Chapter Reference</h3>
-          <button class="help-btn" onclick={() => (showHelp = true)} aria-label="About References">
+          <button
+            class="help-btn"
+            onclick={() => (showHelp = true)}
+            aria-label="About References"
+            use:tooltip={{ text: 'Click to learn about References', delay: 0 }}
+          >
             <CircleQuestionMark size="16" />
           </button>
         </div>
@@ -478,7 +484,12 @@
                   </div>
                   <div class="result-actions">
                     {#if result.chapters?.length}
-                      <button class="icon-btn" title="Preview chapters" onclick={() => openChapterPreview(result)}>
+                      <button
+                        class="icon-btn"
+                        aria-label="Preview chapters"
+                        use:tooltip={'Preview chapters'}
+                        onclick={() => openChapterPreview(result)}
+                      >
                         <Eye size="16" />
                       </button>
                     {/if}
@@ -494,7 +505,7 @@
                             class="add-btn"
                             disabled={addingState[result.asin] === 'adding'}
                             onclick={() => addAudnexusReference(result)}
-                            title="Add as Reference"
+                            use:tooltip={'Add as Reference'}
                           >
                             {#if addingState[result.asin] === 'adding'}
                               <div class="spinner small"></div>

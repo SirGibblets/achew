@@ -3,6 +3,7 @@
   import Pause from '@lucide/svelte/icons/pause';
   import Play from '@lucide/svelte/icons/play';
   import { onDestroy, onMount, tick } from 'svelte';
+  import { tooltip } from '../../actions/tooltip';
   import { audio, currentSegmentId, isPlaying } from '../../stores/audio';
   import { chapters } from '../../stores/session';
   import type { BasicChapter, ChapterData } from '../../types/chapter';
@@ -346,7 +347,8 @@
             e.stopPropagation();
             playChapter(chapter.id);
           }}
-          title="Play"
+          aria-label="Play"
+          use:tooltip={'Play'}
         >
           {#if $currentSegmentId === chapter.id && $isPlaying}
             <Pause size="14" />

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tooltip } from '../../actions/tooltip';
   import { session, chapters } from '../../stores/session';
   import { api, handleApiError } from '../../utils/api';
   import { audio } from '../../stores/audio';
@@ -226,7 +227,8 @@
               class="view-titles-btn"
               onclick={() => (selectedRefIsCustom ? (showCustomTitles = true) : viewChapterTitles())}
               disabled={!selectedRefId}
-              title={selectedRefIsCustom ? 'Edit custom titles' : 'View chapter titles from selected Reference'}
+              aria-label={selectedRefIsCustom ? 'Edit custom titles' : 'View chapter titles from selected Reference'}
+              use:tooltip={selectedRefIsCustom ? 'Edit custom titles' : 'View chapter titles from selected Reference'}
             >
               {#if selectedRefIsCustom}
                 <Pencil size="20" />
@@ -238,7 +240,8 @@
               type="button"
               class="view-titles-btn"
               onclick={() => (showAddReference = true)}
-              title="Add Chapter Reference"
+              aria-label="Add Chapter Reference"
+              use:tooltip={'Add Chapter Reference'}
             >
               <Plus size="20" />
             </button>

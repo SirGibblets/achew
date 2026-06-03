@@ -1,5 +1,6 @@
 <script lang="ts">
   import { slide, fade } from 'svelte/transition';
+  import { tooltip } from '../actions/tooltip';
   import { session } from '../stores/session';
   import { api } from '../utils/api';
   import AudiobookCard from './AudiobookCard.svelte';
@@ -29,7 +30,6 @@
   let validationError = $state('');
   let isValidating = $state(false);
   let isDebouncing = $state(false);
-  let showHelp = $state(false);
   let bookInfo = $state<BookInfo | null>(null);
   let isValidItem = $state(false);
 
@@ -323,31 +323,26 @@
               autocomplete="off"
               spellcheck="false"
             />
+            {#snippet helpContent()}
+              <div class="help-tooltip-content">
+                <p>
+                  When viewing a book in Audiobookshelf, the Item ID can be found in the URL after <em>"/item/"</em>
+                </p>
+                <code
+                  >https://your-abs-server.com/library/item/<span class="url-id-highlight"
+                    >6f0aa6e5-684a-4823-aaeb-1a15c7084902</span
+                  ></code
+                >
+              </div>
+            {/snippet}
             <button
               type="button"
               class="help-icon"
-              onclick={() => (showHelp = !showHelp)}
-              onmouseenter={() => (showHelp = true)}
-              onmouseleave={() => (showHelp = false)}
               aria-label="Where to find the Item ID"
+              use:tooltip={{ content: helpContent, maxWidth: 650, delay: 0 }}
             >
               <CircleQuestionMark size="16" color="var(--text-muted)" />
             </button>
-
-            {#if showHelp}
-              <div class="help-tooltip">
-                <div class="help-tooltip-content">
-                  <p>
-                    When viewing a book in Audiobookshelf, the Item ID can be found in the URL after <em>"/item/"</em>
-                  </p>
-                  <code
-                    >https://your-abs-server.com/library/item/<span class="url-id-highlight"
-                      >6f0aa6e5-684a-4823-aaeb-1a15c7084902</span
-                    ></code
-                  >
-                </div>
-              </div>
-            {/if}
           </div>
           {#if validationError}
             <div class="invalid-feedback">
@@ -572,36 +567,6 @@
     background-color: var(--bg-secondary);
   }
 
-  .help-tooltip {
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    margin-bottom: 8px;
-    width: 650px;
-    max-width: 90vw;
-    background: var(--bg-primary);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    z-index: 10;
-    animation: fadeInDown 0.2s ease-out;
-  }
-
-  @keyframes fadeInDown {
-    from {
-      opacity: 0;
-      transform: translateX(-50%) translateY(8px);
-    }
-    to {
-      opacity: 1;
-      transform: translateX(-50%) translateY(0);
-    }
-  }
-
-  .help-tooltip-content {
-    padding: 1rem;
-  }
-
   .help-tooltip-content p {
     margin: 0 0 0.5rem 0;
     color: var(--text-primary);
@@ -801,10 +766,6 @@
 
     .input-container {
       max-width: 100%;
-    }
-
-    .help-tooltip {
-      width: 95vw;
     }
 
     .help-tooltip-content code {

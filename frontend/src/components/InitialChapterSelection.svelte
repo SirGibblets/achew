@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { tooltip } from '../actions/tooltip';
   import { session } from '../stores/session';
   import { api } from '../utils/api';
   import DocLink from './DocLink.svelte';
@@ -42,8 +43,6 @@
   let activeComparisonRef = $state<string | null>(null);
   let showUsageHints = $state(false);
   let includeUnalignedRefs = $state<Record<string, boolean>>({});
-  let showTooltip = $state(false);
-  let showSensitivityTooltip = $state(false);
 
   let timelineTooltip = $state<TimelineTooltip>({
     show: false,
@@ -474,73 +473,68 @@
         </h4>
         <div class="existing-chapter-toggles">
           {#if chapterRefs.length > 0}
+            {#snippet legendContent()}
+              <div class="tooltip-header">Timeline Comparison Legend</div>
+              <div class="tooltip-content">
+                <div class="legend-item">
+                  <div class="legend-visual">
+                    <div class="mini-timeline">
+                      <div class="mini-timeline-line"></div>
+                      <div class="mini-timeline-line bottom"></div>
+                      <div class="mini-tick existing unaligned" style="left: 50%"></div>
+                    </div>
+                  </div>
+                  <div class="legend-text">
+                    <strong>Red ticks:</strong> Unaligned Reference chapter
+                  </div>
+                </div>
+
+                <div class="legend-item">
+                  <div class="legend-visual">
+                    <div class="mini-timeline">
+                      <div class="mini-timeline-line"></div>
+                      <div class="mini-timeline-line bottom"></div>
+                      <div class="mini-tick new unaligned" style="left: 50%"></div>
+                    </div>
+                  </div>
+                  <div class="legend-text">
+                    {#if isDarkMode}
+                      <strong>White ticks:</strong> Unaligned selected cue
+                    {:else}
+                      <strong>Black ticks:</strong> Unaligned selected cue
+                    {/if}
+                  </div>
+                </div>
+
+                <div class="legend-item">
+                  <div class="legend-visual">
+                    <div class="mini-timeline">
+                      <div class="mini-timeline-line"></div>
+                      <div class="mini-timeline-line bottom"></div>
+                      <div class="mini-tick existing aligned" style="left: 50%"></div>
+                      <div class="mini-tick new aligned" style="left: 50%"></div>
+                    </div>
+                  </div>
+                  <div class="legend-text">
+                    {#if isDarkMode}
+                      <strong>Yellow/Green ticks:</strong> Selected cue aligned with Reference chapter
+                    {:else}
+                      <strong>Blue/Purple ticks:</strong> Selected cue aligned with Reference chapter
+                    {/if}
+                  </div>
+                </div>
+              </div>
+            {/snippet}
             <div class="compare-label">
               Compare to:
               <div
                 class="tooltip-container"
                 role="button"
                 tabindex="0"
-                onmouseenter={() => (showTooltip = true)}
-                onmouseleave={() => (showTooltip = false)}
-                onfocus={() => (showTooltip = true)}
-                onblur={() => (showTooltip = false)}
                 aria-label="Show timeline legend"
+                use:tooltip={{ content: legendContent, delay: 0 }}
               >
                 <CircleQuestionMark size="14" />
-                {#if showTooltip}
-                  <div class="tooltip">
-                    <div class="tooltip-header">Timeline Comparison Legend</div>
-                    <div class="tooltip-content">
-                      <div class="legend-item">
-                        <div class="legend-visual">
-                          <div class="mini-timeline">
-                            <div class="mini-timeline-line"></div>
-                            <div class="mini-timeline-line bottom"></div>
-                            <div class="mini-tick existing unaligned" style="left: 50%"></div>
-                          </div>
-                        </div>
-                        <div class="legend-text">
-                          <strong>Red ticks:</strong> Unaligned Reference chapter
-                        </div>
-                      </div>
-
-                      <div class="legend-item">
-                        <div class="legend-visual">
-                          <div class="mini-timeline">
-                            <div class="mini-timeline-line"></div>
-                            <div class="mini-timeline-line bottom"></div>
-                            <div class="mini-tick new unaligned" style="left: 50%"></div>
-                          </div>
-                        </div>
-                        <div class="legend-text">
-                          {#if isDarkMode}
-                            <strong>White ticks:</strong> Unaligned selected cue
-                          {:else}
-                            <strong>Black ticks:</strong> Unaligned selected cue
-                          {/if}
-                        </div>
-                      </div>
-
-                      <div class="legend-item">
-                        <div class="legend-visual">
-                          <div class="mini-timeline">
-                            <div class="mini-timeline-line"></div>
-                            <div class="mini-timeline-line bottom"></div>
-                            <div class="mini-tick existing aligned" style="left: 50%"></div>
-                            <div class="mini-tick new aligned" style="left: 50%"></div>
-                          </div>
-                        </div>
-                        <div class="legend-text">
-                          {#if isDarkMode}
-                            <strong>Yellow/Green ticks:</strong> Selected cue aligned with Reference chapter
-                          {:else}
-                            <strong>Blue/Purple ticks:</strong> Selected cue aligned with Reference chapter
-                          {/if}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                {/if}
               </div>
             </div>
           {/if}
@@ -549,7 +543,7 @@
               class="toggle-btn"
               class:active={activeComparisonRef === ref.id}
               onclick={() => toggleChapterRefDisplay(ref.id)}
-              title="Show/hide {ref.name} ({ref.chapters.length} chapters)"
+              use:tooltip={`Show/hide ${ref.name} (${ref.chapters.length} chapters)`}
             >
               {ref.short_name} ({ref.chapters.length})
             </button>
@@ -722,19 +716,13 @@
             <div
               class="tooltip-container"
               role="button"
-              tabindex="0"
-              onmouseenter={() => (showSensitivityTooltip = true)}
-              onmouseleave={() => (showSensitivityTooltip = false)}
-              onfocus={() => (showSensitivityTooltip = true)}
-              onblur={() => (showSensitivityTooltip = false)}
               aria-label="Sensitivity explanation"
+              use:tooltip={{
+                text: 'Adjusts the likelihood that cues near the start and end of the audiobook will be included.',
+                delay: 0,
+              }}
             >
               <CircleQuestionMark size="13" />
-              {#if showSensitivityTooltip}
-                <div class="sensitivity-tooltip">
-                  Adjusts the likelihood that cues near the start and end of the audiobook will be included.
-                </div>
-              {/if}
             </div>
             <div class="chevron {showSensitivity ? 'rotated' : ''}">
               <ChevronDown size="12" />
@@ -1261,27 +1249,6 @@
     border-radius: 1px;
   }
 
-  .sensitivity-tooltip {
-    position: absolute;
-    top: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    margin-top: 0.5rem;
-    background: var(--bg-primary);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    padding: 0.75rem 1rem;
-    z-index: 1000;
-    width: 280px;
-    font-size: 0.8rem;
-    line-height: 1.5;
-    color: var(--text-secondary);
-    white-space: normal;
-    text-align: left;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    pointer-events: none;
-  }
-
   .sensitivity-axis-label {
     font-size: 0.75rem;
     color: var(--text-muted);
@@ -1526,22 +1493,6 @@
     pointer-events: none;
   }
 
-  .tooltip {
-    position: absolute;
-    top: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    margin-top: 0.5rem;
-    background: var(--bg-primary);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    padding: 1rem;
-    z-index: 1000;
-    width: 360px;
-    font-size: 0.875rem;
-    line-height: 1.4;
-  }
-
   .tooltip-header {
     font-weight: 600;
     color: var(--text-primary);
@@ -1749,12 +1700,6 @@
     .hints-list li {
       font-size: 0.9rem;
       margin-bottom: 0.875rem;
-    }
-
-    .tooltip {
-      width: 250px;
-      font-size: 0.8rem;
-      padding: 0.875rem;
     }
 
     .legend-visual {

@@ -135,7 +135,10 @@
       Custom Instructions
       <div
         class="help-icon"
-        use:tooltip={'A persisted library of instructions that can be reused across audiobooks. Check the items you wish to enable for this cleanup.'}
+        use:tooltip={{
+          text: 'A persisted library of instructions that can be reused across audiobooks. Check the items you wish to enable for this cleanup.',
+          delay: 0,
+        }}
       >
         <CircleQuestionMark size="14" />
       </div>
@@ -180,12 +183,13 @@
             <button
               class="delete-btn"
               onclick={() => deleteInstruction(instruction.id)}
-              title="Delete instruction"
+              aria-label="Delete instruction"
+              use:tooltip={'Delete instruction'}
               type="button"
             >
               <Trash2 size="16" />
             </button>
-            <div class="drag-handle" title="Drag to reorder">
+            <div class="drag-handle" use:tooltip={'Drag to reorder'}>
               <GripVertical size="16" />
             </div>
           </div>
