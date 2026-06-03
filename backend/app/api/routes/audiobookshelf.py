@@ -75,6 +75,7 @@ async def get_libraries():
 async def search_library(
     library_id: str,
     q: str = Query(..., description="Search query"),
+    limit: int = Query(12, ge=1, le=100, description="Maximum number of results to return"),
 ):
     """Search for books within a specific library"""
     # Check if API is configured
@@ -101,7 +102,7 @@ async def search_library(
                 )
 
             # Search within the specified library
-            search_results = await abs_service.search_library(library_id, q.strip())
+            search_results = await abs_service.search_library(library_id, q.strip(), limit)
 
             # Add proper cover URLs to the results
             for book in search_results:

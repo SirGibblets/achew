@@ -7,6 +7,8 @@
   import { tooltip } from '../../actions/tooltip';
   import { chapterSearch } from '../../stores/chapterSearch';
   import { session } from '../../stores/session';
+  import { formatDuration } from '../../utils/format';
+  import SeriesPill from '../SeriesPill.svelte';
   import { autoRuleName, autoRuleSetName } from './ruleUtils';
   import type { Rule, RuleSet } from '../../types/rules';
 
@@ -20,6 +22,10 @@
     name: string;
     author?: string;
     series?: string;
+    series_sequence?: string;
+    subtitle?: string;
+    duration?: number;
+    num_audio_files?: number;
     has_cover?: boolean;
     is_ignored: boolean;
     chapters?: ResultChapter[];
@@ -27,6 +33,7 @@
   }
 
   let panelsEl: HTMLDivElement | undefined = $state();
+  let bookListEl: HTMLDivElement | undefined = $state();
   let panelMaxHeight = $state('');
 
   function measurePanels() {
@@ -35,10 +42,39 @@
     panelMaxHeight = `${window.innerHeight - top - 44}px`;
   }
 
+  function navigateList(delta: number) {
+    if (visibleResults.length === 0) return;
+    const currentId = highlightedBook?.id;
+    const currentIndex = currentId ? visibleResults.findIndex((b) => b.id === currentId) : -1;
+    const nextIndex =
+      currentIndex === -1
+        ? delta > 0
+          ? 0
+          : visibleResults.length - 1
+        : Math.min(Math.max(currentIndex + delta, 0), visibleResults.length - 1);
+    const next = visibleResults[nextIndex];
+    if (next) {
+      selectBook(next.id);
+      bookListEl?.querySelector(`[data-book-id="${CSS.escape(next.id)}"]`)?.scrollIntoView({ block: 'nearest' });
+    }
+  }
+
+  function handleKeydown(e: KeyboardEvent) {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    const target = e.target as HTMLElement | null;
+    if (target && (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable)) return;
+    e.preventDefault();
+    navigateList(e.key === 'ArrowDown' ? 1 : -1);
+  }
+
   onMount(() => {
     requestAnimationFrame(measurePanels);
     window.addEventListener('resize', measurePanels);
-    return () => window.removeEventListener('resize', measurePanels);
+    window.addEventListener('keydown', handleKeydown);
+    return () => {
+      window.removeEventListener('resize', measurePanels);
+      window.removeEventListener('keydown', handleKeydown);
+    };
   });
 
   let results = $derived(($chapterSearch.results as ResultBook[] | undefined) || []);
@@ -161,7 +197,7 @@
           {/if}
         </div>
       {:else}
-        <div class="book-list">
+        <div class="book-list" bind:this={bookListEl}>
           {#each visibleResults as book (book.id)}
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -169,6 +205,7 @@
               class="book-item"
               class:highlighted={book.id === highlightedId}
               class:is-ignored={book.is_ignored}
+              data-book-id={book.id}
               onclick={() => selectBook(book.id)}
             >
               <div class="book-cover">
@@ -194,24 +231,45 @@
     <div class="right-panel">
       {#if highlightedBook}
         <div class="detail-header">
-          <strong class="detail-title">{highlightedBook.name}</strong>
-          <span class="chapter-count">
-            {highlightedBook.chapters?.length || 0} chapter{highlightedBook.chapters?.length === 1 ? '' : 's'}
-          </span>
+          <div class="detail-cover">
+            {#if coverUrl(highlightedBook)}
+              <img src={coverUrl(highlightedBook)} alt="" loading="lazy" />
+            {:else}
+              <div class="cover-placeholder"></div>
+            {/if}
+          </div>
+          <div class="detail-info">
+            <div class="detail-title-row">
+              <strong class="detail-title" title={highlightedBook.name}>{highlightedBook.name}</strong>
+              <span class="chapter-count">
+                {highlightedBook.chapters?.length || 0} Chapter{highlightedBook.chapters?.length === 1 ? '' : 's'}
+              </span>
+            </div>
+            {#if highlightedBook.subtitle}
+              <span class="detail-subtitle" title={highlightedBook.subtitle}>{highlightedBook.subtitle}</span>
+            {/if}
+            <div class="detail-pills">
+              {#if highlightedBook.duration}
+                <span class="detail-pill">{formatDuration(highlightedBook.duration)}</span>
+              {/if}
+              {#if (highlightedBook.num_audio_files ?? 0) > 1}
+                <span class="detail-pill">{highlightedBook.num_audio_files} files</span>
+              {/if}
+              {#if highlightedBook.series}
+                <SeriesPill name={highlightedBook.series} sequence={highlightedBook.series_sequence} themed={false} />
+              {/if}
+            </div>
+          </div>
         </div>
 
         <div class="chapter-list">
           {#if (highlightedBook.chapters || []).length === 0}
             <div class="empty-state"><p>No chapter data available.</p></div>
           {:else}
-            <div class="chapter-header-row">
-              <span class="col-time">Time</span>
-              <span class="col-title">Title</span>
-            </div>
-            {#each highlightedBook.chapters ?? [] as ch, i}
+            {#each highlightedBook.chapters ?? [] as ch}
               <div class="chapter-row">
                 <span class="col-time">{formatTime(ch.start_time)}</span>
-                <span class="col-title">{ch.title || `Chapter ${i + 1}`}</span>
+                <span class="col-title">{ch.title || `[No Title]`}</span>
               </div>
             {/each}
           {/if}
@@ -418,12 +476,40 @@
 
   .detail-header {
     display: flex;
-    justify-content: space-between;
-    align-items: baseline;
+    align-items: flex-start;
+    gap: 0.75rem;
     padding: 0.75rem 1rem;
     border-bottom: 1px solid var(--border-color);
     background: var(--bg-secondary);
     flex-shrink: 0;
+  }
+
+  .detail-cover {
+    width: 72px;
+    height: 72px;
+    flex-shrink: 0;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .detail-cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .detail-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .detail-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.75rem;
   }
 
   .detail-title {
@@ -433,13 +519,39 @@
     white-space: nowrap;
     flex: 1;
     min-width: 0;
+    line-height: 1;
   }
 
   .chapter-count {
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
     color: var(--text-secondary);
     flex-shrink: 0;
-    margin-left: 0.75rem;
+  }
+
+  .detail-subtitle {
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .detail-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+    align-items: center;
+    margin-top: 0.25rem;
+  }
+
+  .detail-pill {
+    padding: 0.2rem 0.45rem;
+    border-radius: 100px;
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    border: 1px solid var(--pill-border);
+    white-space: nowrap;
   }
 
   .chapter-list {
@@ -448,21 +560,10 @@
     font-size: 0.875rem;
   }
 
-  .chapter-header-row,
   .chapter-row {
     display: flex;
     gap: 1rem;
     padding: 0.4rem 1rem;
-  }
-
-  .chapter-header-row {
-    position: sticky;
-    top: 0;
-    background: var(--bg-secondary);
-    border-bottom: 1px solid var(--border-color);
-    font-weight: 600;
-    font-size: 0.8125rem;
-    color: var(--text-secondary);
   }
 
   .chapter-row:nth-child(even) {

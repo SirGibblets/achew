@@ -3,6 +3,7 @@
   import { tooltip } from '../actions/tooltip';
   import { session } from '../stores/session';
   import { api } from '../utils/api';
+  import type { Book } from '../types/book';
   import AudiobookCard from './AudiobookCard.svelte';
   import DocLink from './DocLink.svelte';
   import ChapterSearch from './chapter_search/ChapterSearch.svelte';
@@ -39,7 +40,7 @@
   let libraries = $state<LibraryInfo[]>([]);
   let selectedLibrary = $state<LibraryInfo | null>(null);
   let searchQuery = $state('');
-  let searchResults = $state<unknown[]>([]);
+  let searchResults = $state<Book[]>([]);
   let isLoadingLibraries = $state(false);
   let isSearching = $state(false);
   let searchError = $state('');
@@ -191,7 +192,7 @@
     searchError = '';
 
     try {
-      const results = (await api.audiobookshelf.searchLibrary(selectedLibrary.id, searchQuery.trim())) as unknown[];
+      const results = await api.audiobookshelf.searchLibrary(selectedLibrary.id, searchQuery.trim());
       searchResults = results;
 
       if (results.length === 0) {
@@ -431,17 +432,17 @@
       {#if searchResults.length > 0}
         <div class="search-results">
           <div class="results-list">
-            {#each searchResults as bookRaw}
-              {@const book = bookRaw as {
-                id: string;
-                duration: number;
-                media: { metadata: { title: string }; coverPath: string; audioFiles?: unknown[] };
-              }}
+            {#each searchResults as book}
+              {@const meta = book.media.metadata}
+              {@const firstSeries = meta.series?.[0]}
               <AudiobookCard
-                title={book.media.metadata.title}
+                title={meta.title}
+                subtitle={meta.subtitle}
                 duration={book.duration}
                 coverImageUrl={book.media.coverPath}
-                fileCount={book.media.audioFiles?.length || 0}
+                fileCount={book.media.numAudioFiles ?? book.media.audioFiles?.length ?? 1}
+                seriesName={firstSeries?.name ?? meta.seriesName}
+                seriesSequence={firstSeries?.sequence}
                 size="compact"
               >
                 {#snippet actions()}
@@ -470,11 +471,13 @@
       <ChapterSearch />
     {/if}
 
-    <div class="start-docs">
-      <DocLink path="/getting-started/" text="Getting Started" featureName="Getting Started" />
-      &nbsp;·&nbsp;
-      <DocLink path="/getting-started/finding-a-book/" text="Finding a Book" featureName="Finding a Book" />
-    </div>
+    {#if !isChapterSearch}
+      <div class="start-docs">
+        <DocLink path="/getting-started/" text="Getting Started" featureName="Getting Started" />
+        &nbsp;·&nbsp;
+        <DocLink path="/getting-started/finding-a-book/" text="Finding a Book" featureName="Finding a Book" />
+      </div>
+    {/if}
   </div>
 </div>
 

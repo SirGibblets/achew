@@ -469,8 +469,10 @@ export const audiobookshelf = {
     return apiRequest<ABSLibrary[]>('/audiobookshelf/libraries');
   },
 
-  searchLibrary(libraryId: string, query: string) {
-    return apiRequest<Book[]>(`/audiobookshelf/libraries/${libraryId}/search?q=${encodeURIComponent(query)}`);
+  searchLibrary(libraryId: string, query: string, limit = 36) {
+    return apiRequest<Book[]>(
+      `/audiobookshelf/libraries/${libraryId}/search?q=${encodeURIComponent(query)}&limit=${limit}`,
+    );
   },
 
   getLibraryItems(libraryId: string, refresh = false) {

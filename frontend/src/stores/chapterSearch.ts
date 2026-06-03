@@ -14,6 +14,10 @@ interface SearchResultBook {
   name: string;
   author?: string;
   series?: string;
+  series_sequence?: string;
+  subtitle?: string;
+  duration?: number;
+  num_audio_files?: number;
   has_cover?: boolean;
   is_ignored: boolean;
   chapters?: unknown[];

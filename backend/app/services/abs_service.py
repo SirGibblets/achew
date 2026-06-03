@@ -344,11 +344,11 @@ class ABSService:
             logger.error(f"Error fetching libraries: {e}")
             return []
 
-    async def search_library(self, library_id: str, query: str) -> List[Book]:
+    async def search_library(self, library_id: str, query: str, limit: int = 12) -> List[Book]:
         """Search within a specific library, filter for books with audio files"""
         try:
             url = f"{self.config.url}/api/libraries/{library_id}/search"
-            params = {"q": query}
+            params = {"q": query, "limit": limit}
             async with self.session.get(url, headers=self._get_headers(), params=params) as resp:
                 if resp.status == 200:
                     data = await resp.json()
