@@ -50,6 +50,7 @@
 
   /* Component Colors */
   --slider-stop-outline: color-mix(in srgb, var(--text-primary) 25%, transparent);
+  --pill-border: color-mix(in srgb, var(--text-primary) 30%, transparent);
   --compare-accent: #01b3cb;
   --bg-chapter-hover: #00000005;
   --bg-chapter-disabled: var(--bg-tertiary);

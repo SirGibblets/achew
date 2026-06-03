@@ -1,14 +1,19 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import BookHeadphones from '@lucide/svelte/icons/book-headphones';
+  import { formatDuration } from '../utils/format';
+  import SeriesPill from './SeriesPill.svelte';
 
   interface Props {
     title?: string;
+    subtitle?: string | null;
     duration?: number;
     coverImageUrl?: string | null;
     showDuration?: boolean;
     fileCount?: number;
     showFileCount?: boolean;
+    seriesName?: string | null;
+    seriesSequence?: string | null;
     size?: 'normal' | 'compact';
     metadata?: Snippet;
     actions?: Snippet;
@@ -16,27 +21,18 @@
 
   let {
     title = '',
+    subtitle = null,
     duration = 0,
     coverImageUrl = null,
     showDuration = true,
     fileCount = 1,
     showFileCount = true,
+    seriesName = null,
+    seriesSequence = null,
     size = 'normal',
     metadata,
     actions,
   }: Props = $props();
-
-  // Format duration for display
-  function formatDuration(seconds: number): string {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = Math.floor(seconds % 60);
-
-    if (hours > 0) {
-      return `${hours}h ${minutes}m ${secs}s`;
-    }
-    return `${minutes}m ${secs}s`;
-  }
 </script>
 
 <div class="audiobook-card" class:compact={size === 'compact'}>
@@ -49,12 +45,18 @@
   </div>
   <div class="audiobook-details">
     <h3 class="audiobook-title">{title || 'Audiobook'}</h3>
+    {#if subtitle}
+      <p class="audiobook-subtitle" title={subtitle}>{subtitle}</p>
+    {/if}
     <div class="audiobook-metadata">
       {#if showDuration && duration > 0}
         <div class="audiobook-duration">{formatDuration(duration)}</div>
       {/if}
       {#if showFileCount && fileCount > 1}
         <div class="audiobook-file-count">{fileCount} files</div>
+      {/if}
+      {#if seriesName}
+        <SeriesPill name={seriesName} sequence={seriesSequence} />
       {/if}
       {@render metadata?.()}
     </div>
@@ -79,7 +81,7 @@
   }
 
   .audiobook-card.compact {
-    padding: 1rem;
+    padding: 0.75rem;
     gap: 1rem;
   }
 
@@ -95,8 +97,8 @@
   }
 
   .audiobook-card.compact .audiobook-icon {
-    width: 60px;
-    height: 60px;
+    width: 72px;
+    height: 72px;
     font-size: 2rem;
   }
 
@@ -126,6 +128,21 @@
     margin-bottom: 0.25rem;
   }
 
+  .audiobook-subtitle {
+    margin: -0.25rem 0 0.5rem 0;
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .audiobook-card.compact .audiobook-subtitle {
+    margin-top: 0;
+    font-size: 0.85rem;
+  }
+
   .audiobook-metadata {
     display: flex;
     gap: 0.5rem;
@@ -135,13 +152,13 @@
 
   .audiobook-duration,
   .audiobook-file-count {
-    padding: 0.25rem 0.5rem;
+    padding: 0.2rem 0.45rem;
     border-radius: 100px;
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     color: var(--text-primary);
     font-weight: 500;
     display: inline-block;
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    border: 1px solid var(--pill-border);
   }
 
   .audiobook-file-count {

@@ -30,6 +30,10 @@ async def init_db() -> None:
                 name TEXT NOT NULL,
                 author TEXT,
                 series TEXT,
+                series_sequence TEXT,
+                subtitle TEXT,
+                duration REAL,
+                num_audio_files INTEGER,
                 has_cover INTEGER NOT NULL DEFAULT 0
             )
         """)
@@ -56,6 +60,22 @@ async def init_db() -> None:
         except Exception:
             pass  # Column already exists
 
+        # Migration: add book metadata columns and invalidate cache so next sync repopulates them
+        added_metadata_column = False
+        for column, decl in (
+            ("series_sequence", "TEXT"),
+            ("subtitle", "TEXT"),
+            ("duration", "REAL"),
+            ("num_audio_files", "INTEGER"),
+        ):
+            try:
+                await db.execute(f"ALTER TABLE books ADD COLUMN {column} {decl}")
+                added_metadata_column = True
+            except Exception:
+                pass  # Column already exists
+        if added_metadata_column:
+            await db.execute("DELETE FROM books")
+
         await db.commit()
     logger.info(f"Chapter search database initialized at {DB_PATH}")
 
@@ -67,6 +87,10 @@ async def upsert_book(
     name: str,
     author: Optional[str],
     series: Optional[str],
+    series_sequence: Optional[str],
+    subtitle: Optional[str],
+    duration: Optional[float],
+    num_audio_files: Optional[int],
     has_cover: bool,
     chapters: list[dict],
 ) -> None:
@@ -74,16 +98,34 @@ async def upsert_book(
     async with _get_db() as db:
         await db.execute(
             """
-            INSERT INTO books (id, library_id, name, author, series, has_cover)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO books (
+                id, library_id, name, author, series, series_sequence,
+                subtitle, duration, num_audio_files, has_cover
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 library_id=excluded.library_id,
                 name=excluded.name,
                 author=COALESCE(excluded.author, author),
                 series=COALESCE(excluded.series, series),
+                series_sequence=COALESCE(excluded.series_sequence, series_sequence),
+                subtitle=COALESCE(excluded.subtitle, subtitle),
+                duration=COALESCE(excluded.duration, duration),
+                num_audio_files=COALESCE(excluded.num_audio_files, num_audio_files),
                 has_cover=excluded.has_cover
             """,
-            (id, library_id, name, author, series, int(has_cover)),
+            (
+                id,
+                library_id,
+                name,
+                author,
+                series,
+                series_sequence,
+                subtitle,
+                duration,
+                num_audio_files,
+                int(has_cover),
+            ),
         )
         # Replace chapters entirely
         await db.execute("DELETE FROM chapters WHERE book_id = ?", (id,))

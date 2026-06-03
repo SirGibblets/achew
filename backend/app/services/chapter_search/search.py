@@ -26,7 +26,8 @@ async def run_search(
     Evaluate the ruleset against every cached book in the library.
 
     Returns a list of matched books sorted alphabetically by name, each with:
-      - id, name, author, series, has_cover, is_ignored
+      - id, name, author, series, series_sequence, subtitle, has_cover, is_ignored
+      - duration, num_audio_files
       - chapters: list of {title, start_time}
       - matched_rule_ids: list of rule IDs that caused the match
     """
@@ -48,6 +49,10 @@ async def run_search(
                     "name": book["name"],
                     "author": book.get("author"),
                     "series": book.get("series"),
+                    "series_sequence": book.get("series_sequence"),
+                    "subtitle": book.get("subtitle"),
+                    "duration": book.get("duration"),
+                    "num_audio_files": book.get("num_audio_files"),
                     "has_cover": book.get("has_cover", False),
                     "is_ignored": book.get("is_ignored", False),
                     "chapters": book.get("chapters", []),

@@ -162,7 +162,7 @@ async def _fetch_and_cache_book(
     url = f"{_base_url()}/api/items/{book_id}"
 
     try:
-        async with session.get(url, headers=_headers()) as resp:
+        async with session.get(url, headers=_headers(), params={"expanded": 1}) as resp:
             if resp.status != 200:
                 logger.warning(f"Failed to fetch book {book_id}: {resp.status}")
                 return
@@ -186,12 +186,20 @@ async def _fetch_and_cache_book(
 
     has_cover = bool(media.get("coverPath"))
 
+    audio_files = media.get("audioFiles") or []
+    duration = media.get("duration") or sum((f.get("duration") or 0) for f in audio_files) or None
+    num_audio_files = media.get("numAudioFiles") or len(audio_files)
+
     await upsert_book(
         id=book_id,
         library_id=library_id,
         name=metadata.get("title", item.get("name", "")),
         author=_extract_author(metadata) or item.get("author"),
         series=_extract_series_from_metadata(metadata) or item.get("series"),
+        series_sequence=_extract_series_sequence_from_metadata(metadata),
+        subtitle=metadata.get("subtitle"),
+        duration=duration,
+        num_audio_files=num_audio_files,
         has_cover=has_cover,
         chapters=chapters,
     )
@@ -244,10 +252,14 @@ def _extract_series(item: dict) -> Optional[str]:
 
 
 def _extract_series_from_metadata(metadata: dict) -> Optional[str]:
-    series_name = metadata.get("seriesName")
-    if series_name:
-        return series_name
     series_list = metadata.get("series")
     if series_list and isinstance(series_list, list) and series_list:
         return series_list[0].get("name")
+    return metadata.get("seriesName")
+
+
+def _extract_series_sequence_from_metadata(metadata: dict) -> Optional[str]:
+    series_list = metadata.get("series")
+    if series_list and isinstance(series_list, list) and series_list:
+        return series_list[0].get("sequence")
     return None
