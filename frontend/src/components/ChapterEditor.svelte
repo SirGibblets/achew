@@ -3,6 +3,7 @@
   import { SvelteMap } from 'svelte/reactivity';
   import { get } from 'svelte/store';
   import { fade, slide } from 'svelte/transition';
+  import { tooltip } from '../actions/tooltip';
   import { audio, currentSegmentId, isPlaying } from '../stores/audio';
   import DocLink from './DocLink.svelte';
   import {
@@ -908,7 +909,10 @@
                   Offset
                   <div
                     class="help-icon"
-                    data-tooltip="The time difference between the reference chapter timestamp and the realigned timestamp."
+                    use:tooltip={{
+                      text: 'The time difference between the reference chapter timestamp and the realigned timestamp.',
+                      delay: 0,
+                    }}
                   >
                     <CircleHelp size="14" />
                   </div>
@@ -960,7 +964,12 @@
                       class:disabled={timestampValidationError}
                       class:playing={$currentSegmentId === `timestamp-edit-${chapter.id}` && $isPlaying}
                       onclick={() => playFromEditedTimestamp(chapter.id)}
-                      title={timestampValidationError ? 'Cannot play: invalid timestamp' : 'Play from edited timestamp'}
+                      aria-label={timestampValidationError
+                        ? 'Cannot play: invalid timestamp'
+                        : 'Play from edited timestamp'}
+                      use:tooltip={timestampValidationError
+                        ? 'Cannot play: invalid timestamp'
+                        : 'Play from edited timestamp'}
                       disabled={!!timestampValidationError}
                     >
                       {#if $currentSegmentId === `timestamp-edit-${chapter.id}` && $isPlaying}
@@ -982,7 +991,7 @@
                       {#if nearbyCuesError !== null}
                         <span
                           class="jump-fetch-error"
-                          data-tooltip={`Could not load cues: ${nearbyCuesError}`}
+                          use:tooltip={`Could not load cues: ${nearbyCuesError}`}
                           transition:fade={{ duration: 250 }}
                         >
                           <TriangleAlert size="10" />
@@ -997,7 +1006,8 @@
                           class="jump-btn jump-btn-prev"
                           class:loaded={cuesLoaded}
                           disabled={!cuesLoaded || !prevTarget}
-                          data-tooltip={jumpTooltip(prevTarget, current, 'prev')}
+                          aria-label="Jump to previous cue"
+                          use:tooltip={{ text: jumpTooltip(prevTarget, current, 'prev'), dismissOnClick: false }}
                           onmousedown={(e) => e.preventDefault()}
                           onclick={() => jumpToCue('prev', chapter.id)}
                         >
@@ -1008,7 +1018,8 @@
                           class="jump-btn jump-btn-next"
                           class:loaded={cuesLoaded}
                           disabled={!cuesLoaded || !nextTarget}
-                          data-tooltip={jumpTooltip(nextTarget, current, 'next')}
+                          aria-label="Jump to next cue"
+                          use:tooltip={{ text: jumpTooltip(nextTarget, current, 'next'), dismissOnClick: false }}
                           onmousedown={(e) => e.preventDefault()}
                           onclick={() => jumpToCue('next', chapter.id)}
                         >
@@ -1017,19 +1028,29 @@
                       {/if}
                     </div>
                     {#if timestampValidationError}
-                      <button class="timestamp-warning-btn" data-tooltip={timestampValidationError}>
+                      <button
+                        class="timestamp-warning-btn"
+                        aria-label={timestampValidationError}
+                        use:tooltip={timestampValidationError}
+                      >
                         <TriangleAlert size="14" />
                       </button>
                     {:else}
                       <button
                         class="timestamp-save-btn"
                         onclick={() => saveTimestampEdit(chapter.id)}
-                        title="Save timestamp"
+                        aria-label="Save timestamp"
+                        use:tooltip={'Save timestamp'}
                       >
                         <Check size="14" />
                       </button>
                     {/if}
-                    <button class="timestamp-cancel-btn" onclick={cancelTimestampEdit} title="Cancel editing">
+                    <button
+                      class="timestamp-cancel-btn"
+                      onclick={cancelTimestampEdit}
+                      aria-label="Cancel editing"
+                      use:tooltip={'Cancel editing'}
+                    >
                       <X size="14" />
                     </button>
                   </div>
@@ -1037,12 +1058,12 @@
                   <button
                     class="timestamp-display"
                     onclick={() => startTimestampEdit(chapter.id, chapter.timestamp)}
-                    title="Edit timestamp"
+                    use:tooltip={'Edit timestamp'}
                   >
                     {formatTimestamp(chapter.timestamp)}
                   </button>
                 {:else}
-                  <span class="timestamp-display readonly" title="The first chapter must start at 0">
+                  <span class="timestamp-display readonly" use:tooltip={'The first chapter must start at 0'}>
                     {formatTimestamp(chapter.timestamp)}
                   </span>
                 {/if}
@@ -1060,9 +1081,12 @@
                       {#if isGuess || lowConfidence}
                         <div
                           class="warning-icon"
-                          data-tooltip={isGuess
-                            ? 'This timestamp is an estimate. Please verify.'
-                            : 'Low confidence alignment. Please verify.'}
+                          use:tooltip={{
+                            text: isGuess
+                              ? 'This timestamp is an estimate. Please verify.'
+                              : 'Low confidence alignment. Please verify.',
+                            delay: 0,
+                          }}
                         >
                           <TriangleAlert size="14" />
                         </div>
@@ -1073,7 +1097,7 @@
               {/if}
               {#if showTranscriptions}
                 <td class="transcript-cell">
-                  <span class="transcript-tooltip-wrapper" data-tooltip={chapter.transcript}>
+                  <span class="transcript-tooltip-wrapper" use:tooltip={{ text: chapter.transcript, delay: 500 }}>
                     <span class="transcript-text">{chapter.transcript}</span>
                   </span>
                 </td>
@@ -1082,7 +1106,8 @@
                     class="btn btn-sm btn-outline restore-btn"
                     onclick={() => restoreTranscript(chapter.id, chapter.transcript)}
                     disabled={chapter.title === chapter.transcript}
-                    title="Replace title with transcript"
+                    aria-label="Replace title with transcript"
+                    use:tooltip={'Replace title with transcript'}
                   >
                     <ArrowRight size="14" />
                   </button>
@@ -1105,7 +1130,8 @@
                   <button
                     class="transcribe-button"
                     onclick={() => transcribeChapter(chapter.id)}
-                    title="Transcribe chapter title"
+                    aria-label="Transcribe chapter title"
+                    use:tooltip={'Transcribe chapter title'}
                     disabled={!!$transcriptionStatuses[chapter.id]}
                   >
                     <Mic size="16" />
@@ -1114,7 +1140,8 @@
                     class="play-button"
                     class:playing={$currentSegmentId === chapter.id && $isPlaying}
                     onclick={() => playChapter(chapter.id)}
-                    title={$currentSegmentId === chapter.id && $isPlaying ? 'Stop' : 'Play'}
+                    aria-label={$currentSegmentId === chapter.id && $isPlaying ? 'Stop' : 'Play'}
+                    use:tooltip={$currentSegmentId === chapter.id && $isPlaying ? 'Stop' : 'Play'}
                   >
                     {#if $currentSegmentId === chapter.id && $isPlaying}
                       <Pause size="16" />
@@ -1126,7 +1153,8 @@
                     <button
                       class="btn btn-sm btn-danger delete-btn"
                       onclick={() => deleteChapter(chapter.id)}
-                      title="Delete chapter"
+                      aria-label="Delete chapter"
+                      use:tooltip={'Delete chapter'}
                     >
                       <Trash2 size="16" />
                     </button>
@@ -1138,7 +1166,8 @@
                   <button
                     class="add-chapter-button"
                     onclick={() => openAddChapterDialog(chapter.id)}
-                    title="Add chapter after this one"
+                    aria-label="Add chapter after this one"
+                    use:tooltip={'Add chapter after this one'}
                   >
                     <Plus size="16" />
                   </button>
@@ -1186,7 +1215,10 @@
                 <span>Tab to Next</span>
                 <div
                   class="help-icon"
-                  data-tooltip="Press Tab while editing a chapter title to move focus to the next selected chapter"
+                  use:tooltip={{
+                    text: 'Press Tab while editing a chapter title to move focus to the next selected chapter',
+                    delay: 0,
+                  }}
                 >
                   <CircleQuestionMark size="14" />
                 </div>
@@ -1200,7 +1232,10 @@
                     onchange={handleHideTranscriptionsChange}
                   />
                   <span>Hide Transcripts</span>
-                  <div class="help-icon" data-tooltip="Hide the original transcripts to focus on editing titles">
+                  <div
+                    class="help-icon"
+                    use:tooltip={{ text: 'Hide the original transcripts to focus on editing titles', delay: 0 }}
+                  >
                     <CircleQuestionMark size="14" />
                   </div>
                 </label>
@@ -1209,7 +1244,10 @@
               <label class="setting-item">
                 <input type="checkbox" checked={editorSettings.show_formatted_time} onchange={handleTimeFormatChange} />
                 <span>Format Timestamps</span>
-                <div class="help-icon" data-tooltip="Show timestamps as hh:mm:ss instead of seconds">
+                <div
+                  class="help-icon"
+                  use:tooltip={{ text: 'Show timestamps as hh:mm:ss instead of seconds', delay: 0 }}
+                >
                   <CircleQuestionMark size="14" />
                 </div>
               </label>
@@ -1228,7 +1266,7 @@
                 {#if ($session.chapterRefs || []).length > 0}
                   <button
                     class="btn btn-cancel btn-sm tool-btn full-width"
-                    title="Apply titles from a chapter reference"
+                    use:tooltip={'Apply titles from a chapter reference'}
                     onclick={() => (showApplyTitlesDialog = true)}
                   >
                     <BookMarked size="16" color="var(--primary-color)" />
@@ -1237,7 +1275,7 @@
                 {/if}
                 <button
                   class="btn btn-cancel btn-sm tool-btn full-width"
-                  title="Shift Timestamps"
+                  use:tooltip={'Shift Timestamps'}
                   onclick={() => (showShiftTimestampsDialog = true)}
                 >
                   <Clock size="16" color="var(--primary-color)" />
@@ -1245,7 +1283,7 @@
                 </button>
                 <button
                   class="btn btn-cancel btn-sm tool-btn full-width"
-                  title="Transcribe Selected"
+                  use:tooltip={'Transcribe Selected'}
                   onclick={transcribeSelected}
                   disabled={$selectionStats.selected === 0 || Object.keys($transcriptionStatuses).length > 0}
                 >
@@ -1256,7 +1294,7 @@
               <div class="tools-column">
                 <button
                   class="btn btn-cancel btn-sm tool-btn full-width"
-                  title="Delete Selected"
+                  use:tooltip={'Delete Selected'}
                   onclick={() => deleteBySelection('selected')}
                   disabled={$selectionStats.selected === 0}
                 >
@@ -1265,7 +1303,7 @@
                 </button>
                 <button
                   class="btn btn-cancel btn-sm tool-btn full-width"
-                  title="Delete Unselected"
+                  use:tooltip={'Delete Unselected'}
                   onclick={() => deleteBySelection('unselected')}
                   disabled={$selectionStats.unselected === 0}
                 >
@@ -1290,7 +1328,7 @@
             class="btn btn-outline btn-sm undo-redo-btn"
             onclick={undo}
             disabled={!$canUndo}
-            title="Undo last action"
+            use:tooltip={'Undo last action'}
           >
             <Undo size="16" />
             Undo
@@ -1299,7 +1337,7 @@
             class="btn btn-outline btn-sm undo-redo-btn"
             onclick={redo}
             disabled={!$canRedo}
-            title="Redo next action"
+            use:tooltip={'Redo next action'}
           >
             Redo
             <Redo size="16" />
@@ -1311,7 +1349,8 @@
             class="btn btn-cancel btn-sm tools-toggle"
             class:active={showSettings}
             onclick={toggleSettingsPanel}
-            title="Additional tools and settings"
+            aria-label="Additional tools and settings"
+            use:tooltip={'Additional tools and settings'}
           >
             <MoreVertical size="16" />
           </button>
@@ -1319,7 +1358,7 @@
             class="btn btn-ai btn-sm"
             onclick={processSelectedWithAI}
             disabled={$selectionStats.selected === 0 || loading}
-            title="Enhance selected chapter titles with AI"
+            use:tooltip={'Enhance selected chapter titles with AI'}
           >
             <Icon name="ai" size="16" color="white" />
             Clean Up Selected
@@ -1778,24 +1817,6 @@
     right: 0.15rem;
   }
 
-  .jump-btn[data-tooltip]:hover::after {
-    content: attr(data-tooltip);
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%) translateY(-6px);
-    padding: 6px 10px;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    font-size: 0.8125rem;
-    line-height: 1.3;
-    white-space: nowrap;
-    z-index: 10001;
-    pointer-events: none;
-  }
-
   .jump-fetch-error {
     position: absolute;
     right: 0.3rem;
@@ -1807,25 +1828,6 @@
     color: var(--warning);
     opacity: 0.6;
     cursor: help;
-  }
-
-  .jump-fetch-error[data-tooltip]:hover::after {
-    content: attr(data-tooltip);
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%) translateY(-6px);
-    padding: 6px 10px;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    font-size: 0.8125rem;
-    line-height: 1.3;
-    white-space: nowrap;
-    max-width: 260px;
-    z-index: 10001;
-    pointer-events: none;
   }
 
   .timestamp-input:focus {
@@ -1880,36 +1882,6 @@
     position: relative;
   }
 
-  .timestamp-warning-btn[data-tooltip]:hover::after {
-    content: attr(data-tooltip);
-    position: absolute;
-    transform: translateY(calc(-50% - 18px));
-    padding: 8px 12px;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    font-size: 0.875rem;
-    line-height: 1.4;
-    white-space: pre-line;
-    max-width: 320px;
-    width: max-content;
-    z-index: 10001;
-    pointer-events: none;
-  }
-
-  .timestamp-warning-btn[data-tooltip]:hover::before {
-    content: '';
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    margin-bottom: -5px;
-    border: 6px solid transparent;
-    border-top-color: var(--border-color);
-    z-index: 10002;
-  }
-
   .transcript-cell {
     min-width: 120px;
     max-width: 280px;
@@ -1937,39 +1909,6 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-
-  .transcript-tooltip-wrapper[data-tooltip]::after {
-    content: attr(data-tooltip);
-    position: absolute;
-    bottom: 100%;
-    left: 0;
-    margin-bottom: 8px;
-    padding: 8px 12px;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    font-size: 0.75rem;
-    font-style: normal;
-    line-height: 1.4;
-    white-space: normal;
-    width: max-content;
-    max-width: 480px;
-    z-index: 10001;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
-    transition:
-      opacity 0.15s ease,
-      visibility 0s linear 0.15s;
-  }
-
-  .transcript-tooltip-wrapper[data-tooltip]:hover::after {
-    opacity: 1;
-    visibility: visible;
-    transition-delay: 0.5s, 0.5s;
   }
 
   .title-cell {
@@ -2341,40 +2280,6 @@
     background: var(--bg-tertiary);
   }
 
-  .help-icon[data-tooltip]:hover::after {
-    content: attr(data-tooltip);
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    margin-bottom: 12px;
-    padding: 8px 12px;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    font-size: 0.75rem;
-    line-height: 1.4;
-    white-space: pre-line;
-    width: max-content;
-    max-width: 240px;
-    z-index: 10001;
-    pointer-events: none;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    font-weight: normal;
-  }
-
-  .help-icon[data-tooltip]:hover::before {
-    content: '';
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    border: 6px solid transparent;
-    border-top-color: var(--border-color);
-    z-index: 10002;
-  }
-
   .tools-toggle {
     padding: 0 !important;
     width: 2.25rem;
@@ -2425,39 +2330,6 @@
     align-items: center;
     cursor: help;
     position: relative;
-  }
-
-  .warning-icon[data-tooltip]:hover::after {
-    content: attr(data-tooltip);
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    margin-bottom: 11px;
-    padding: 8px 12px;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    font-size: 0.75rem;
-    line-height: 1.4;
-    white-space: pre-line;
-    width: max-content;
-    max-width: 200px;
-    z-index: 10001;
-    pointer-events: none;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  }
-
-  .warning-icon[data-tooltip]:hover::before {
-    content: '';
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    border: 6px solid transparent;
-    border-top-color: var(--border-color);
-    z-index: 10002;
   }
 
   .header-with-icon {

@@ -4,6 +4,7 @@
   import Search from '@lucide/svelte/icons/search';
   import Trash2 from '@lucide/svelte/icons/trash-2';
 
+  import { tooltip } from '../../actions/tooltip';
   import { chapterSearch } from '../../stores/chapterSearch';
   import { hasEnabledRules } from './ruleUtils';
   import RuleEditor from './RuleEditor.svelte';
@@ -90,7 +91,7 @@
         class="search-btn"
         onclick={handleSearch}
         disabled={!canSearch}
-        title={!selectedLibrary
+        use:tooltip={!selectedLibrary
           ? 'Select a library'
           : !rootRuleset || !hasEnabledRules(rootRuleset)
             ? 'Enable at least one rule'
@@ -103,7 +104,7 @@
         class="help-btn"
         onclick={() => (helpOpen = true)}
         aria-label="Help"
-        title="How does Chapter Search work?"
+        use:tooltip={'Click to view how Chapter Search works'}
       >
         <CircleQuestionMark size="18" />
       </button>
@@ -126,7 +127,7 @@
 
   <!-- Bottom controls -->
   <div class="cache-row">
-    <button class="stats-btn" onclick={handleStats} disabled={!selectedLibrary} title="View library statistics">
+    <button class="stats-btn" onclick={handleStats} disabled={!selectedLibrary} use:tooltip={'View library statistics'}>
       <BarChart3 size="14" />
       Library Stats
     </button>
@@ -134,7 +135,7 @@
       class="cache-btn"
       onclick={clearCache}
       disabled={clearingCache}
-      title="Clear cached chapter data for this library. The next search will re-sync all books."
+      use:tooltip={'Clear cached chapter data for this library. The next search will re-sync all books.'}
     >
       <Trash2 size="14" />
       {clearingCache ? 'Clearing…' : `Clear Cache${selectedLibrary ? ` for ${selectedLibrary.name}` : ''}`}

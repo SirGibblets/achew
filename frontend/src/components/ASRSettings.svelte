@@ -363,7 +363,10 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
                 {#if currentASRLanguage === 'auto' && availableLanguages.length > 1}
                   <div
                     class="warning-icon"
-                    use:tooltip={'Transcription tends to be faster and more accurate when the audio language is specified.'}
+                    use:tooltip={{
+                      text: 'Transcription tends to be faster and more accurate when the audio language is specified.',
+                      delay: 0,
+                    }}
                   >
                     <TriangleAlert size="14" />
                   </div>
@@ -419,7 +422,10 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
             Trim segments
             <div
               class="help-icon"
-              use:tooltip={'Trimming can help increase transcription speed and accuracy by removing excess speech from chapter audio segments. Disable this if transcripts are frequently blank, nonsensical, or missing desired portions of the chapter title.'}
+              use:tooltip={{
+                text: 'Trimming can help increase transcription speed and accuracy by removing excess speech from chapter audio segments. Disable this if transcripts are frequently blank, nonsensical, or missing desired portions of the chapter title.',
+                delay: 0,
+              }}
             >
               <CircleQuestionMark size="14" />
             </div>
@@ -429,7 +435,10 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
         <label
           class="checkbox-label"
           class:disabled={!currentServiceSupportsBiasWords}
-          use:tooltip={!currentServiceSupportsBiasWords ? 'Not available for this transcription service' : null}
+          use:tooltip={{
+            text: !currentServiceSupportsBiasWords ? 'Not available for this transcription service' : null,
+            delay: 0,
+          }}
         >
           <input
             type="checkbox"
@@ -443,7 +452,10 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
             {#if currentServiceSupportsBiasWords}
               <div
                 class="help-icon"
-                use:tooltip={"Bias words can help guide the transcription model toward more consistent results. For example, providing numerical digits helps the model produce chapter numbers as digits instead of words. Providing a list of uncommon words or names can help the model spell those correctly. You'll want to ensure that the bias words are in the same language as the audiobook."}
+                use:tooltip={{
+                  text: "Bias words can help guide the transcription model toward more consistent results. For example, providing numerical digits helps the model produce chapter numbers as digits instead of words. Providing a list of uncommon words or names can help the model spell those correctly. You'll want to ensure that the bias words are in the same language as the audiobook.",
+                  delay: 0,
+                }}
               >
                 <CircleQuestionMark size="14" />
               </div>
@@ -467,7 +479,8 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
               type="button"
               class="reset-button"
               onclick={resetBiasWords}
-              title="Reset to default"
+              aria-label="Reset to default"
+              use:tooltip={'Reset to default'}
               disabled={asrOptionsLoading}
             >
               <RotateCcw size="12" />
@@ -495,7 +508,10 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
               <label for="segment-length">Transcription Length</label>
               <div
                 class="help-icon"
-                use:tooltip={'The length of audio to be transcribed for each chapter title. Increase this if your audiobook has unusually long titles.'}
+                use:tooltip={{
+                  text: 'The length of audio to be transcribed for each chapter title. Increase this if your audiobook has unusually long titles.',
+                  delay: 0,
+                }}
               >
                 <CircleQuestionMark size="14" />
               </div>

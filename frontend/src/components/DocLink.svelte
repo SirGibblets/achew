@@ -36,7 +36,7 @@
   class="doc-link"
   class:icon-only={!text}
   class:explicit-size={size != null}
-  use:tooltip={tooltipText}
+  use:tooltip={{ text: tooltipText, delay: 0 }}
 >
   {#if text}
     {#if inlineIcon}<BookOpen {...iconProps} class="inline-icon" />{/if}{text}

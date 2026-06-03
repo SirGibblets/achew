@@ -196,7 +196,10 @@
     </select>
     <div
       class="help-icon"
-      use:tooltip={'Use titles from a Chapter Reference whose timestamps line up with pending chapters. Selected titles are applied directly, while the remaining titles will be transcribed.'}
+      use:tooltip={{
+        text: 'Use titles from a Chapter Reference whose timestamps line up with pending chapters. Selected titles are applied directly; only the remaining titles will be transcribed.',
+        delay: 0,
+      }}
     >
       <CircleQuestionMark size="14" />
     </div>
@@ -238,7 +241,8 @@
                     e.stopPropagation();
                     playSegment(row.id, row.timestamp);
                   }}
-                  title="Play"
+                  aria-label="Play"
+                  use:tooltip={'Play'}
                 >
                   {#if $currentSegmentId === row.id && $isPlaying}
                     <Pause size="14" />
@@ -264,7 +268,8 @@
                     e.stopPropagation();
                     playSegment(row.id, row.timestamp);
                   }}
-                  title="Play"
+                  aria-label="Play"
+                  use:tooltip={'Play'}
                 >
                   {#if $currentSegmentId === row.id && $isPlaying}
                     <Pause size="14" />

@@ -19,7 +19,7 @@
       await navigator.clipboard.writeText(text);
       copied = true;
       if (timeout) clearTimeout(timeout);
-      timeout = setTimeout(() => (copied = false), 1500);
+      timeout = setTimeout(() => (copied = false), 3000);
     } catch (error) {
       console.error('Failed to copy to clipboard:', error);
     }
@@ -31,7 +31,7 @@
   class:copied
   type="button"
   onclick={copy}
-  use:tooltip={copied ? 'Copied!' : label}
+  use:tooltip={{ text: copied ? 'Copied!' : label, delay: 0, dismissOnClick: false }}
   aria-label={copied ? 'Copied' : label}
 >
   {#if copied}

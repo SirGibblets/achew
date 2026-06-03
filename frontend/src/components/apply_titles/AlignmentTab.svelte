@@ -2,6 +2,7 @@
   import CornerDownRight from '@lucide/svelte/icons/corner-down-right';
   import Pause from '@lucide/svelte/icons/pause';
   import Play from '@lucide/svelte/icons/play';
+  import { tooltip } from '../../actions/tooltip';
   import { audio, currentSegmentId, isPlaying } from '../../stores/audio';
   import { chapters } from '../../stores/session';
   import type { ChapterReference } from '../../types/references';
@@ -135,7 +136,8 @@
             e.stopPropagation();
             playChapter(chapter.id);
           }}
-          title="Play"
+          aria-label="Play"
+          use:tooltip={'Play'}
         >
           {#if $currentSegmentId === chapter.id && $isPlaying}
             <Pause size="14" />
@@ -171,7 +173,8 @@
             e.stopPropagation();
             playChapter(chapter.id);
           }}
-          title="Play"
+          aria-label="Play"
+          use:tooltip={'Play'}
         >
           {#if $currentSegmentId === chapter.id && $isPlaying}
             <Pause size="14" />

@@ -1,16 +1,22 @@
+import { mount, unmount, type Snippet } from 'svelte';
 import type { Action } from 'svelte/action';
+import TooltipContent from './TooltipContent.svelte';
 
 export interface TooltipOptions {
   /** The tooltip text. When empty/null, the tooltip is disabled. */
   text?: string | null;
   /** Preferred side. Flips automatically when there isn't room. Default 'top'. */
   placement?: 'top' | 'bottom';
-  /** Delay in ms before showing on hover/focus. Default 0 (instant). */
+  /** Delay in ms before showing on hover/focus. Default 800 (matches native `title`). */
   delay?: number;
   /** Max bubble width in px. Default 360. */
   maxWidth?: number;
   /** Whether to render the little arrow. Default true. */
   showArrow?: boolean;
+  /** Hide the tooltip when its node is clicked. Default true). */
+  dismissOnClick?: boolean;
+  /** Rich content rendered into the bubble instead of `text`. */
+  content?: Snippet;
 }
 
 export type TooltipParam = string | null | undefined | TooltipOptions;
@@ -20,17 +26,20 @@ const MARGIN = 8;
 const ARROW = 7;
 
 function normalize(param: TooltipParam): Required<
-  Pick<TooltipOptions, 'placement' | 'delay' | 'maxWidth' | 'showArrow'>
+  Pick<TooltipOptions, 'placement' | 'delay' | 'maxWidth' | 'showArrow' | 'dismissOnClick'>
 > & {
   text: string;
+  content: Snippet | null;
 } {
-  const opts = typeof param === 'string' || param == null ? { text: param } : param;
+  const opts: TooltipOptions = typeof param === 'string' || param == null ? { text: param } : param;
   return {
     text: (opts.text ?? '').trim(),
+    content: opts.content ?? null,
     placement: opts.placement ?? 'top',
-    delay: opts.delay ?? 0,
+    delay: opts.delay ?? 800,
     maxWidth: opts.maxWidth ?? 360,
     showArrow: opts.showArrow ?? true,
+    dismissOnClick: opts.dismissOnClick ?? true,
   };
 }
 
@@ -38,13 +47,17 @@ function normalize(param: TooltipParam): Required<
  * Tooltip rendered in a body-level fixed layer to avoid being clipped in
  * dialogs or overflow containers.
  *
+ * Shows after an 800ms hover/keyboard-focus delay and hides on click.
+ * Override per call site via the options object.
+ *
  * Usage: `<button use:tooltip={'Help text'}>` or
- *        `<span use:tooltip={{ text, placement: 'bottom', delay: 300 }}>`
+ *        `<span use:tooltip={{ text, placement: 'bottom', delay: 0 }}>`
  */
 export const tooltip: Action<HTMLElement, TooltipParam> = (node, param) => {
   let opts = normalize(param);
   let bubble: HTMLDivElement | null = null;
   let arrow: HTMLDivElement | null = null;
+  let instance: ReturnType<typeof mount> | null = null;
   let showTimer: ReturnType<typeof setTimeout> | null = null;
 
   function position() {
@@ -84,12 +97,17 @@ export const tooltip: Action<HTMLElement, TooltipParam> = (node, param) => {
   }
 
   function show() {
-    if (bubble || !opts.text) return;
+    if (bubble || (!opts.text && !opts.content)) return;
 
     bubble = document.createElement('div');
     bubble.className = 'app-tooltip';
-    bubble.textContent = opts.text;
     bubble.style.maxWidth = `${opts.maxWidth}px`;
+
+    if (opts.content) {
+      instance = mount(TooltipContent, { target: bubble, props: { content: opts.content } });
+    } else {
+      bubble.textContent = opts.text;
+    }
 
     if (opts.showArrow) {
       arrow = document.createElement('div');
@@ -112,13 +130,17 @@ export const tooltip: Action<HTMLElement, TooltipParam> = (node, param) => {
     }
     window.removeEventListener('scroll', hide, true);
     window.removeEventListener('resize', hide);
+    if (instance) {
+      unmount(instance);
+      instance = null;
+    }
     bubble?.remove();
     bubble = null;
     arrow = null;
   }
 
   function onEnter() {
-    if (!opts.text || bubble) return;
+    if ((!opts.text && !opts.content) || bubble) return;
     if (opts.delay > 0) {
       showTimer = setTimeout(show, opts.delay);
     } else {
@@ -126,30 +148,41 @@ export const tooltip: Action<HTMLElement, TooltipParam> = (node, param) => {
     }
   }
 
+  function onFocusIn() {
+    if (node.matches(':focus-visible')) onEnter();
+  }
+
+  function onClick() {
+    if (opts.dismissOnClick) hide();
+  }
+
   node.addEventListener('mouseenter', onEnter);
   node.addEventListener('mouseleave', hide);
-  node.addEventListener('focusin', onEnter);
+  node.addEventListener('focusin', onFocusIn);
   node.addEventListener('focusout', hide);
+  node.addEventListener('click', onClick);
 
   return {
     update(next: TooltipParam) {
       opts = normalize(next);
-      if (bubble) {
-        if (!opts.text) {
-          hide();
-        } else {
-          bubble.firstChild!.textContent = opts.text;
-          bubble.style.maxWidth = `${opts.maxWidth}px`;
-          position();
-        }
+      if (!bubble) return;
+      if (!opts.text && !opts.content) {
+        hide();
+        return;
       }
+      bubble.style.maxWidth = `${opts.maxWidth}px`;
+      if (!opts.content) {
+        bubble.firstChild!.textContent = opts.text;
+      }
+      position();
     },
     destroy() {
       hide();
       node.removeEventListener('mouseenter', onEnter);
       node.removeEventListener('mouseleave', hide);
-      node.removeEventListener('focusin', onEnter);
+      node.removeEventListener('focusin', onFocusIn);
       node.removeEventListener('focusout', hide);
+      node.removeEventListener('click', onClick);
     },
   };
 };

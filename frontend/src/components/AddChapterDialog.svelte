@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tooltip } from '../actions/tooltip';
   import { api, handleApiError } from '../utils/api';
   import { audio, currentSegmentId, isPlaying } from '../stores/audio';
   import DocLink from './DocLink.svelte';
@@ -437,14 +438,16 @@
                         <button
                           class="timestamp-adjust"
                           onclick={() => adjustTimestamp(1)}
-                          title="Increase by 1 second"
+                          aria-label="Increase by 1 second"
+                          use:tooltip={'Increase by 1 second'}
                         >
                           <ChevronUp size="16" />
                         </button>
                         <button
                           class="timestamp-adjust"
                           onclick={() => adjustTimestamp(-1)}
-                          title="Decrease by 1 second"
+                          aria-label="Decrease by 1 second"
+                          use:tooltip={'Decrease by 1 second'}
                         >
                           <ChevronDown size="16" />
                         </button>
@@ -458,7 +461,8 @@
                             selectOption(ts);
                             previewAudio(ts);
                           }}
-                          title="Preview audio"
+                          aria-label="Preview audio"
+                          use:tooltip={'Preview audio'}
                         >
                           {#if $currentSegmentId === `preview-${ts}` && $isPlaying}
                             <Pause size="16" />
@@ -537,7 +541,8 @@
                                       selectOption(cue.timestamp);
                                       previewAudio(cue.timestamp);
                                     }}
-                                    title="Preview audio"
+                                    aria-label="Preview audio"
+                                    use:tooltip={'Preview audio'}
                                   >
                                     {#if $currentSegmentId === `preview-${cue.timestamp}` && $isPlaying}
                                       <Pause size="16" />
@@ -573,7 +578,7 @@
                           class="btn btn-secondary btn-scan"
                           onclick={() => startPartialScan('normal')}
                           disabled={scanning}
-                          title="Scan this region for chapter cues using silence detection"
+                          use:tooltip={'Scan this region for chapter cues using silence detection'}
                         >
                           <ScanSearch size="16" />
                           Detect {getSortedDetectedCues().length > 0 ? 'Additional ' : ''}Cues
@@ -584,7 +589,7 @@
                           class="btn btn-secondary btn-scan"
                           onclick={() => startPartialScan('vad')}
                           disabled={scanning}
-                          title="Scan this region for chapter cues using voice activity detection (for dramatized audiobooks)"
+                          use:tooltip={'Scan this region for chapter cues using voice activity detection (for dramatized audiobooks)'}
                         >
                           <AudioLines size="16" />
                           Detect {getSortedDetectedCues().length > 0 ? 'Additional ' : ''}Cues [Dramatized]
@@ -633,7 +638,8 @@
                                 selectOption(deletedChapter.timestamp, deletedChapter.title);
                                 previewAudio(deletedChapter.timestamp);
                               }}
-                              title="Preview audio"
+                              aria-label="Preview audio"
+                              use:tooltip={'Preview audio'}
                             >
                               {#if $currentSegmentId === `preview-${deletedChapter.timestamp}` && $isPlaying}
                                 <Pause size="16" />
@@ -687,7 +693,8 @@
                                 selectOption(chapter.timestamp, chapter.title);
                                 previewAudio(chapter.timestamp);
                               }}
-                              title="Preview audio"
+                              aria-label="Preview audio"
+                              use:tooltip={'Preview audio'}
                             >
                               {#if $currentSegmentId === `preview-${chapter.timestamp}` && $isPlaying}
                                 <Pause size="16" />
@@ -729,7 +736,8 @@
               class="btn btn-primary segmented-right"
               onclick={() => handleConfirm(true)}
               disabled={!selectedTimestamp}
-              title="Add and transcribe"
+              aria-label="Add and transcribe"
+              use:tooltip={{ text: 'Add and transcribe', delay: 0 }}
             >
               <Mic size="16" />
             </button>

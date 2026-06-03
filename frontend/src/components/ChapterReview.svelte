@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { tooltip } from '../actions/tooltip';
   import { chapters, session } from '../stores/session';
   import { api, handleApiError } from '../utils/api';
   import DocLink from './DocLink.svelte';
@@ -382,7 +383,7 @@
                 class="btn btn-cancel export-button"
                 onclick={exportAsSnapshot}
                 disabled={exportLoading}
-                title="Save a snapshot of these chapters as an in-session Chapter Reference"
+                use:tooltip={'Save a snapshot of these chapters as an in-session Chapter Reference'}
               >
                 <BookmarkPlus size="16" />
                 Create Snapshot

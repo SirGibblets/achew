@@ -53,7 +53,7 @@
       <div class="help-body">
         <p>
           References provide chapter titles and/or timestamps that Achew can use when processing your audiobook. There
-          are two kinds of References: Chapter Reference and Title References.
+          are two kinds of References: Chapter References and Title References.
         </p>
 
         <h4>Chapter References <span class="tag">timestamps + titles</span></h4>
