@@ -3,6 +3,7 @@
   import { tooltip } from '../actions/tooltip';
   import { session } from '../stores/session';
   import { api } from '../utils/api';
+  import { computeHistogram, findValleyDefault, gapToSlider, quantizeSlider } from '../utils/cueHistogram';
   import DocLink from './DocLink.svelte';
 
   // Icons
@@ -16,11 +17,7 @@
   const MAX_CUES = 500;
 
   import type { ChapterReference } from '../types/references';
-
-  interface DetectedCueEntry {
-    timestamp: number;
-    gap: number;
-  }
+  import type { DetectedCueEntry } from '../types/api';
 
   interface TimelineTooltip {
     show: boolean;
@@ -85,20 +82,9 @@
   });
 
   let isComparing = $derived(activeComparisonRef !== null);
-  // Largest and smallest gaps among all detected cues
   let maxGap = $derived(allCues.length > 0 ? Math.max(...allCues.map((c) => c.gap)) : 10);
   let minGap = $derived(allCues.length > 0 ? Math.min(...allCues.map((c) => c.gap)) : 1.0);
-  // Logarithmic interpolation:
-  //   slider=0 → threshold=maxGap (fewest chapters)
-  //   slider=1 → threshold=minGap (most chapters)
-  function sliderToThreshold(s: number) {
-    if (maxGap <= minGap) return minGap;
-    return Math.exp(Math.log(maxGap) * (1 - s) + Math.log(minGap) * s);
-  }
-
-  // Inlined from sliderToThreshold so Svelte tracks maxGap, minGap, and sliderValue
-  // directly as reactive dependencies. Calling the function hides them from Svelte's
-  // static analysis, causing threshold to go stale when maxGap/minGap update on load.
+  // Inlined (not a thresholdAt call) so Svelte tracks maxGap/minGap/sliderValue as deps.
   let threshold = $derived(
     maxGap <= minGap ? minGap : Math.exp(Math.log(maxGap) * (1 - sliderValue) + Math.log(minGap) * sliderValue),
   );
@@ -114,16 +100,7 @@
 
   let selectedTimestamps = $derived([0, ...selectedCues.map((c) => c.timestamp)]);
 
-  let barData = $derived.by(() => {
-    if (allCues.length === 0 || maxGap <= minGap) return Array(NUM_BARS).fill(0) as number[];
-    const counts: number[] = Array(NUM_BARS).fill(0);
-    for (let i = 0; i < NUM_BARS; i++) {
-      const gapLow = sliderToThreshold((i + 1) / NUM_BARS);
-      const gapHigh = sliderToThreshold(i / NUM_BARS);
-      counts[i] = allCues.filter((c) => c.gap >= gapLow && c.gap < gapHigh).length;
-    }
-    return counts;
-  });
+  let barData = $derived(computeHistogram(allCues, minGap, maxGap, NUM_BARS));
   let maxBarCount = $derived(Math.max(1, ...barData));
   async function loadDetectedCues() {
     if ($session.step !== 'initial_chapter_selection') return;
@@ -145,32 +122,43 @@
         includeUnalignedRefs[ref.id] = false;
       });
 
-      // Pre-select a threshold that produces approximately the same number of
-      // chapters as the highest chapter count among existing chapter references.
-      let highestExistingCount = 0;
-      chapterRefs.forEach((ref) => {
-        if (ref.chapters && ref.chapters.length > 0) {
-          highestExistingCount = Math.max(highestExistingCount, ref.chapters.length);
-        }
-      });
-
-      if (highestExistingCount > 0 && allCues.length > 0) {
-        // Compute maxGap/minGap locally — the reactive $: declarations won't
-        // have updated yet at this point in the async function.
+      // Pre-select the slider: valley detection first, chapter-count heuristic
+      // as a fallback.
+      if (allCues.length > 0) {
+        // Local min/max — the reactive maxGap/minGap haven't updated yet here.
         const localMaxGap = Math.max(...allCues.map((c) => c.gap));
         const localMinGap = Math.min(...allCues.map((c) => c.gap));
-        const sorted = [...allCues].sort((a, b) => b.gap - a.gap);
-        // ref.chapters includes t=0 as its first entry, same as selectedTimestamps.
-        // To match N total timestamps we need N-1 detected cues, so the threshold
-        // should be the (N-1)th largest gap → index N-2.
-        const targetIndex = Math.min(Math.max(0, highestExistingCount - 2), sorted.length - 1);
-        const targetGap = sorted[targetIndex].gap;
-        let raw = 0.5;
+
+        // ref.chapters includes t=0, so each ref implies (chapters.length - 1) cues.
+        const refCueCounts = chapterRefs
+          .filter((ref) => ref.chapters && ref.chapters.length > 1)
+          .map((ref) => ref.chapters.length - 1);
+
+        let chosen: number | null = null;
         if (localMaxGap > localMinGap) {
-          const clamped = Math.max(localMinGap, Math.min(localMaxGap, targetGap));
-          raw = Math.log(localMaxGap / clamped) / Math.log(localMaxGap / localMinGap);
+          const hist = computeHistogram(allCues, localMinGap, localMaxGap, NUM_BARS);
+          chosen = findValleyDefault(hist, refCueCounts);
         }
-        sliderValue = Math.ceil(Math.min(1, Math.max(0, raw)) * 100) / 100;
+
+        if (chosen !== null) {
+          sliderValue = chosen;
+        } else {
+          // Fall back to roughly matching the highest reference chapter count.
+          let highestExistingCount = 0;
+          chapterRefs.forEach((ref) => {
+            if (ref.chapters && ref.chapters.length > 0) {
+              highestExistingCount = Math.max(highestExistingCount, ref.chapters.length);
+            }
+          });
+          if (highestExistingCount > 0) {
+            const sorted = [...allCues].sort((a, b) => b.gap - a.gap);
+            // N chapters need N-1 cues, so target the (N-1)th largest gap (index N-2).
+            const targetIndex = Math.min(Math.max(0, highestExistingCount - 2), sorted.length - 1);
+            sliderValue = quantizeSlider(gapToSlider(sorted[targetIndex].gap, localMinGap, localMaxGap));
+          } else {
+            sliderValue = 0.5;
+          }
+        }
       } else {
         sliderValue = 0.5;
       }
