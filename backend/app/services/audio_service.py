@@ -1,4 +1,5 @@
 import asyncio
+import collections
 import functools
 import logging
 import os
@@ -357,6 +358,7 @@ class AudioProcessingService:
                 "ffmpeg",
                 "-i",
                 input_file,
+                "-vn",
                 "-af",
                 f"silencedetect=n={silence_threshold}dB:d={MIN_SILENCE_DURATION}",
                 "-f",
@@ -389,7 +391,7 @@ class AudioProcessingService:
         publish_progress: bool = True,
     ) -> Optional[List[Tuple[float, float]]]:
         """Run silence detection in a separate thread"""
-        process = subprocess.Popen(cmd, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
+        process = subprocess.Popen(cmd, stderr=subprocess.PIPE, stdout=subprocess.DEVNULL, text=True, encoding="utf-8", errors="replace")
 
         with self._process_lock:
             self._running_processes.append(process)
@@ -482,16 +484,19 @@ class AudioProcessingService:
             input_file,
             "-t",
             str(segment_duration),
+            "-vn",
             "-af",
             f"silencedetect=n={silence_threshold}dB:d={MIN_SILENCE_DURATION}",
             "-f",
             "null",
             "-progress",
             "pipe:2",
+            "-stats_period",
+            "1",
             "-",
         ]
 
-        process = subprocess.Popen(cmd, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
+        process = subprocess.Popen(cmd, stderr=subprocess.PIPE, stdout=subprocess.DEVNULL, text=True, encoding="utf-8", errors="replace")
 
         with self._process_lock:
             self._running_processes.append(process)
@@ -1505,12 +1510,12 @@ class AudioProcessingService:
                 output_file,
             ]
             process = subprocess.Popen(
-                cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE, text=True, encoding="utf-8", errors="replace"
+                cmd, stderr=subprocess.PIPE, stdout=subprocess.DEVNULL, text=True, encoding="utf-8", errors="replace"
             )
             with self._process_lock:
                 self._running_processes.append(process)
 
-            stderr_output = []
+            stderr_output = collections.deque(maxlen=100)
 
             # Parse progress output in real-time
             current_time = 0.0
