@@ -30,6 +30,7 @@
 
   let editorSettings = $state<EditorSettings>({
     show_formatted_time: true,
+    show_fractional_seconds: true,
   });
 
   $effect(() => {
@@ -56,14 +57,17 @@
       return seconds.toFixed(2);
     }
 
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = Math.floor(seconds % 60);
+    const showFractions = editorSettings.show_fractional_seconds !== false;
+    const rounded = showFractions ? Math.round(seconds * 100) / 100 : Math.floor(seconds);
+    const hours = Math.floor(rounded / 3600);
+    const minutes = Math.floor((rounded % 3600) / 60);
+    const secsValue = rounded % 60;
+    const secs = showFractions ? secsValue.toFixed(2).padStart(5, '0') : secsValue.toString().padStart(2, '0');
 
     if (hours > 0) {
-      return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+      return `${hours}:${minutes.toString().padStart(2, '0')}:${secs}`;
     } else {
-      return `${minutes}:${secs.toString().padStart(2, '0')}`;
+      return `${minutes}:${secs}`;
     }
   }
 

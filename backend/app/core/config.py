@@ -68,6 +68,7 @@ class EditorSettings(BaseModel):
     tab_navigation: bool = False
     hide_transcriptions: bool = False
     show_formatted_time: bool = True
+    show_fractional_seconds: bool = True
 
 
 class CustomInstruction(BaseModel):
