@@ -51,6 +51,7 @@ Clicking the menu button (:lucide-ellipsis-vertical:{ .icon-token }) on the Acti
 - **Tab to Next:** If enabled, pressing Tab on the keyboard while editing a chapter title will move focus to the title of the next selected chapter.
 - **Hide Transcripts:** If enabled, the Transcript column will not be shown.
 - **Format Timestamps:** If enabled, timestamps will be displayed using the `HH:MM:SS` format instead of displaying raw seconds.
+    - **Fractional Seconds:** If enabled, formatted timestamps will display hundredths of a second, e.g. `01:23.45`. Only available when **Format Timestamps** is enabled; unformatted timestamps always show fractional seconds.
 
 ### Additional Tools
 
