@@ -24,6 +24,7 @@ from app.models.chapter_operation import (
 from app.models.enums import Step
 
 from ...app import get_app_state
+from ...core.config import get_settings
 from ...core.constants import CHAPTER_START_PADDING
 
 logger = logging.getLogger(__name__)
@@ -752,6 +753,64 @@ async def export_chapters_cue():
         raise
     except Exception as e:
         logger.error(f"Failed to export CUE: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/chapters/realignment-fixture")
+async def export_realignment_fixture():
+    """DEBUG-only: export the most recent realignment as a regression test fixture.
+
+    Includes the aligner inputs and the user-corrected timestamps (ground truth).
+    Disabled (404) unless DEBUG is set.
+    """
+    if not get_settings().DEBUG:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    try:
+        app_state = get_app_state()
+        pipeline = app_state.pipeline
+
+        if not pipeline:
+            raise HTTPException(status_code=404, detail="No active pipeline")
+
+        snapshot = pipeline._realignment_snapshot
+        if not snapshot:
+            raise HTTPException(status_code=404, detail="No realignment data to export")
+
+        # Ground truth = the user-confirmed timestamps now in the pipeline, aligned to
+        # each reference chapter by its original (reference) timestamp. A reference chapter
+        # the user deleted has no live counterpart, so its ground-truth timestamp is null.
+        live_by_original = {
+            ch.realignment.original_timestamp: ch for ch in pipeline.chapters if ch.realignment is not None
+        }
+
+        ground_truth = []
+        for src_ts in snapshot["ref_chapters"]:
+            live = live_by_original.get(src_ts)
+            ground_truth.append(live.timestamp if live else None)
+
+        fixture = {
+            "ref_duration": snapshot["ref_duration"],
+            "book_duration": snapshot["book_duration"],
+            "ref_chapters": snapshot["ref_chapters"],
+            "detected_cues": snapshot["detected_cues"],
+            "ground_truth": ground_truth,
+        }
+
+        json_content = json.dumps(fixture, indent=2, ensure_ascii=False)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"realignment_fixture_{timestamp}.json"
+
+        return Response(
+            content=json_content,
+            media_type="application/json",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to export realignment fixture: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

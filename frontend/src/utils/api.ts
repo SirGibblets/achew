@@ -265,6 +265,33 @@ export const chapters = {
     return apiRequest<ChapterReference>('/chapters/export/snapshot', { method: 'POST', body: {} });
   },
 
+  // DEBUG-only: download the most recent realignment as a regression test fixture.
+  // The backend returns 404 unless the server is running with DEBUG enabled.
+  async exportRealignmentFixture(): Promise<ChapterExportResult> {
+    const response = await fetch(`${API_BASE}/api/chapters/realignment-fixture`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    if (!response.ok) {
+      throw new APIError('Failed to export realignment fixture', response.status);
+    }
+
+    const contentDisposition = response.headers.get('content-disposition');
+    let filename = 'realignment_fixture.json';
+    if (contentDisposition) {
+      const filenameMatch = /filename="(.+)"/.exec(contentDisposition);
+      if (filenameMatch) {
+        filename = filenameMatch[1] ?? filename;
+      }
+    }
+
+    const contentType = response.headers.get('content-type');
+    const data = await response.text();
+
+    return { data, filename, mimeType: contentType ?? 'application/json' };
+  },
+
   getAddOptions(chapterId: string) {
     return apiRequest<AddOptionsResponse>(`/chapters/add-options/${chapterId}`);
   },
