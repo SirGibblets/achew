@@ -105,6 +105,7 @@ export interface ASROptionsResponse {
 
 export interface EditorSettings {
   show_formatted_time?: boolean;
+  show_fractional_seconds?: boolean;
   hide_transcriptions?: boolean;
   tab_navigation?: boolean;
   [key: string]: unknown;

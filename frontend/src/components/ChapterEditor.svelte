@@ -71,6 +71,7 @@
     tab_navigation: false,
     hide_transcriptions: false,
     show_formatted_time: true,
+    show_fractional_seconds: true,
   });
 
   // Timestamp editing state
@@ -247,6 +248,11 @@
   async function handleTimeFormatChange(event: Event) {
     const enabled = (event.target as HTMLInputElement).checked;
     await saveEditorSettings({ show_formatted_time: enabled });
+  }
+
+  async function handleFractionalSecondsChange(event: Event) {
+    const enabled = (event.target as HTMLInputElement).checked;
+    await saveEditorSettings({ show_fractional_seconds: enabled });
   }
 
   function handleScroll() {
@@ -486,15 +492,18 @@
       return seconds.toFixed(2);
     }
 
-    // Show formatted time hh:mm:ss
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = Math.floor(seconds % 60);
+    // Show formatted time hh:mm:ss, optionally with hundredths on the seconds
+    const showFractions = editorSettings.show_fractional_seconds !== false;
+    const rounded = showFractions ? Math.round(seconds * 100) / 100 : Math.floor(seconds);
+    const hours = Math.floor(rounded / 3600);
+    const minutes = Math.floor((rounded % 3600) / 60);
+    const secsValue = rounded % 60;
+    const secs = showFractions ? secsValue.toFixed(2).padStart(5, '0') : secsValue.toString().padStart(2, '0');
 
     if (hours > 0) {
-      return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+      return `${hours}:${minutes.toString().padStart(2, '0')}:${secs}`;
     } else {
-      return `${minutes}:${secs.toString().padStart(2, '0')}`;
+      return `${minutes}:${secs}`;
     }
   }
 
@@ -760,10 +769,11 @@
       return;
     }
 
-    // formatTimestamp() is lossy (floors to whole seconds in formatted mode, hundredths
-    // otherwise), so re-parsing the displayed string drops the sub-second precision of a
-    // jumped/nudged cue. When the input still reflects currentJumpPosition, save that exact
-    // value; only fall back to the parsed input when the user has typed something different.
+    // formatTimestamp() is lossy (floors to whole seconds when fractional seconds are off,
+    // rounds to hundredths otherwise), so re-parsing the displayed string drops the finer
+    // precision of a jumped/nudged cue. When the input still reflects currentJumpPosition,
+    // save that exact value; only fall back to the parsed input when the user has typed
+    // something different.
     const timestampToSave =
       currentJumpPosition !== null && formatTimestamp(currentJumpPosition) === timestampInputValue
         ? currentJumpPosition
@@ -967,7 +977,13 @@
               </td>
               <td class="timestamp" class:editing={editingTimestampId === chapter.id}>
                 {#if editingTimestampId === chapter.id}
-                  <div class="timestamp-edit-overlay">
+                  <!-- Reserve the cell's normal width: the edit overlay is position:absolute,
+                       so without this the auto-layout column collapses to the next-widest row. -->
+                  <span class="timestamp-width-keeper" aria-hidden="true">{formatTimestamp(chapter.timestamp)}</span>
+                  <div
+                    class="timestamp-edit-overlay"
+                    class:with-fractions={editorSettings.show_fractional_seconds !== false}
+                  >
                     <button
                       class="timestamp-play-btn"
                       class:disabled={timestampValidationError}
@@ -1260,6 +1276,20 @@
                   <CircleQuestionMark size="14" />
                 </div>
               </label>
+
+              {#if editorSettings.show_formatted_time}
+                <label class="setting-item setting-item-sub">
+                  <input
+                    type="checkbox"
+                    checked={editorSettings.show_fractional_seconds}
+                    onchange={handleFractionalSecondsChange}
+                  />
+                  <span>Fractional Seconds</span>
+                  <div class="help-icon" use:tooltip={{ text: 'Show hundredths of a second (e.g. 1:23.45)', delay: 0 }}>
+                    <CircleQuestionMark size="14" />
+                  </div>
+                </label>
+              {/if}
             </div>
           </div>
 
@@ -1704,6 +1734,11 @@
     cursor: default;
   }
 
+  .timestamp-width-keeper {
+    visibility: hidden;
+    white-space: nowrap;
+  }
+
   .timestamp-edit-overlay {
     position: absolute;
     top: 0.5rem;
@@ -1719,6 +1754,10 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     z-index: 1000;
     min-width: 262px;
+  }
+
+  .timestamp-edit-overlay.with-fractions {
+    min-width: 286px;
   }
 
   .timestamp-play-btn {
@@ -2224,6 +2263,14 @@
 
   .setting-item input[type='checkbox'] {
     accent-color: var(--primary);
+  }
+
+  .setting-item-sub {
+    margin-left: 1.5rem;
+    margin-top: -0.4rem;
+    font-size: 0.8rem;
+    font-weight: 400;
+    color: var(--text-secondary);
   }
 
   .tools-split-layout {

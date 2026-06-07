@@ -14,6 +14,7 @@
 
   interface EditorSettings {
     show_formatted_time?: boolean;
+    show_fractional_seconds?: boolean;
   }
 
   interface Props {
@@ -22,7 +23,11 @@
     oncancel?: () => void;
   }
 
-  let { isOpen = $bindable(false), editorSettings = { show_formatted_time: true }, oncancel }: Props = $props();
+  let {
+    isOpen = $bindable(false),
+    editorSettings = { show_formatted_time: true, show_fractional_seconds: true },
+    oncancel,
+  }: Props = $props();
 
   let applyTo = $state('selected');
   let offsetValue = $state('0');
@@ -104,16 +109,19 @@
       return seconds.toFixed(2);
     }
 
+    const showFractions = editorSettings.show_fractional_seconds !== false;
     const sign = seconds < 0 ? '-' : '';
     const abs = Math.abs(seconds);
-    const hours = Math.floor(abs / 3600);
-    const minutes = Math.floor((abs % 3600) / 60);
-    const secs = Math.floor(abs % 60);
+    const rounded = showFractions ? Math.round(abs * 100) / 100 : Math.floor(abs);
+    const hours = Math.floor(rounded / 3600);
+    const minutes = Math.floor((rounded % 3600) / 60);
+    const secsValue = rounded % 60;
+    const secs = showFractions ? secsValue.toFixed(2).padStart(5, '0') : secsValue.toString().padStart(2, '0');
 
     if (hours > 0) {
-      return `${sign}${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+      return `${sign}${hours}:${minutes.toString().padStart(2, '0')}:${secs}`;
     }
-    return `${sign}${minutes}:${secs.toString().padStart(2, '0')}`;
+    return `${sign}${minutes}:${secs}`;
   }
 
   // --- Audio playback ---

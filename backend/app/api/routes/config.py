@@ -704,6 +704,7 @@ class EditorSettingsRequest(BaseModel):
     tab_navigation: Optional[bool] = None
     hide_transcriptions: Optional[bool] = None
     show_formatted_time: Optional[bool] = None
+    show_fractional_seconds: Optional[bool] = None
 
 
 @router.get("/config/editor-settings")

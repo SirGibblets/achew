@@ -18,6 +18,7 @@
 
   interface EditorSettings {
     show_formatted_time?: boolean;
+    show_fractional_seconds?: boolean;
   }
 
   interface AddChapterConfirmDetail {
@@ -38,7 +39,7 @@
     isOpen = $bindable(false),
     chapterId = null,
     defaultTab = null,
-    editorSettings = { show_formatted_time: true },
+    editorSettings = { show_formatted_time: true, show_fractional_seconds: true },
     onconfirm,
     oncancel,
   }: Props = $props();
@@ -63,14 +64,17 @@
       return seconds.toFixed(2);
     }
 
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = Math.floor(seconds % 60);
+    const showFractions = editorSettings.show_fractional_seconds !== false;
+    const rounded = showFractions ? Math.round(seconds * 100) / 100 : Math.floor(seconds);
+    const hours = Math.floor(rounded / 3600);
+    const minutes = Math.floor((rounded % 3600) / 60);
+    const secsValue = rounded % 60;
+    const secs = showFractions ? secsValue.toFixed(2).padStart(5, '0') : secsValue.toString().padStart(2, '0');
 
     if (hours > 0) {
-      return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+      return `${hours}:${minutes.toString().padStart(2, '0')}:${secs}`;
     } else {
-      return `${minutes}:${secs.toString().padStart(2, '0')}`;
+      return `${minutes}:${secs}`;
     }
   }
 
@@ -79,7 +83,7 @@
       return parseFloat(input) || 0;
     }
 
-    const parts = input.split(':').map((p: string) => parseInt(p, 10));
+    const parts = input.split(':').map((p: string) => parseFloat(p) || 0);
     if (parts.length === 2) {
       return parts[0] * 60 + parts[1];
     } else if (parts.length === 3) {
@@ -229,7 +233,7 @@
       addOptions = await api.chapters.getAddOptions(chapterId);
 
       if (addOptions) {
-        if (editorSettings.show_formatted_time) {
+        if (editorSettings.show_formatted_time && editorSettings.show_fractional_seconds === false) {
           addOptions.min_timestamp = Math.ceil(addOptions.min_timestamp);
           addOptions.max_timestamp = Math.floor(addOptions.max_timestamp);
         }
@@ -432,7 +436,11 @@
                         oninput={handleTimestampInput}
                         onkeydown={handleTimestampKeydown}
                         class="timestamp-input"
-                        placeholder={editorSettings.show_formatted_time ? 'mm:ss' : 'seconds'}
+                        placeholder={editorSettings.show_formatted_time
+                          ? editorSettings.show_fractional_seconds === false
+                            ? 'mm:ss'
+                            : 'mm:ss.ss'
+                          : 'seconds'}
                       />
                       <div class="timestamp-controls">
                         <button
