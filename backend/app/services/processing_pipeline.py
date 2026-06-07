@@ -14,7 +14,7 @@ from app.api.routes.chapters import DetectedCue
 from app.app import get_app_state
 from app.models.abs import AudioFile, AudioInfo, Book
 
-from ..core.config import get_app_config
+from ..core.config import get_app_config, get_settings
 from ..core.constants import BOOK_END_IGNORE_WINDOW
 from ..core.system_info import get_worker_count
 from ..models.ai_options import AIOptions
@@ -68,6 +68,11 @@ class ProcessingPipeline:
         self._ai_cleanup_task: Optional[asyncio.Task] = None
         self.is_realignment: bool = False
         self.is_quick_edit: bool = False
+
+        # Debug-only snapshot of the inputs/output of the most recent realignment,
+        # captured when settings.DEBUG is set so the ChapterReview page can export a
+        # test fixture. See _capture_realignment_snapshot / the debug export endpoint.
+        self._realignment_snapshot: Optional[Dict[str, Any]] = None
 
         # Create temporary directory
         sys_tmp_dir = tempfile.gettempdir()
@@ -947,7 +952,7 @@ class ProcessingPipeline:
                 "Calculating audio extraction targets…",
             )
 
-            padding: float = max(30, abs(self.book_duration - chapter_ref.duration) * 1.5)
+            padding: float = max(180, abs(self.book_duration - chapter_ref.duration) * 2)
 
             raw_segments = []
             for chapter in chapter_ref.chapters:
@@ -1003,14 +1008,15 @@ class ProcessingPipeline:
             await self.restart_at_step(RestartStep.SELECT_WORKFLOW, f"Processing failed: {str(e)}")
             raise
 
-    async def _realign_chapters(self, ref: ChapterReference, ransac_threshold: float):
+    async def _realign_chapters(self, ref: ChapterReference, padding: float):
         """Realign chapters using the detected silences and the reference chapters"""
         self._notify_progress(Step.AUDIO_ANALYSIS, 100, "Aligning chapters…")
 
         try:
-            aligner = ChapterAligner(
-                ransac_threshold=ransac_threshold,
-            )
+            # The extraction padding bounds how far a cue can sit from its expected
+            # position, so it is also the aligner's matching window — a wide window
+            # (large duration mismatch) must not be re-narrowed to the default.
+            aligner = ChapterAligner(max_drift=padding)
 
             aligned_chapters, _ = aligner.align(
                 ref.chapters.copy(),
@@ -1045,12 +1051,29 @@ class ProcessingPipeline:
 
             self.chapters = new_chapters
 
+            self._capture_realignment_snapshot(ref)
+
             self._notify_progress(Step.CHAPTER_EDITING, 0, f"Realigned {len(self.chapters)} chapters")
 
         except Exception as e:
             logger.error(f"Error during chapter alignment: {e}", exc_info=True)
             await self.restart_at_step(RestartStep.SELECT_WORKFLOW, f"Alignment failed: {str(e)}")
             raise
+
+    def _capture_realignment_snapshot(self, ref: ChapterReference) -> None:
+        """When DEBUG is set, stash the aligner inputs so the ChapterReview page can export
+        a regression fixture. The user-corrected ground-truth timestamps are read live from
+        self.chapters at export time."""
+        if not get_settings().DEBUG:
+            self._realignment_snapshot = None
+            return
+
+        self._realignment_snapshot = {
+            "ref_duration": ref.duration,
+            "book_duration": self.book_duration,
+            "ref_chapters": [c.timestamp for c in ref.chapters],
+            "detected_cues": [[c.timestamp, c.gap] for c in (self.detected_cues or [])],
+        }
 
     @staticmethod
     def _format_duration_difference(diff_percent: float, diff_seconds: float) -> str:

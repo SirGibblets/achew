@@ -32,6 +32,16 @@
   let showAddReference = $state(false);
 
   let titleRefs = $derived($session.titleRefs || []);
+
+  const DURATION_MISMATCH_WARNING_SECONDS = 180;
+
+  let realignDurationMismatch = $derived.by(() => {
+    const bookDuration = $session.book?.duration;
+    const ref = chapterRefs.find((r) => r.id === selectedRealignRef);
+    if (!ref || bookDuration == null) return false;
+    return Math.abs(bookDuration - ref.duration) > DURATION_MISMATCH_WARNING_SECONDS;
+  });
+
   function handleReferenceAdded(newRef: { id: string; chapters?: unknown[] }) {
     if (newRef.chapters) {
       if (activeTab === 'realign') selectedRealignRef = newRef.id;
@@ -317,6 +327,16 @@
               <CircleQuestionMark size="14" />
             </div>
           </div>
+
+          {#if realignDurationMismatch}
+            <div class="duration-warning-card">
+              <TriangleAlert size="20" color="var(--warning)" />
+              <p class="duration-warning-text">
+                The duration of the selected reference differs significantly from your book's duration. Realignment may
+                fail or produce inaccurate results.
+              </p>
+            </div>
+          {/if}
 
           <div class="actions">
             <button class="btn btn-verify" onclick={proceedWithSelection} disabled={loading || !selectedRealignRef}>
@@ -827,6 +847,29 @@
   }
 
   .codec-warning-text {
+    margin: 0;
+    font-size: 0.9rem;
+    line-height: 1.4;
+  }
+
+  .duration-warning-card {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem;
+    background: rgba(245, 158, 11, 0.1);
+    border: 0.5px solid var(--warning);
+    border-radius: 8px;
+    margin: 1.5rem auto 0.5rem;
+    max-width: 700px;
+  }
+
+  .duration-warning-card :global(svg) {
+    flex-shrink: 0;
+  }
+
+  .duration-warning-text {
     margin: 0;
     font-size: 0.9rem;
     line-height: 1.4;

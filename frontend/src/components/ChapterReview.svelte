@@ -8,6 +8,7 @@
   // Icons
   import BookMarked from '@lucide/svelte/icons/book-marked';
   import BookmarkPlus from '@lucide/svelte/icons/bookmark-plus';
+  import Bug from '@lucide/svelte/icons/bug';
   import Check from '@lucide/svelte/icons/check';
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
   import ChevronLeft from '@lucide/svelte/icons/chevron-left';
@@ -130,6 +131,11 @@
   let referenceExportInfo = $state<string | null>(null);
   let exportSection = $state<HTMLElement | undefined>();
 
+  // Debug-only realignment fixture export: shown only in the Vite dev server
+  // (./dev.sh) and only when the chapters came from the realignment workflow.
+  const isDev = import.meta.env.DEV;
+  let isRealignment = $derived($chapters.some((chapter) => chapter.realignment != null));
+
   function toggleExportSection() {
     exportExpanded = !exportExpanded;
     if (exportExpanded) {
@@ -175,6 +181,29 @@
     } catch (err) {
       error = handleApiError(err);
       console.error('Error exporting as snapshot:', err);
+    } finally {
+      exportLoading = false;
+    }
+  }
+
+  async function exportRealignmentFixture() {
+    exportLoading = true;
+    try {
+      const response = await api.chapters.exportRealignmentFixture();
+
+      // Create a download link
+      const blob = new Blob([response.data], { type: response.mimeType });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = response.filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      error = handleApiError(err);
+      console.error('Error exporting realignment fixture:', err);
     } finally {
       exportLoading = false;
     }
@@ -390,6 +419,23 @@
               </button>
             </div>
           </div>
+
+          {#if isDev && isRealignment}
+            <div class="export-group">
+              <p class="export-group-label">Debug (dev only)</p>
+              <div class="export-buttons">
+                <button
+                  class="btn btn-cancel export-button"
+                  onclick={exportRealignmentFixture}
+                  disabled={exportLoading}
+                  use:tooltip={'Download a regression test fixture: source chapters, detected cues, and your corrected timestamps as ground truth'}
+                >
+                  <Bug size="16" />
+                  Realignment Fixture
+                </button>
+              </div>
+            </div>
+          {/if}
 
           {#if referenceExportInfo}
             <div class="export-info">

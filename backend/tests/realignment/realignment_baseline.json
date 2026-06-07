@@ -1,0 +1,395 @@
+{
+  "cases": {
+    "real/realignment_fixture_20260604_211309": {
+      "confident_wrong": 4,
+      "correct": 14,
+      "matchable": 18
+    },
+    "real/realignment_fixture_20260604_211456": {
+      "confident_wrong": 5,
+      "correct": 13,
+      "matchable": 19
+    },
+    "real/realignment_fixture_20260604_211724": {
+      "confident_wrong": 7,
+      "correct": 15,
+      "matchable": 23
+    },
+    "real/realignment_fixture_20260604_211909": {
+      "confident_wrong": 0,
+      "correct": 18,
+      "matchable": 18
+    },
+    "real/realignment_fixture_20260604_212122": {
+      "confident_wrong": 0,
+      "correct": 4,
+      "matchable": 4
+    },
+    "real/realignment_fixture_20260605_002825": {
+      "confident_wrong": 1,
+      "correct": 76,
+      "matchable": 77
+    },
+    "real/realignment_fixture_20260605_003319": {
+      "confident_wrong": 0,
+      "correct": 28,
+      "matchable": 28
+    },
+    "real/realignment_fixture_20260605_004044": {
+      "confident_wrong": 0,
+      "correct": 37,
+      "matchable": 37
+    },
+    "real/realignment_fixture_20260605_230501": {
+      "confident_wrong": 2,
+      "correct": 80,
+      "matchable": 82
+    },
+    "real/realignment_fixture_20260605_232233": {
+      "confident_wrong": 1,
+      "correct": 23,
+      "matchable": 24
+    },
+    "real/realignment_fixture_20260606_161033": {
+      "confident_wrong": 0,
+      "correct": 29,
+      "matchable": 29
+    },
+    "real/realignment_fixture_20260606_161321": {
+      "confident_wrong": 0,
+      "correct": 25,
+      "matchable": 25
+    },
+    "real/realignment_fixture_20260606_161612": {
+      "confident_wrong": 0,
+      "correct": 65,
+      "matchable": 65
+    },
+    "real/realignment_fixture_20260606_161843": {
+      "confident_wrong": 0,
+      "correct": 25,
+      "matchable": 25
+    },
+    "real/realignment_fixture_20260606_162027": {
+      "confident_wrong": 0,
+      "correct": 31,
+      "matchable": 31
+    },
+    "real/realignment_fixture_20260606_162405": {
+      "confident_wrong": 1,
+      "correct": 22,
+      "matchable": 23
+    },
+    "real/realignment_fixture_20260606_162629": {
+      "confident_wrong": 0,
+      "correct": 40,
+      "matchable": 40
+    },
+    "real/realignment_fixture_20260606_163031": {
+      "confident_wrong": 1,
+      "correct": 50,
+      "matchable": 51
+    },
+    "real/realignment_fixture_20260606_163252": {
+      "confident_wrong": 0,
+      "correct": 77,
+      "matchable": 77
+    },
+    "real/realignment_fixture_20260606_163837": {
+      "confident_wrong": 0,
+      "correct": 42,
+      "matchable": 42
+    },
+    "real/realignment_fixture_20260606_164158": {
+      "confident_wrong": 1,
+      "correct": 23,
+      "matchable": 24
+    },
+    "real/realignment_fixture_20260606_164455": {
+      "confident_wrong": 0,
+      "correct": 39,
+      "matchable": 39
+    },
+    "real/realignment_fixture_20260606_164638": {
+      "confident_wrong": 0,
+      "correct": 29,
+      "matchable": 30
+    },
+    "real/realignment_fixture_20260606_164920": {
+      "confident_wrong": 1,
+      "correct": 78,
+      "matchable": 79
+    },
+    "real/realignment_fixture_20260606_170110": {
+      "confident_wrong": 1,
+      "correct": 81,
+      "matchable": 82
+    },
+    "real/realignment_fixture_20260606_170350": {
+      "confident_wrong": 0,
+      "correct": 106,
+      "matchable": 106
+    },
+    "real/realignment_fixture_20260606_171739": {
+      "confident_wrong": 4,
+      "correct": 95,
+      "matchable": 100
+    },
+    "real/realignment_fixture_20260606_172004": {
+      "confident_wrong": 3,
+      "correct": 11,
+      "matchable": 16
+    },
+    "real/realignment_fixture_20260606_172128": {
+      "confident_wrong": 1,
+      "correct": 14,
+      "matchable": 16
+    },
+    "real/realignment_fixture_20260606_172340": {
+      "confident_wrong": 0,
+      "correct": 9,
+      "matchable": 9
+    },
+    "real/realignment_fixture_20260606_172624": {
+      "confident_wrong": 0,
+      "correct": 48,
+      "matchable": 48
+    },
+    "real/realignment_fixture_20260606_174516": {
+      "confident_wrong": 1,
+      "correct": 60,
+      "matchable": 78
+    },
+    "real/realignment_fixture_20260606_174613": {
+      "confident_wrong": 0,
+      "correct": 9,
+      "matchable": 9
+    },
+    "real/realignment_fixture_20260606_175306": {
+      "confident_wrong": 0,
+      "correct": 53,
+      "matchable": 53
+    },
+    "real/realignment_fixture_20260606_180606": {
+      "confident_wrong": 1,
+      "correct": 14,
+      "matchable": 25
+    },
+    "real/realignment_fixture_20260606_182018": {
+      "confident_wrong": 3,
+      "correct": 56,
+      "matchable": 60
+    },
+    "real/realignment_fixture_20260606_182158": {
+      "confident_wrong": 1,
+      "correct": 28,
+      "matchable": 29
+    },
+    "real/realignment_fixture_20260606_182533": {
+      "confident_wrong": 0,
+      "correct": 82,
+      "matchable": 82
+    },
+    "real/realignment_fixture_20260606_182935": {
+      "confident_wrong": 1,
+      "correct": 82,
+      "matchable": 83
+    },
+    "real/realignment_fixture_20260606_183305": {
+      "confident_wrong": 0,
+      "correct": 42,
+      "matchable": 42
+    },
+    "real/realignment_fixture_20260606_184643": {
+      "confident_wrong": 0,
+      "correct": 94,
+      "matchable": 94
+    },
+    "real/realignment_fixture_20260606_184939": {
+      "confident_wrong": 3,
+      "correct": 23,
+      "matchable": 26
+    },
+    "real/realignment_fixture_20260606_185426": {
+      "confident_wrong": 0,
+      "correct": 18,
+      "matchable": 18
+    },
+    "real/realignment_fixture_20260606_190356": {
+      "confident_wrong": 0,
+      "correct": 24,
+      "matchable": 24
+    },
+    "real/realignment_fixture_20260606_191512": {
+      "confident_wrong": 0,
+      "correct": 25,
+      "matchable": 25
+    },
+    "real/realignment_fixture_20260606_193107": {
+      "confident_wrong": 0,
+      "correct": 86,
+      "matchable": 86
+    },
+    "real/realignment_fixture_20260606_193432": {
+      "confident_wrong": 0,
+      "correct": 63,
+      "matchable": 63
+    },
+    "real/realignment_fixture_20260606_193604": {
+      "confident_wrong": 0,
+      "correct": 65,
+      "matchable": 65
+    },
+    "synthetic/clean/1": {
+      "confident_wrong": 0,
+      "correct": 19,
+      "matchable": 19
+    },
+    "synthetic/clean/11": {
+      "confident_wrong": 0,
+      "correct": 19,
+      "matchable": 19
+    },
+    "synthetic/clean/2": {
+      "confident_wrong": 0,
+      "correct": 19,
+      "matchable": 19
+    },
+    "synthetic/clean/3": {
+      "confident_wrong": 0,
+      "correct": 19,
+      "matchable": 19
+    },
+    "synthetic/clean/7": {
+      "confident_wrong": 0,
+      "correct": 19,
+      "matchable": 19
+    },
+    "synthetic/front_matter_decoy/1": {
+      "confident_wrong": 0,
+      "correct": 19,
+      "matchable": 19
+    },
+    "synthetic/front_matter_decoy/11": {
+      "confident_wrong": 0,
+      "correct": 19,
+      "matchable": 19
+    },
+    "synthetic/front_matter_decoy/2": {
+      "confident_wrong": 0,
+      "correct": 19,
+      "matchable": 19
+    },
+    "synthetic/front_matter_decoy/3": {
+      "confident_wrong": 0,
+      "correct": 19,
+      "matchable": 19
+    },
+    "synthetic/front_matter_decoy/7": {
+      "confident_wrong": 0,
+      "correct": 19,
+      "matchable": 19
+    },
+    "synthetic/linear_drift/1": {
+      "confident_wrong": 0,
+      "correct": 19,
+      "matchable": 19
+    },
+    "synthetic/linear_drift/11": {
+      "confident_wrong": 0,
+      "correct": 19,
+      "matchable": 19
+    },
+    "synthetic/linear_drift/2": {
+      "confident_wrong": 0,
+      "correct": 19,
+      "matchable": 19
+    },
+    "synthetic/linear_drift/3": {
+      "confident_wrong": 0,
+      "correct": 19,
+      "matchable": 19
+    },
+    "synthetic/linear_drift/7": {
+      "confident_wrong": 0,
+      "correct": 19,
+      "matchable": 19
+    },
+    "synthetic/missing_chapter/1": {
+      "confident_wrong": 0,
+      "correct": 18,
+      "matchable": 18
+    },
+    "synthetic/missing_chapter/11": {
+      "confident_wrong": 0,
+      "correct": 18,
+      "matchable": 18
+    },
+    "synthetic/missing_chapter/2": {
+      "confident_wrong": 0,
+      "correct": 18,
+      "matchable": 18
+    },
+    "synthetic/missing_chapter/3": {
+      "confident_wrong": 0,
+      "correct": 18,
+      "matchable": 18
+    },
+    "synthetic/missing_chapter/7": {
+      "confident_wrong": 0,
+      "correct": 18,
+      "matchable": 18
+    },
+    "synthetic/per_chapter_jitter/1": {
+      "confident_wrong": 0,
+      "correct": 19,
+      "matchable": 19
+    },
+    "synthetic/per_chapter_jitter/11": {
+      "confident_wrong": 0,
+      "correct": 19,
+      "matchable": 19
+    },
+    "synthetic/per_chapter_jitter/2": {
+      "confident_wrong": 0,
+      "correct": 19,
+      "matchable": 19
+    },
+    "synthetic/per_chapter_jitter/3": {
+      "confident_wrong": 0,
+      "correct": 19,
+      "matchable": 19
+    },
+    "synthetic/per_chapter_jitter/7": {
+      "confident_wrong": 2,
+      "correct": 17,
+      "matchable": 19
+    },
+    "synthetic/step_shift/1": {
+      "confident_wrong": 0,
+      "correct": 19,
+      "matchable": 19
+    },
+    "synthetic/step_shift/11": {
+      "confident_wrong": 1,
+      "correct": 18,
+      "matchable": 19
+    },
+    "synthetic/step_shift/2": {
+      "confident_wrong": 0,
+      "correct": 19,
+      "matchable": 19
+    },
+    "synthetic/step_shift/3": {
+      "confident_wrong": 0,
+      "correct": 19,
+      "matchable": 19
+    },
+    "synthetic/step_shift/7": {
+      "confident_wrong": 0,
+      "correct": 19,
+      "matchable": 19
+    }
+  },
+  "tolerance": 0.1
+}
