@@ -1,5 +1,4 @@
 import asyncio
-import collections
 import functools
 import logging
 import os
@@ -391,7 +390,7 @@ class AudioProcessingService:
         publish_progress: bool = True,
     ) -> Optional[List[Tuple[float, float]]]:
         """Run silence detection in a separate thread"""
-        process = subprocess.Popen(cmd, stderr=subprocess.PIPE, stdout=subprocess.DEVNULL, text=True, encoding="utf-8", errors="replace")
+        process = subprocess.Popen(cmd, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
 
         with self._process_lock:
             self._running_processes.append(process)
@@ -491,12 +490,10 @@ class AudioProcessingService:
             "null",
             "-progress",
             "pipe:2",
-            "-stats_period",
-            "1",
             "-",
         ]
 
-        process = subprocess.Popen(cmd, stderr=subprocess.PIPE, stdout=subprocess.DEVNULL, text=True, encoding="utf-8", errors="replace")
+        process = subprocess.Popen(cmd, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
 
         with self._process_lock:
             self._running_processes.append(process)
@@ -1510,12 +1507,12 @@ class AudioProcessingService:
                 output_file,
             ]
             process = subprocess.Popen(
-                cmd, stderr=subprocess.PIPE, stdout=subprocess.DEVNULL, text=True, encoding="utf-8", errors="replace"
+                cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE, text=True, encoding="utf-8", errors="replace"
             )
             with self._process_lock:
                 self._running_processes.append(process)
 
-            stderr_output = collections.deque(maxlen=100)
+            stderr_output = []
 
             # Parse progress output in real-time
             current_time = 0.0
