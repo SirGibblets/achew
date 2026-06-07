@@ -760,8 +760,17 @@
       return;
     }
 
+    // formatTimestamp() is lossy (floors to whole seconds in formatted mode, hundredths
+    // otherwise), so re-parsing the displayed string drops the sub-second precision of a
+    // jumped/nudged cue. When the input still reflects currentJumpPosition, save that exact
+    // value; only fall back to the parsed input when the user has typed something different.
+    const timestampToSave =
+      currentJumpPosition !== null && formatTimestamp(currentJumpPosition) === timestampInputValue
+        ? currentJumpPosition
+        : parsedTimestamp;
+
     try {
-      await api.chapters.updateTimestamp(chapterId, parsedTimestamp);
+      await api.chapters.updateTimestamp(chapterId, timestampToSave);
       cancelTimestampEdit();
     } catch (err) {
       timestampValidationError = handleApiError(err);
