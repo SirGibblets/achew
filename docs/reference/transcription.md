@@ -53,7 +53,7 @@ All model sizes have multilingual[^2] variants. All model sizes except `large` a
 
 You can configure your transcription settings from **Settings → Transcription Settings**, or in the **Transcribe Titles** screen shown before transcription occurs in specific workflows.
 
-Start by picking the **transcription service**, **model variant**, and **language** you wish to use. See the [Services](#services) section above for recommendations. For English audiobooks, an English-only model is recommended. For multilingual Whisper variants, it is recommended that you select your book's specific language, as the `Auto` option tends to be slower and less accurate.
+Start by picking the **transcription service**, **model variant**, and **language** you wish to use. See the [Services](#services) section above for recommendations. For English audiobooks, an English-only model is recommended. For multilingual Whisper variants, it is recommended that you select your book's specific language, as the `Auto` option tends to be slower and less accurate. The correct language will automatically be selected if the book's langauge is specified in Audiobookshelf.
 
 Then, configure the other options:
 

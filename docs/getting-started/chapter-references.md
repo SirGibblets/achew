@@ -176,7 +176,7 @@ In the **Audnexus Search** tab, you can search the [Audnexus](https://audnex.us)
 Each result displays relevant information that can help you decide on a good match. Use the **Eye** button in the top right of each result to preview its chapter list, and click the **Add** button to add it as a Chapter Reference.
 
 !!! tip
-    If the book has an ASIN set in Audiobookshelf, Achew auto-adds the Audnexus Reference for the US storefront at load time. Use this dialog to add new References using a different region, or to search by title when no ASIN is set.
+    If the book has an ASIN set in Audiobookshelf, Achew attempts to auto-add the Audnexus Reference at load time. Use this dialog to add new References using a different region, or to search by title when no ASIN is set.
 
 [^1]:
     Timestamps in JSON and CSV files can be in any of these formats:
