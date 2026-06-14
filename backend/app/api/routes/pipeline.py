@@ -26,6 +26,7 @@ class StartWorkflowRequest(BaseModel):
     workflow: str
     ref_id: Optional[str] = None
     dramatized: Optional[bool] = False
+    thorough: Optional[bool] = False
 
 
 class RestartPipelineRequest(BaseModel):
@@ -256,7 +257,7 @@ async def start_workflow(request: StartWorkflowRequest, background_tasks: Backgr
 
         async def run_workflow():
             try:
-                await pipeline.start_workflow(request.workflow, request.ref_id, request.dramatized)
+                await pipeline.start_workflow(request.workflow, request.ref_id, request.dramatized, request.thorough)
             except Exception as e:
                 logger.error(f"Failed to start workflow: {e}")
 

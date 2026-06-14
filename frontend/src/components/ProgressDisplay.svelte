@@ -111,12 +111,19 @@
 
   let feedText = $state<string | null>(null);
   let lastStep = $state($session.step);
+
+  // Latched for the life of this processing run: realignment sets this once when it widens
+  // its detection window, and the second extraction/analysis pass should keep showing it.
+  let expandedDetection = $state(false);
+
   $effect(() => {
     if ($session.step !== lastStep) {
       lastStep = $session.step;
       feedText = null;
     }
-    const latest = ($progress.details as { feed_text?: string } | undefined)?.feed_text;
+    const details = $progress.details as { feed_text?: string; expanded_detection?: boolean } | undefined;
+    if (details?.expanded_detection) expandedDetection = true;
+    const latest = details?.feed_text;
     if (latest) feedText = latest;
   });
 
@@ -191,6 +198,11 @@
     <h2>{currentStepConfig.title}</h2>
     <div>
       <p class="step-description">{currentStepConfig.description}</p>
+      {#if expandedDetection}
+        <p class="expanded-note" transition:slide={{ duration: 300 }}>
+          Poor alignment — performing additional detection over a wider range…
+        </p>
+      {/if}
     </div>
 
     <div class="progress-section">
@@ -316,6 +328,12 @@
 
   .step-description {
     color: var(--text-secondary);
+  }
+
+  .expanded-note {
+    margin-top: 0.5rem;
+    color: var(--warning);
+    font-size: 0.9rem;
   }
 
   .progress-section {

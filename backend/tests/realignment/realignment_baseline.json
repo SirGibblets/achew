@@ -1,18 +1,18 @@
 {
   "cases": {
     "real/realignment_fixture_20260604_211309": {
-      "confident_wrong": 4,
-      "correct": 14,
+      "confident_wrong": 2,
+      "correct": 15,
       "matchable": 18
     },
     "real/realignment_fixture_20260604_211456": {
-      "confident_wrong": 5,
-      "correct": 13,
+      "confident_wrong": 1,
+      "correct": 18,
       "matchable": 19
     },
     "real/realignment_fixture_20260604_211724": {
-      "confident_wrong": 7,
-      "correct": 15,
+      "confident_wrong": 5,
+      "correct": 18,
       "matchable": 23
     },
     "real/realignment_fixture_20260604_211909": {
@@ -26,8 +26,8 @@
       "matchable": 4
     },
     "real/realignment_fixture_20260605_002825": {
-      "confident_wrong": 1,
-      "correct": 76,
+      "confident_wrong": 0,
+      "correct": 77,
       "matchable": 77
     },
     "real/realignment_fixture_20260605_003319": {
@@ -131,13 +131,13 @@
       "matchable": 106
     },
     "real/realignment_fixture_20260606_171739": {
-      "confident_wrong": 4,
-      "correct": 95,
+      "confident_wrong": 1,
+      "correct": 98,
       "matchable": 100
     },
     "real/realignment_fixture_20260606_172004": {
-      "confident_wrong": 3,
-      "correct": 11,
+      "confident_wrong": 1,
+      "correct": 13,
       "matchable": 16
     },
     "real/realignment_fixture_20260606_172128": {
@@ -181,8 +181,8 @@
       "matchable": 60
     },
     "real/realignment_fixture_20260606_182158": {
-      "confident_wrong": 1,
-      "correct": 28,
+      "confident_wrong": 0,
+      "correct": 29,
       "matchable": 29
     },
     "real/realignment_fixture_20260606_182533": {
@@ -191,8 +191,8 @@
       "matchable": 82
     },
     "real/realignment_fixture_20260606_182935": {
-      "confident_wrong": 1,
-      "correct": 82,
+      "confident_wrong": 0,
+      "correct": 83,
       "matchable": 83
     },
     "real/realignment_fixture_20260606_183305": {
@@ -206,8 +206,8 @@
       "matchable": 94
     },
     "real/realignment_fixture_20260606_184939": {
-      "confident_wrong": 3,
-      "correct": 23,
+      "confident_wrong": 2,
+      "correct": 24,
       "matchable": 26
     },
     "real/realignment_fixture_20260606_185426": {
@@ -239,6 +239,111 @@
       "confident_wrong": 0,
       "correct": 65,
       "matchable": 65
+    },
+    "real/realignment_fixture_20260611_214849": {
+      "confident_wrong": 0,
+      "correct": 26,
+      "matchable": 26
+    },
+    "real/realignment_fixture_20260611_215016": {
+      "confident_wrong": 0,
+      "correct": 83,
+      "matchable": 83
+    },
+    "real/realignment_fixture_20260611_215210": {
+      "confident_wrong": 0,
+      "correct": 86,
+      "matchable": 86
+    },
+    "real/realignment_fixture_20260611_215415": {
+      "confident_wrong": 0,
+      "correct": 44,
+      "matchable": 44
+    },
+    "real/realignment_fixture_20260612_190156": {
+      "confident_wrong": 0,
+      "correct": 7,
+      "matchable": 7
+    },
+    "real/realignment_fixture_20260612_190351": {
+      "confident_wrong": 0,
+      "correct": 90,
+      "matchable": 90
+    },
+    "real/realignment_fixture_20260612_191101": {
+      "confident_wrong": 0,
+      "correct": 20,
+      "matchable": 20
+    },
+    "real/realignment_fixture_20260612_191237": {
+      "confident_wrong": 1,
+      "correct": 27,
+      "matchable": 29
+    },
+    "real/realignment_fixture_20260612_191835": {
+      "confident_wrong": 4,
+      "correct": 125,
+      "matchable": 130
+    },
+    "real/realignment_fixture_20260612_192041": {
+      "confident_wrong": 0,
+      "correct": 31,
+      "matchable": 31
+    },
+    "real/realignment_fixture_20260612_192245": {
+      "confident_wrong": 0,
+      "correct": 19,
+      "matchable": 19
+    },
+    "real/realignment_fixture_20260612_192600": {
+      "confident_wrong": 0,
+      "correct": 53,
+      "matchable": 53
+    },
+    "real/realignment_fixture_20260612_192845": {
+      "confident_wrong": 0,
+      "correct": 21,
+      "matchable": 21
+    },
+    "real/realignment_fixture_20260612_192956": {
+      "confident_wrong": 0,
+      "correct": 80,
+      "matchable": 80
+    },
+    "real/realignment_fixture_20260612_193627": {
+      "confident_wrong": 0,
+      "correct": 11,
+      "matchable": 11
+    },
+    "real/realignment_fixture_20260612_193820": {
+      "confident_wrong": 0,
+      "correct": 55,
+      "matchable": 55
+    },
+    "real/realignment_fixture_20260612_193929": {
+      "confident_wrong": 0,
+      "correct": 25,
+      "matchable": 25
+    },
+    "real/realignment_fixture_20260612_194202": {
+      "confident_wrong": 0,
+      "correct": 42,
+      "matchable": 42
+    },
+    "real/realignment_fixture_20260612_194515": {
+      "confident_wrong": 0,
+      "correct": 16,
+      "matchable": 16
+    },
+    "real/realignment_fixture_20260612_195201": {
+      "confident_wrong": 9,
+      "correct": 48,
+      "matchable": 59
+    },
+    "real/realignment_fixture_20260612_195623": {
+      "confident_wrong": 0,
+      "correct": 20,
+      "matchable": 20
     },
     "synthetic/clean/1": {
       "confident_wrong": 0,
@@ -340,6 +445,31 @@
       "correct": 18,
       "matchable": 18
     },
+    "synthetic/offsetting_shift/1": {
+      "confident_wrong": 0,
+      "correct": 16,
+      "matchable": 16
+    },
+    "synthetic/offsetting_shift/11": {
+      "confident_wrong": 0,
+      "correct": 15,
+      "matchable": 15
+    },
+    "synthetic/offsetting_shift/2": {
+      "confident_wrong": 0,
+      "correct": 16,
+      "matchable": 16
+    },
+    "synthetic/offsetting_shift/3": {
+      "confident_wrong": 0,
+      "correct": 16,
+      "matchable": 16
+    },
+    "synthetic/offsetting_shift/7": {
+      "confident_wrong": 0,
+      "correct": 16,
+      "matchable": 16
+    },
     "synthetic/per_chapter_jitter/1": {
       "confident_wrong": 0,
       "correct": 19,
@@ -351,18 +481,18 @@
       "matchable": 19
     },
     "synthetic/per_chapter_jitter/2": {
-      "confident_wrong": 0,
-      "correct": 19,
+      "confident_wrong": 2,
+      "correct": 17,
       "matchable": 19
     },
     "synthetic/per_chapter_jitter/3": {
-      "confident_wrong": 0,
-      "correct": 19,
+      "confident_wrong": 1,
+      "correct": 18,
       "matchable": 19
     },
     "synthetic/per_chapter_jitter/7": {
-      "confident_wrong": 2,
-      "correct": 17,
+      "confident_wrong": 1,
+      "correct": 18,
       "matchable": 19
     },
     "synthetic/step_shift/1": {
@@ -389,6 +519,31 @@
       "confident_wrong": 0,
       "correct": 19,
       "matchable": 19
+    },
+    "synthetic/tail_shift/1": {
+      "confident_wrong": 0,
+      "correct": 10,
+      "matchable": 10
+    },
+    "synthetic/tail_shift/11": {
+      "confident_wrong": 0,
+      "correct": 12,
+      "matchable": 12
+    },
+    "synthetic/tail_shift/2": {
+      "confident_wrong": 0,
+      "correct": 14,
+      "matchable": 14
+    },
+    "synthetic/tail_shift/3": {
+      "confident_wrong": 0,
+      "correct": 10,
+      "matchable": 10
+    },
+    "synthetic/tail_shift/7": {
+      "confident_wrong": 0,
+      "correct": 16,
+      "matchable": 16
     }
   },
   "tolerance": 0.1

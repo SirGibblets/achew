@@ -10,6 +10,8 @@ in ``app/api/routes/chapters.py``)::
       "ref_chapters":  [float, ...],            # source chapter timestamps
       "detected_cues": [[float, float], ...],   # [timestamp, gap] per cue
       "ground_truth":  [float | None, ...],     # user-corrected timestamp, null if deleted
+      "padding": float,                         # extraction half-width the cues were
+                                                # detected with (absent in older fixtures)
     }
 
 ``ref_chapters`` and ``ground_truth`` are index-aligned — one entry per reference chapter.
@@ -24,6 +26,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from app.api.routes.chapters import DetectedCue
+from app.core.constants import REALIGN_PADDING_DEFAULT
 from app.models.chapter import BasicChapter
 
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures"
@@ -51,6 +54,9 @@ class Fixture:
     # Per-chapter correct boundary; None where the chapter has no ground truth
     # (e.g. the user deleted it, or it has no real boundary in the audio).
     ground_truth: List[Optional[float]]
+    # Extraction padding the cues were captured with; None for fixtures captured before
+    # the field existed (their padding is reconstructed by production_padding()).
+    padding: Optional[float] = None
 
     @classmethod
     def from_json(cls, path: Path) -> "Fixture":
@@ -62,7 +68,43 @@ class Fixture:
             ref_chapters=[BasicChapter(timestamp=float(t), title="") for t in data["ref_chapters"]],
             detected_cues=[DetectedCue(timestamp=float(t), gap=float(g)) for t, g in data["detected_cues"]],
             ground_truth=[(None if t is None else float(t)) for t in data["ground_truth"]],
+            padding=(float(data["padding"]) if data.get("padding") is not None else None),
         )
+
+
+def production_padding(fx: Fixture) -> float:
+    """The extraction padding production would use for this fixture: the value recorded at
+    capture time when present, otherwise the pipeline's first-pass formula."""
+    if fx.padding is not None:
+        return fx.padding
+    return max(REALIGN_PADDING_DEFAULT, abs(fx.book_duration - fx.ref_duration) * 2)
+
+
+def extraction_regions(ref_times: Sequence[float], book_duration: float, padding: float) -> List[Tuple[float, float]]:
+    """The merged audio regions realignment detection scans — mirrors the pipeline's
+    ``_realignment_segment_times``: a ±padding window around each reference timestamp,
+    clamped to the book and coalesced."""
+    raw = []
+    for t in ref_times:
+        start = max(0.0, t - padding)
+        end = min(book_duration, t + padding)
+        if start > book_duration:
+            continue
+        raw.append((start, end))
+    raw.sort()
+    merged: List[Tuple[float, float]] = []
+    for start, end in raw:
+        if merged and start <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    return merged
+
+
+def cues_in_regions(cues: Sequence[DetectedCue], regions: Sequence[Tuple[float, float]]) -> List[DetectedCue]:
+    """Only the cues detection could actually have produced: those inside a scanned region.
+    Used to simulate a production pass from a fixture captured with wider coverage."""
+    return [c for c in cues if any(s <= c.timestamp <= e for s, e in regions)]
 
 
 @dataclass
@@ -273,6 +315,48 @@ def make_front_matter_decoy(rng: random.Random, n: int = 20) -> Fixture:
     )
 
 
+def make_offsetting_shift(rng: random.Random, n: int = 20) -> Fixture:
+    """Total durations match, but a mid-book run of boundaries is shifted well beyond the
+    default extraction padding — content inserted at one point and an equal amount removed
+    later. The duration-difference term in the padding formula sees nothing, so the shifted
+    boundaries fall outside first-pass detection coverage: the case the aligner's expansion
+    signal exists for."""
+    ref = _make_ref_chapters(rng, n)
+    k1 = rng.randint(n // 4, n // 2)
+    k2 = rng.randint(k1 + 3, min(n - 2, k1 + 7))
+    shift = rng.choice([-1, 1]) * rng.uniform(45.0, 80.0)
+    true = [r + (shift if k1 < i <= k2 else 0.0) for i, r in enumerate(ref)]
+    dur = ref[-1] + rng.uniform(600, 1800)
+    return build_fixture(
+        "offsetting_shift",
+        rng=rng,
+        ref_times=ref,
+        true_times=true,
+        ref_duration=dur,
+        book_duration=dur,
+    )
+
+
+def make_tail_shift(rng: random.Random, n: int = 20) -> Fixture:
+    """Total durations match, but every boundary from some point on is shifted beyond the
+    default extraction padding (extra content mid-book, offset by shorter trailing content
+    after the last chapter). Like offsetting_shift, invisible to the padding formula —
+    detectable only by the expansion signal."""
+    ref = _make_ref_chapters(rng, n)
+    k = rng.randint(n // 2, n - 3)
+    shift = rng.uniform(45.0, 80.0)
+    true = [r + (shift if i > k else 0.0) for i, r in enumerate(ref)]
+    dur = ref[-1] + shift + rng.uniform(600, 1800)
+    return build_fixture(
+        "tail_shift",
+        rng=rng,
+        ref_times=ref,
+        true_times=true,
+        ref_duration=dur,
+        book_duration=dur,
+    )
+
+
 def make_missing_chapter(rng: random.Random, n: int = 20) -> Fixture:
     """A reference chapter that has no real boundary in the audio (e.g. two
     chapters were narrated as one) — it must be left as a guess, not stolen from a
@@ -304,4 +388,6 @@ SYNTHETIC_BUILDERS = {
     "step_shift": make_step_shift,
     "front_matter_decoy": make_front_matter_decoy,
     "missing_chapter": make_missing_chapter,
+    "offsetting_shift": make_offsetting_shift,
+    "tail_shift": make_tail_shift,
 }

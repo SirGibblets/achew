@@ -139,10 +139,10 @@ export const session = {
     return apiRequest<StatusResponse>('/status');
   },
 
-  startWorkflow(workflow: string, refId?: string, dramatized?: boolean) {
+  startWorkflow(workflow: string, refId?: string, dramatized?: boolean, thorough?: boolean) {
     return apiRequest<unknown>('/pipeline/start-workflow', {
       method: 'POST',
-      body: { workflow, ref_id: refId, dramatized },
+      body: { workflow, ref_id: refId, dramatized, thorough },
     });
   },
 

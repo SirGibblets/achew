@@ -26,6 +26,7 @@
   let selectedQuickEditRef = $state('');
   let activeTab = $state('smart_detect');
   let isDramatized = $state(false);
+  let isThorough = $state(false);
   let chapterRefs = $state<ChapterReference[]>([]);
   let error = $state<string | null>(null);
 
@@ -77,7 +78,7 @@
           loading = false;
           return;
         }
-        await api.session.startWorkflow('realign', selectedRealignRef, isDramatized);
+        await api.session.startWorkflow('realign', selectedRealignRef, isDramatized, isThorough);
       } else if (activeTab === 'regenerate') {
         if (!selectedRegenerateRef) {
           alert('Please select a Chapter Reference.');
@@ -312,19 +313,37 @@
 
           <ReferenceFooter {titleRefs} onAddReference={() => (showAddReference = true)} />
 
-          <div class="dramatized-toggle">
-            <label>
-              <input type="checkbox" bind:checked={isDramatized} disabled={loading} />
-              <span>Dramatized</span>
-            </label>
-            <div
-              class="help-icon"
-              use:tooltip={{
-                text: 'Select this if your audiobook contains non-speech elements like music and sound effects. Detection will be slower but more accurate.',
-                delay: 0,
-              }}
-            >
-              <CircleQuestionMark size="14" />
+          <div class="detection-toggles">
+            <div class="dramatized-toggle">
+              <label>
+                <input type="checkbox" bind:checked={isDramatized} disabled={loading} />
+                <span>Dramatized</span>
+              </label>
+              <div
+                class="help-icon"
+                use:tooltip={{
+                  text: 'Select this if your audiobook contains non-speech elements like music and sound effects. Detection will be slower but more accurate.',
+                  delay: 0,
+                }}
+              >
+                <CircleQuestionMark size="14" />
+              </div>
+            </div>
+
+            <div class="dramatized-toggle">
+              <label>
+                <input type="checkbox" bind:checked={isThorough} disabled={loading} />
+                <span>Find large shifts</span>
+              </label>
+              <div
+                class="help-icon"
+                use:tooltip={{
+                  text: 'Scans more of the audio during realignment. Slower, but may help catch chapters that have shifted unusually far from the reference timestamps. Rarely needed.',
+                  delay: 0,
+                }}
+              >
+                <CircleQuestionMark size="14" />
+              </div>
             </div>
           </div>
 
@@ -758,6 +777,19 @@
     justify-content: center;
     gap: 0.5rem;
     margin-top: 1.5rem;
+  }
+
+  /* Row that holds the Dramatized + Thorough detection toggles side by side */
+  .detection-toggles {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2rem;
+    margin-top: 1.5rem;
+  }
+
+  .detection-toggles .dramatized-toggle {
+    margin-top: 0;
   }
 
   .dramatized-toggle label {

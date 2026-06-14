@@ -15,7 +15,7 @@ from app.app import get_app_state
 from app.models.abs import AudioFile, AudioInfo, Book
 
 from ..core.config import get_app_config, get_settings
-from ..core.constants import BOOK_END_IGNORE_WINDOW
+from ..core.constants import BOOK_END_IGNORE_WINDOW, REALIGN_PADDING_DEFAULT, REALIGN_PADDING_EXPANDED
 from ..core.system_info import get_worker_count
 from ..models.ai_options import AIOptions
 from ..models.chapter import ChapterData, RealignmentData
@@ -875,7 +875,13 @@ class ProcessingPipeline:
             await self.restart_at_step(RestartStep.IDLE, f"Fetching item failed: {str(e)}")
             raise
 
-    async def start_workflow(self, workflow: str, ref_id: Optional[str] = None, dramatized: Optional[bool] = False):
+    async def start_workflow(
+        self,
+        workflow: str,
+        ref_id: Optional[str] = None,
+        dramatized: Optional[bool] = False,
+        thorough: Optional[bool] = False,
+    ):
         """Run the user-selected workflow."""
 
         try:
@@ -904,7 +910,7 @@ class ProcessingPipeline:
             elif workflow == "realign":
                 if not ref_id:
                     raise ValueError("Reference ID is required for realign workflow")
-                await self.realign_chapters(ref_id, dramatized=dramatized or False)
+                await self.realign_chapters(ref_id, dramatized=dramatized or False, thorough=thorough or False)
 
             else:
                 raise ValueError(f"Invalid workflow: {workflow}")
@@ -935,8 +941,15 @@ class ProcessingPipeline:
         logger.info(f"Quick edit: loaded {len(self.chapters)} chapters from {chapter_ref.short_name}")
         self._notify_progress(Step.CHAPTER_EDITING, 0)
 
-    async def realign_chapters(self, ref_id: str, dramatized: bool = False):
-        """Realign chapter timestamps from the user-selected reference"""
+    async def realign_chapters(self, ref_id: str, dramatized: bool = False, thorough: bool = False):
+        """Realign chapter timestamps from the user-selected reference.
+
+        Detection only scans a padded window around each reference timestamp. If the
+        aligner signals that a boundary may sit outside the scanned audio (a chapter
+        shifted beyond the padding while the total durations stayed similar), the
+        padding is widened to REALIGN_PADDING_EXPANDED and extraction, detection and
+        alignment are re-run — at most once. ``thorough`` is a user option to start
+        at the expanded padding, for cases where the aligner fails to signal."""
 
         try:
             chapter_ref = next((src for src in self.chapter_refs if src.id == ref_id), None)
@@ -946,70 +959,106 @@ class ProcessingPipeline:
 
             self.is_realignment = True
 
-            self._notify_progress(
-                Step.AUDIO_EXTRACTION,
-                0,
-                "Calculating audio extraction targets…",
-            )
+            min_padding = REALIGN_PADDING_EXPANDED if thorough else REALIGN_PADDING_DEFAULT
+            padding: float = max(min_padding, abs(self.book_duration - chapter_ref.duration) * 2)
+            allow_expansion = padding < REALIGN_PADDING_EXPANDED
 
-            padding: float = max(180, abs(self.book_duration - chapter_ref.duration) * 2)
+            while True:
+                self._notify_progress(
+                    Step.AUDIO_EXTRACTION,
+                    0,
+                    "Calculating audio extraction targets…",
+                )
 
-            raw_segments = []
-            for chapter in chapter_ref.chapters:
-                start = max(0, chapter.timestamp - padding)
-                end = min(self.book_duration, chapter.timestamp + padding)
+                segment_times = self._realignment_segment_times(chapter_ref, padding)
 
-                if start > self.book_duration:
-                    continue
+                self._extraction_task = asyncio.create_task(self._extract_realignment_segments(segment_times))
+                await self._extraction_task
 
-                raw_segments.append((start, end))
+                if self.segment_files is None or self.step != Step.AUDIO_EXTRACTION:
+                    # Extraction was canceled
+                    return
 
-            segment_times: List[Tuple[float, float]] = []
+                if len(self.segment_files) != len(segment_times):
+                    raise RuntimeError("Mismatch between extracted segments and expected segments for realignment")
 
-            if raw_segments:
-                raw_segments.sort(key=lambda x: x[0])
-                current_start, current_end = raw_segments[0]
+                segment_starts, _ = zip(*segment_times)
+                segments = list(zip(segment_starts, self.segment_files))
 
-                for next_start, next_end in raw_segments[1:]:
-                    if next_start <= current_end:
-                        current_end = max(current_end, next_end)
-                    else:
-                        segment_times.append((current_start, current_end))
-                        current_start, current_end = next_start, next_end
+                if dramatized:
+                    await self._detect_realignment_cues_vad(segments)
+                else:
+                    await self._detect_realignment_cues(segments)
 
-                segment_times.append((current_start, current_end))
+                if self.detected_cues is None or self.step not in [Step.AUDIO_ANALYSIS, Step.VAD_ANALYSIS]:
+                    # Detection was canceled
+                    return
 
-            self._extraction_task = asyncio.create_task(self._extract_realignment_segments(segment_times))
-            await self._extraction_task
+                needs_expansion = await self._realign_chapters(chapter_ref, padding, segment_times, allow_expansion)
+                if not needs_expansion:
+                    return
 
-            if self.segment_files is None or self.step != Step.AUDIO_EXTRACTION:
-                # Extraction was canceled
-                return
-
-            if len(self.segment_files) != len(segment_times):
-                raise RuntimeError("Mismatch between extracted segments and expected segments for realignment")
-
-            segment_starts, _ = zip(*segment_times)
-            segments = list(zip(segment_starts, self.segment_files))
-
-            if dramatized:
-                await self._detect_realignment_cues_vad(segments)
-            else:
-                await self._detect_realignment_cues(segments)
-
-            if self.detected_cues is None or self.step not in [Step.AUDIO_ANALYSIS, Step.VAD_ANALYSIS]:
-                # Detection was canceled
-                return
-
-            await self._realign_chapters(chapter_ref, padding)
+                # Widen detection and re-run extraction/detection/alignment, exactly once.
+                logger.info(
+                    f"Realignment requested wider detection: padding {padding:.0f}s -> {REALIGN_PADDING_EXPANDED:.0f}s"
+                )
+                padding = REALIGN_PADDING_EXPANDED
+                allow_expansion = False
+                self.cleanup_segment_files()
+                self._notify_progress(
+                    Step.AUDIO_EXTRACTION,
+                    0,
+                    "Poor alignment — performing additional detection…",
+                    {"expanded_detection": True},
+                )
 
         except Exception as e:
             logger.error(f"Failed to align chapters: {e}", exc_info=True)
             await self.restart_at_step(RestartStep.SELECT_WORKFLOW, f"Processing failed: {str(e)}")
             raise
 
-    async def _realign_chapters(self, ref: ChapterReference, padding: float):
-        """Realign chapters using the detected silences and the reference chapters"""
+    def _realignment_segment_times(self, ref: ChapterReference, padding: float) -> List[Tuple[float, float]]:
+        """Merged audio regions to extract for realignment detection: a ±padding window
+        around each reference chapter timestamp, clamped to the book and coalesced."""
+        raw_segments = []
+        for chapter in ref.chapters:
+            start = max(0, chapter.timestamp - padding)
+            end = min(self.book_duration, chapter.timestamp + padding)
+
+            if start > self.book_duration:
+                continue
+
+            raw_segments.append((start, end))
+
+        segment_times: List[Tuple[float, float]] = []
+
+        if raw_segments:
+            raw_segments.sort(key=lambda x: x[0])
+            current_start, current_end = raw_segments[0]
+
+            for next_start, next_end in raw_segments[1:]:
+                if next_start <= current_end:
+                    current_end = max(current_end, next_end)
+                else:
+                    segment_times.append((current_start, current_end))
+                    current_start, current_end = next_start, next_end
+
+            segment_times.append((current_start, current_end))
+
+        return segment_times
+
+    async def _realign_chapters(
+        self,
+        ref: ChapterReference,
+        padding: float,
+        scanned_regions: List[Tuple[float, float]],
+        allow_expansion: bool,
+    ) -> bool:
+        """Realign chapters using the detected silences and the reference chapters.
+
+        Returns True — without committing any chapters — when the aligner signals that a
+        boundary may sit outside the scanned regions and ``allow_expansion`` permits a
+        retry; the caller then re-runs the whole pass with REALIGN_PADDING_EXPANDED."""
         self._notify_progress(Step.AUDIO_ANALYSIS, 100, "Aligning chapters…")
 
         try:
@@ -1018,12 +1067,16 @@ class ProcessingPipeline:
             # (large duration mismatch) must not be re-narrowed to the default.
             aligner = ChapterAligner(max_drift=padding)
 
-            aligned_chapters, _ = aligner.align(
+            aligned_chapters, stats = aligner.align(
                 ref.chapters.copy(),
                 self.detected_cues.copy() if self.detected_cues else [],
                 ref.duration,
                 self.book_duration,
+                scanned_regions=scanned_regions,
             )
+
+            if allow_expansion and stats.get("expansion_needed"):
+                return True
 
             new_chapters = []
             for i, ch in enumerate(aligned_chapters):
@@ -1051,19 +1104,23 @@ class ProcessingPipeline:
 
             self.chapters = new_chapters
 
-            self._capture_realignment_snapshot(ref)
+            self._capture_realignment_snapshot(ref, padding)
 
             self._notify_progress(Step.CHAPTER_EDITING, 0, f"Realigned {len(self.chapters)} chapters")
+
+            return False
 
         except Exception as e:
             logger.error(f"Error during chapter alignment: {e}", exc_info=True)
             await self.restart_at_step(RestartStep.SELECT_WORKFLOW, f"Alignment failed: {str(e)}")
             raise
 
-    def _capture_realignment_snapshot(self, ref: ChapterReference) -> None:
+    def _capture_realignment_snapshot(self, ref: ChapterReference, padding: float) -> None:
         """When DEBUG is set, stash the aligner inputs so the ChapterReview page can export
         a regression fixture. The user-corrected ground-truth timestamps are read live from
-        self.chapters at export time."""
+        self.chapters at export time. ``padding`` records the extraction half-width the cues
+        were detected with (post-expansion if a retry ran), so tests can reconstruct the
+        scanned regions exactly."""
         if not get_settings().DEBUG:
             self._realignment_snapshot = None
             return
@@ -1073,6 +1130,7 @@ class ProcessingPipeline:
             "book_duration": self.book_duration,
             "ref_chapters": [c.timestamp for c in ref.chapters],
             "detected_cues": [[c.timestamp, c.gap] for c in (self.detected_cues or [])],
+            "padding": padding,
         }
 
     @staticmethod

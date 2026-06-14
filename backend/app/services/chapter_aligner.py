@@ -7,8 +7,14 @@ matching**, in three tiers:
    the *unadjusted reference durations* to the spacings between cues (a monotonic duration-shape
    DP). Matching relative spacing rather than absolute position makes it immune to a global
    front-matter offset and to per-chapter slop; prefiltering to strong cues removes the bulk of
-   the decoy silences (e.g. the louder pause after a chapter title). The chapters that land are
-   placed reliably and establish accurate LOCAL positions. This is the confident tier.
+   the decoy silences (e.g. the louder pause after a chapter title). The pool depth is
+   coverage-aware (see SLACK): a narrow scan gets a shallower strong set, which measurably
+   reduces decoy flips. The chapters that land are placed reliably and establish accurate LOCAL
+   positions. This is the confident tier. The duration term needs a time-base scale; the global
+   book/reference duration ratio is used first, then revised to the robust slope through the
+   skeleton's own matches when the two disagree (see SCALE_REVISION_MIN_DELTA) — the ratio
+   mis-scales when the duration difference sits in trailing/front content rather than spread
+   across chapters, which would otherwise make the skeleton drift later with every chapter.
 
 2. FILL. The skeleton leaves runs of chapters unmatched — weak-gap true boundaries that never
    made the strong set, and (crucially) true boundaries that sit off the global scale line behind
@@ -32,6 +38,20 @@ Fills/polish only ever touch guesses; the confident skeleton tier is never moved
 is never silently wrong on a recovered boundary. On the real fixtures (≤3min duration difference,
 the design target) this scores ~97% of matchable chapters within 0.1s, the rest flagged rather
 than confidently misplaced.
+
+EXPANSION SIGNAL. Detection only covers the audio the pipeline extracted (± the extraction
+padding around each reference timestamp), so a boundary that shifted beyond the padding —
+typically offsetting insertions/removals that leave the total durations similar — is simply
+invisible: no cue exists at it. When ``align`` is given the ``scanned_regions`` that detection
+actually covered, it reports ``expansion_needed`` in the returned stats: True when some chapter
+ended up placed on no cue at all AND part of the window the aligner would have searched for it
+was never scanned. "We found nothing, but we never looked there" is not evidence the boundary
+is missing, so the pipeline reacts by widening the extraction padding and re-running detection
+and alignment once. A chapter whose searched window WAS fully scanned and still has no cue is a
+genuinely missing boundary (e.g. two chapters narrated as one) — expansion cannot help it, so it
+does not fire the signal by itself when its surroundings were densely covered. Known limit: a
+shifted region whose every chapter gets captured by a decoy chain inside the scanned windows
+leaves nothing unplaced and is undetectable post-hoc.
 """
 
 from typing import Any, Dict, List, Optional, Tuple
@@ -39,8 +59,14 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 
 from app.api.routes.chapters import BasicChapter, DetectedCue
+from app.core.constants import REALIGN_PADDING_EXPANDED
 
-# Strong-cue set size = #chapters + SLACK + a quarter more (headroom for extra real boundaries).
+# Strong-cue set size = #chapters + SLACK, plus a quarter more on a WIDE scan only
+# (max_drift >= REALIGN_PADDING_EXPANDED). The extra headroom exists to absorb strong
+# NON-boundary silences (scene breaks, disc gaps) that a wide scan sweeps up alongside the
+# true boundaries. A narrow scan never analyzed that audio — the cues the headroom was
+# budgeted for don't exist in the pool — so the extra slots only admit mid-strength decoys
+# near the boundaries, which measurably flips borderline skeleton matches on real books.
 SLACK = 3
 
 # Skeleton DP weights (duration-shape dominant, position a weak prior, gap a tie-breaker).
@@ -48,6 +74,23 @@ SK_W_POS = 0.25
 SK_W_DUR = 1.0
 SK_GAP_REWARD = 1.5
 SK_UNMATCHED = 20.0
+
+# Scale revision. The duration term scales reference spacings by the global duration ratio
+# (book / reference). That ratio is wrong when the duration difference is NOT distributed
+# across chapters but sits in trailing or front content — a long closing section, an interview
+# after the last chapter, front matter: the chapter region then runs at ~1.0 while the ratio
+# says otherwise, so the duration term over-/under-stretches and the skeleton drifts a little
+# more with every chapter. After the first skeleton pass, re-estimate the scale as the robust
+# (Theil–Sen) slope through the skeleton's own matches; if it disagrees with the ratio by more
+# than MIN_DELTA, adopt it and re-run the skeleton once. The slope is offset-invariant and
+# robust to a minority of decoy matches, and genuinely distributed drift (where the ratio is
+# right) reproduces the ratio, so the revision is a no-op there.
+SCALE_REVISION_MIN_DELTA = 0.003
+# Sanity bounds: a realignment maps a book onto a near-equal-length reference, so a slope this
+# far from 1.0 is a bad fit (mostly decoy matches), not a real time-base difference — ignore it.
+SCALE_REVISION_BOUNDS = (0.9, 1.1)
+# Don't trust a slope estimated from too few matches; fall back to the duration ratio.
+SCALE_REVISION_MIN_MATCHES = 5
 
 # Fill: a second, LOCAL duration-shape DP over each run of chapters the skeleton left
 # unmatched, over the FULL cue set and bracketed by the confident skeleton positions around the
@@ -102,65 +145,139 @@ class ChapterAligner:
         detected_cues: List[DetectedCue],
         total_duration_ref: float,
         total_duration_actual: float,
-    ) -> Tuple[List[Dict[str, Any]], Dict[str, float]]:
+        scanned_regions: Optional[List[Tuple[float, float]]] = None,
+    ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
         n = len(ref_chapters)
         if n == 0:
-            return [], {"scale": 1.0, "offset": 0.0}
+            return [], {"scale": 1.0, "offset": 0.0, "expansion_needed": False}
 
         scale = total_duration_actual / total_duration_ref if total_duration_ref > 0 else 1.0
         ref = np.array([c.timestamp for c in ref_chapters], dtype=float)
         ref0 = ref[0]
         cue_t = np.array([c.timestamp for c in detected_cues], dtype=float)
         cue_g = np.array([c.gap for c in detected_cues], dtype=float)
-
-        if not detected_cues:
-            anchor = {0: (0.0, -1, 0.0, True)}
-            return self._build(ref_chapters, anchor, cue_g, scale), {"scale": scale, "offset": -scale * ref0}
-
-        # ── Tier 1: skeleton on the strongest cues ──────────────────────
-        n_keep = min(len(detected_cues), n + self.slack + n // 4)
-        strong = sorted(
-            sorted(range(len(detected_cues)), key=lambda k: cue_g[k], reverse=True)[:n_keep],
-            key=lambda k: cue_t[k],
-        )
-        s_time = cue_t[strong]
-        s_gap = cue_g[strong]
         window = max(90.0, abs(total_duration_actual - total_duration_ref) * 2.0, self.max_drift)
-        skel_match = self._skeleton_dp(ref, s_time, s_gap, scale, window)
 
         # placed[chapter] = (time, cue_index, residual, confident). Chapter 0 anchors at 0.
         placed: Dict[int, Tuple[float, int, float, bool]] = {0: (0.0, -1, 0.0, True)}
-        for i in range(1, n):
-            j = skel_match[i]
-            if j >= 0:
-                placed[i] = (float(s_time[j]), strong[j], 0.0, True)
 
-        # ── Tier 2: fill each hole between skeleton anchors with a LOCAL duration-shape DP ──
-        # The skeleton leaves runs of chapters unmatched — weak-gap boundaries, or true
-        # boundaries that sit off the global scale line behind a front-matter/step offset. Re-run
-        # the same offset-invariant duration-shape match locally over each such run, bracketed by
-        # the confident skeleton positions around it (using the FULL cue set, since a weak true
-        # boundary may not be in the strong set). Fills are flagged as guesses (is_guess=True):
-        # the skeleton is the confident tier, a fill recovers a likely boundary without asserting
-        # certainty.
-        anchors = sorted(placed)
-        for a in range(len(anchors)):
-            lo = anchors[a]
-            hi = anchors[a + 1] if a + 1 < len(anchors) else None
-            interior = list(range(lo + 1, hi if hi is not None else n))
-            if not interior:
-                continue
-            t_lo = placed[lo][0]
-            t_hi = placed[hi][0] if hi is not None else None
-            r_scale = self._region_scale(a, anchors, placed, ref, scale)
-            region = self._fill_region(interior, ref, cue_t, cue_g, r_scale, lo, t_lo, hi, t_hi, window)
-            for i, (j, residual) in region.items():
-                placed[i] = (float(cue_t[j]), j, residual, False)
+        if detected_cues:
+            # ── Tier 1: skeleton on the strongest cues ──────────────────────
+            # Pool depth is coverage-aware: the n//4 headroom only on a wide scan (see SLACK).
+            headroom = n // 4 if self.max_drift >= REALIGN_PADDING_EXPANDED else 0
+            n_keep = min(len(detected_cues), n + self.slack + headroom)
+            strong = sorted(
+                sorted(range(len(detected_cues)), key=lambda k: cue_g[k], reverse=True)[:n_keep],
+                key=lambda k: cue_t[k],
+            )
+            s_time = cue_t[strong]
+            s_gap = cue_g[strong]
+            skel_match = self._skeleton_dp(ref, s_time, s_gap, scale, window)
 
-        # ── Tier 3: polish fills against their now-dense local neighbourhood ──
-        self._polish(n, ref, cue_t, cue_g, placed)
+            # Revise the scale if the slope through the skeleton's matches disagrees with the
+            # global duration ratio (trailing/front content contaminating the ratio); re-run once.
+            revised = self._scale_from_matches(ref, s_time, skel_match)
+            if revised is not None and abs(revised - scale) > SCALE_REVISION_MIN_DELTA:
+                scale = revised
+                skel_match = self._skeleton_dp(ref, s_time, s_gap, scale, window)
 
-        return self._build(ref_chapters, placed, cue_g, scale), {"scale": scale, "offset": -scale * ref0}
+            for i in range(1, n):
+                j = skel_match[i]
+                if j >= 0:
+                    placed[i] = (float(s_time[j]), strong[j], 0.0, True)
+
+            # ── Tier 2: fill each hole between skeleton anchors with a LOCAL duration-shape DP ──
+            # The skeleton leaves runs of chapters unmatched — weak-gap boundaries, or true
+            # boundaries that sit off the global scale line behind a front-matter/step offset. Re-run
+            # the same offset-invariant duration-shape match locally over each such run, bracketed by
+            # the confident skeleton positions around it (using the FULL cue set, since a weak true
+            # boundary may not be in the strong set). Fills are flagged as guesses (is_guess=True):
+            # the skeleton is the confident tier, a fill recovers a likely boundary without asserting
+            # certainty.
+            anchors = sorted(placed)
+            for a in range(len(anchors)):
+                lo = anchors[a]
+                hi = anchors[a + 1] if a + 1 < len(anchors) else None
+                interior = list(range(lo + 1, hi if hi is not None else n))
+                if not interior:
+                    continue
+                t_lo = placed[lo][0]
+                t_hi = placed[hi][0] if hi is not None else None
+                r_scale = self._region_scale(a, anchors, placed, ref, scale)
+                region = self._fill_region(interior, ref, cue_t, cue_g, r_scale, lo, t_lo, hi, t_hi, window)
+                for i, (j, residual) in region.items():
+                    placed[i] = (float(cue_t[j]), j, residual, False)
+
+            # ── Tier 3: polish fills against their now-dense local neighbourhood ──
+            self._polish(n, ref, cue_t, cue_g, placed)
+
+        results = self._build(ref_chapters, placed, cue_g, scale)
+
+        expansion_needed = scanned_regions is not None and self._needs_expansion(
+            results, placed, window, scanned_regions, total_duration_actual
+        )
+
+        return results, {"scale": scale, "offset": -scale * ref0, "expansion_needed": expansion_needed}
+
+    @staticmethod
+    def _scale_from_matches(ref: np.ndarray, s_time: np.ndarray, skel_match: List[int]) -> Optional[float]:
+        """Robust (Theil–Sen) slope of matched cue time vs reference time over the skeleton's
+        confident matches — an offset-invariant estimate of the chapter region's time-base,
+        immune to a minority of decoy matches. Returns None when too few matches to trust, or
+        the slope is implausibly far from 1.0 (a bad fit rather than a real time-base shift)."""
+        pts = [(ref[i], float(s_time[j])) for i, j in enumerate(skel_match) if j >= 0]
+        if len(pts) < SCALE_REVISION_MIN_MATCHES:
+            return None
+        rs = np.array([p[0] for p in pts])
+        cs = np.array([p[1] for p in pts])
+        slopes = [
+            (cs[b] - cs[a]) / (rs[b] - rs[a])
+            for a in range(len(rs))
+            for b in range(a + 1, len(rs))
+            if rs[b] - rs[a] > 1e-6
+        ]
+        if not slopes:
+            return None
+        slope = float(np.median(slopes))
+        lo, hi = SCALE_REVISION_BOUNDS
+        return slope if lo < slope < hi else None
+
+    @staticmethod
+    def _needs_expansion(
+        results: List[Dict[str, Any]],
+        placed: Dict[int, Tuple[float, int, float, bool]],
+        window: float,
+        scanned_regions: List[Tuple[float, float]],
+        total_duration_actual: float,
+    ) -> bool:
+        """Whether detection should be widened and alignment re-run: True when some chapter
+        was placed on no cue at all (interpolated by ``_build``) and part of the ±``window``
+        neighbourhood the aligner would have searched for it was never scanned. Finding no cue
+        in audio we never analyzed is not evidence the boundary is missing — only a chapter
+        whose searched window was fully covered is treated as genuinely cue-less."""
+        regions = sorted(scanned_regions)
+
+        def covered(lo: float, hi: float) -> bool:
+            # Is [lo, hi] (clamped to the book) fully inside the union of scanned regions?
+            lo, hi = max(0.0, lo), min(total_duration_actual, hi)
+            if hi <= lo:
+                return True  # nothing inside the book to scan
+            pos = lo
+            for s, e in regions:
+                if s > pos:
+                    return False
+                pos = max(pos, e)
+                if pos >= hi:
+                    return True
+            return pos >= hi
+
+        for i in range(1, len(results)):
+            if i in placed:
+                continue  # placed chapters sit on detected cues, inside scanned audio
+            t = float(results[i]["timestamp"])
+            if not covered(t - window, t + window):
+                return True
+        return False
 
     def _skeleton_dp(
         self, ref: np.ndarray, s_time: np.ndarray, s_gap: np.ndarray, scale: float, window: float

@@ -795,6 +795,7 @@ async def export_realignment_fixture():
             "ref_chapters": snapshot["ref_chapters"],
             "detected_cues": snapshot["detected_cues"],
             "ground_truth": ground_truth,
+            "padding": snapshot["padding"],
         }
 
         json_content = json.dumps(fixture, indent=2, ensure_ascii=False)
