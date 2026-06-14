@@ -211,7 +211,12 @@ def probe_segment_extension(audio_file: str, temp_dir: str) -> str:
     if src_ext not in _REMUX_CONTAINER_EXTS:
         return src_ext
 
-    for ext in _PROBE_CANDIDATES:
+    codec = get_audio_codec(audio_file)
+    candidates = list(_PROBE_CANDIDATES)
+    if codec and codec in _CODEC_EXT_MAP and _CODEC_EXT_MAP[codec] not in candidates:
+        candidates.insert(0, _CODEC_EXT_MAP[codec])
+
+    for ext in candidates:
         if _probe_extension(audio_file, ext, temp_dir=temp_dir):
             logger.info(f"Segment extension probe selected '{ext}' for {audio_file}")
             return ext
