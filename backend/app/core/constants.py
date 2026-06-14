@@ -18,3 +18,9 @@ MAX_JITTER_CROP = 0.1
 
 # Ignore silences within this many seconds of the book's end to prevent false positives.
 BOOK_END_IGNORE_WINDOW = 1.5
+
+# Default padding used to determine the extraction window for realignment
+REALIGN_PADDING_DEFAULT = 15.0
+
+# The padding used to determine the extraction window for thorough/expanded realignment
+REALIGN_PADDING_EXPANDED = 180.0

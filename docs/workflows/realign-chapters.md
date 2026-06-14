@@ -22,8 +22,9 @@ A duration mismatch between your audiobook and the Audnexus data almost always m
 2. Choose **Realign Chapters** on the *Select a Workflow* screen.
 3. **Pick a Reference**, e.g. Audnexus. If there are no References, or you wish use another Reference, click the **Add Chapter Reference** button near the bottom.
 4. Toggle the **Dramatized** checkbox for books that contain music or sound effects. Note that dramatized detection takes significantly longer than regular detection, so it is recommended to leave this unchecked for regular audiobooks.
-5. Click the **Realign** button to start the realignment process.
-6. After realignment has finished, use the [Chapter Editor](../editor/index.md) to review and polish the chapters.
+5. *(Rarely needed)* Toggle the **Find large shifts** checkbox if you believe one or more chapters have shifted unusually far from the Reference timestamps. This scans more of the audio to help find cues beyond the expected range, but takes significantly longer. Achew automatically widens its search when it detects that a chapter may have shifted out of scope, so it is recommended to leave this option unchecked most of the time.
+6. Click the **Realign** button to start the realignment process.
+7. After realignment has finished, use the [Chapter Editor](../editor/index.md) to review and polish the chapters.
 
 ## The Offset column
 

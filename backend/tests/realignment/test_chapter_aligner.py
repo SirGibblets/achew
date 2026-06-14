@@ -12,17 +12,22 @@ Two layers:
 import json
 import random
 from pathlib import Path
+from typing import Optional
 
 import pytest
 from realignment_helpers import (
     SYNTHETIC_BUILDERS,
     Fixture,
+    cues_in_regions,
+    extraction_regions,
     load_real_fixtures,
     make_front_matter_decoy,
     make_missing_chapter,
+    production_padding,
     score_alignment,
 )
 
+from app.core.constants import REALIGN_PADDING_DEFAULT, REALIGN_PADDING_EXPANDED
 from app.services.chapter_aligner import ChapterAligner
 
 # Seeds give us a handful of distinct books per scenario while staying deterministic.
@@ -33,16 +38,25 @@ BASELINE_PATH = Path(__file__).parent / "realignment_baseline.json"
 # quantization, far inside any decoy distance.
 SCORE_TOLERANCE = 0.1
 
+# Loaded once: fixtures are read-only test inputs shared by the gate and the
+# expansion-signal tests below.
+REAL_FIXTURES = load_real_fixtures()
 
-def _padding(fx: Fixture) -> float:
-    # Mirror the pipeline's extraction padding, which also bounds the match window.
-    return max(30.0, abs(fx.book_duration - fx.ref_duration) * 1.5)
+
+def _first_pass(fx: Fixture, padding: Optional[float] = None):
+    """Simulate a production realignment pass: detection only sees the cues inside the
+    extraction regions for ``padding`` (the fixture's own capture padding by default), and
+    the aligner is told which regions were scanned so it can request expansion."""
+    pad = production_padding(fx) if padding is None else padding
+    regions = extraction_regions([c.timestamp for c in fx.ref_chapters], fx.book_duration, pad)
+    cues = cues_in_regions(fx.detected_cues, regions)
+    aligner = ChapterAligner(max_drift=pad)
+    result, stats = aligner.align(fx.ref_chapters, cues, fx.ref_duration, fx.book_duration, scanned_regions=regions)
+    return result, stats, cues
 
 
 def _align(fx: Fixture):
-    aligner = ChapterAligner(max_drift=_padding(fx))
-    result, _ = aligner.align(fx.ref_chapters, fx.detected_cues, fx.ref_duration, fx.book_duration)
-    return result
+    return _first_pass(fx)[0]
 
 
 # ── Specific designed behaviours ────────────────────────────────────────────────
@@ -94,15 +108,101 @@ def test_empty_reference_returns_empty():
     assert result == []
 
 
+# ── Expansion signal ────────────────────────────────────────────────────────────
+# First-pass detection only scans ±padding around each reference timestamp; the aligner
+# reports expansion_needed when a chapter ends up on no cue and part of its search window
+# was never scanned. The pipeline then widens to REALIGN_PADDING_EXPANDED and re-runs once.
+
+
+def _max_shift(fx: Fixture) -> float:
+    refs = [c.timestamp for c in fx.ref_chapters]
+    shifts = [abs(gt - refs[i]) for i, gt in enumerate(fx.ground_truth) if i > 0 and gt is not None]
+    return max(shifts, default=0.0)
+
+
+# Real fixtures with boundaries shifted >20s from the reference. Had these books paired a
+# similar-duration reference (forcing the padding to its floor), the shifted boundaries
+# would fall outside first-pass coverage — so they are the candidates for exercising the
+# expansion signal on real cue data.
+HIGH_SHIFT_FIXTURES = [fx for fx in REAL_FIXTURES if _max_shift(fx) > 20.0]
+
+# A shifted region can be fully captured by a chain of decoy cues inside the scanned windows;
+# nothing is left unplaced, so the signal cannot see it (documented limit in chapter_aligner.py).
+# Strict xfail: starts failing if the aligner ever learns to catch it.
+#   - 164638: decoy-masked even at production coverage.
+#   - 192245: only its last two chapters shift (~20.8s), just past this test's forced 15s floor,
+#     and a decoy grabs them. Its real production padding is 31.5s (durdiff-driven), which covers
+#     those shifts — it aligns 20/20 in production and never actually needs expansion; it appears
+#     here only because the test artificially forces the floor.
+EXPANSION_BLIND_FIXTURES = {
+    "realignment_fixture_20260606_164638",
+    "realignment_fixture_20260612_192245",
+}
+
+
+def test_no_expansion_requested_at_production_coverage():
+    """Zero false positives: at its production coverage no real fixture may request a wider
+    scan when the pipeline would honour it (padding below the expanded value), since an
+    expansion re-runs the whole extraction/detection pass."""
+    fired = []
+    for fx in REAL_FIXTURES:
+        if production_padding(fx) >= REALIGN_PADDING_EXPANDED:
+            continue  # pipeline ignores the signal once padding is already at/above expanded
+        _, stats, _ = _first_pass(fx)
+        if stats["expansion_needed"]:
+            fired.append(fx.name)
+    assert not fired, f"expansion requested at production coverage: {fired}"
+
+
+@pytest.mark.parametrize("scenario", ["offsetting_shift", "tail_shift"])
+@pytest.mark.parametrize("seed", SEEDS)
+def test_shift_beyond_padding_triggers_expansion_and_recovers(scenario, seed):
+    """Boundaries shifted beyond the default padding while total durations match (offsetting
+    insertion/removal): invisible to the padding formula, so the first pass must request
+    expansion, and the expanded pass must align without confident errors."""
+    fx = SYNTHETIC_BUILDERS[scenario](random.Random(seed))
+
+    _, stats, _ = _first_pass(fx, padding=REALIGN_PADDING_DEFAULT)
+    assert stats["expansion_needed"], f"seed {seed}: first pass did not request expansion"
+
+    result, _, _ = _first_pass(fx, padding=REALIGN_PADDING_EXPANDED)
+    score = score_alignment(result, fx.ground_truth, tolerance=SCORE_TOLERANCE)
+    assert not score.confident_wrong, f"seed {seed}: confident errors after expansion: {score.confident_wrong}"
+    assert score.accuracy >= 0.85, f"seed {seed}: accuracy {score.accuracy:.2f} after expansion"
+
+
+@pytest.mark.parametrize(
+    "fx",
+    [
+        pytest.param(
+            fx,
+            id=fx.name,
+            marks=(
+                [pytest.mark.xfail(reason="decoy-masked shift: known expansion blind spot", strict=True)]
+                if fx.name in EXPANSION_BLIND_FIXTURES
+                else []
+            ),
+        )
+        for fx in HIGH_SHIFT_FIXTURES
+    ],
+)
+def test_expansion_fires_on_real_high_shift_fixtures(fx):
+    """Each high-shift fixture, re-run as if its reference had a similar duration (padding at
+    the floor, so the shifted boundaries sit outside coverage), must request expansion."""
+    _, stats, _ = _first_pass(fx, padding=REALIGN_PADDING_DEFAULT)
+    assert stats["expansion_needed"], f"{fx.name}: shifted boundaries outside coverage but no expansion requested"
+
+
 # ── Regression gate ─────────────────────────────────────────────────────────────
 
 
 def _score_case(fx: Fixture) -> dict:
     """Over chapters that have a detected cue at their ground-truth boundary (the matchable
     ones): how many the aligner placed within tolerance, and how many it got wrong while
-    asserting confidence (``is_guess`` false)."""
-    cue_times = [c.timestamp for c in fx.detected_cues]
-    result = _align(fx)
+    asserting confidence (``is_guess`` false). Cues outside the production extraction
+    coverage are excluded — detection would never have produced them."""
+    result, _, cues = _first_pass(fx)
+    cue_times = [c.timestamp for c in cues]
     matchable = correct = confident_wrong = 0
     for i, gt in enumerate(fx.ground_truth):
         if gt is None or not any(abs(c - gt) <= 0.1 for c in cue_times):
@@ -120,7 +220,7 @@ def _scorecard() -> dict:
     for scenario in SYNTHETIC_BUILDERS:
         for seed in SEEDS:
             cases[f"synthetic/{scenario}/{seed}"] = _score_case(SYNTHETIC_BUILDERS[scenario](random.Random(seed)))
-    for fx in load_real_fixtures():
+    for fx in REAL_FIXTURES:
         cases[f"real/{fx.name}"] = _score_case(fx)
     return cases
 
