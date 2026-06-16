@@ -50,6 +50,20 @@ export interface ChapterExportResult {
   mimeType: string;
 }
 
+// DEBUG-only dramatized fixture export. `fixture` is the durable JSON that gets downloaded
+// and committed (probe cues + ground-truth label + capture provenance). `computed` is the
+// heuristic's verdict at capture time, shown in the debug UI only.
+export interface DramatizedFixtureResponse {
+  fixture: Record<string, unknown>;
+  computed: {
+    is_dramatized: boolean;
+    standard_cue_count: number;
+    vad_cue_count: number;
+    unmatched_notable_cues: [number, number][];
+  };
+  filename: string;
+}
+
 export interface AIOptions {
   inferOpeningCredits: boolean;
   inferEndCredits: boolean;

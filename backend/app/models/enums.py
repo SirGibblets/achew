@@ -33,6 +33,14 @@ class Step(str, Enum):
         return list(self.__class__.__members__).index(self.name)
 
 
+class DetectionMode(str, Enum):
+    """Detection strategy for Smart Detect / Realign workflows"""
+
+    STANDARD = "standard"
+    AUTO = "auto"
+    DRAMATIZED = "dramatized"
+
+
 class RestartStep(str, Enum):
     """Potential restart points for session restart"""
 

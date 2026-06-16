@@ -1,6 +1,7 @@
 import logging
 import traceback
-from typing import Dict, List, Optional
+from datetime import datetime
+from typing import Dict, List, Literal, Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
@@ -9,9 +10,9 @@ from app.models.references import ChapterReference, TitleReference
 from app.services.processing_pipeline import PipelineProgress
 
 from ...app import get_app_state
-from ...core.config import is_abs_configured
+from ...core.config import get_settings, is_abs_configured
 from ...models.abs import AudioInfo, Book
-from ...models.enums import RestartStep, Step
+from ...models.enums import DetectionMode, RestartStep, Step
 
 logger = logging.getLogger(__name__)
 
@@ -25,8 +26,12 @@ class CreatePipelineRequest(BaseModel):
 class StartWorkflowRequest(BaseModel):
     workflow: str
     ref_id: Optional[str] = None
-    dramatized: Optional[bool] = False
+    detection_mode: DetectionMode = DetectionMode.STANDARD
     thorough: Optional[bool] = False
+
+
+class DramatizedFixtureRequest(BaseModel):
+    ground_truth: Literal["standard", "dramatized"]
 
 
 class RestartPipelineRequest(BaseModel):
@@ -257,7 +262,9 @@ async def start_workflow(request: StartWorkflowRequest, background_tasks: Backgr
 
         async def run_workflow():
             try:
-                await pipeline.start_workflow(request.workflow, request.ref_id, request.dramatized, request.thorough)
+                await pipeline.start_workflow(
+                    request.workflow, request.ref_id, request.detection_mode, request.thorough
+                )
             except Exception as e:
                 logger.error(f"Failed to start workflow: {e}")
 
@@ -272,6 +279,64 @@ async def start_workflow(request: StartWorkflowRequest, background_tasks: Backgr
         raise
     except Exception as e:
         logger.error(f"Failed to select workflow for pipeline: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/pipeline/dramatized-fixture")
+async def export_dramatized_fixture(request: DramatizedFixtureRequest):
+    """DEBUG-only: run the dramatized auto-detection probe on the current book and export
+    it as a regression test fixture tagged with the user-supplied ground-truth label.
+
+    Runs the probe silently (does not change the pipeline step / UI). Disabled (404)
+    unless DEBUG is set.
+    """
+    if not get_settings().DEBUG:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    try:
+        app_state = get_app_state()
+        pipeline = app_state.pipeline
+
+        if not pipeline:
+            raise HTTPException(status_code=404, detail="No active pipeline")
+
+        if app_state.step != Step.SELECT_WORKFLOW:
+            raise HTTPException(
+                status_code=400,
+                detail="Pipeline must be in select_workflow step to export a dramatized fixture",
+            )
+
+        # Always run fresh so captures are reproducible (bypasses the session cache).
+        analysis = await pipeline._run_dramatized_probe(broadcast=False)
+        if analysis is None or pipeline._dramatized_probe is None:
+            raise HTTPException(status_code=500, detail="Dramatized probe did not complete")
+
+        ground_truth_dramatized = request.ground_truth == "dramatized"
+
+        fixture = {
+            **pipeline._dramatized_probe,
+            "ground_truth_dramatized": ground_truth_dramatized,
+        }
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        # ``computed`` is returned for the debug UI's agree/disagree readout only; the
+        # frontend writes just ``fixture`` to the downloaded file.
+        return {
+            "fixture": fixture,
+            "computed": {
+                "is_dramatized": analysis.is_dramatized,
+                "standard_cue_count": analysis.standard_cue_count,
+                "vad_cue_count": analysis.vad_cue_count,
+                "unmatched_notable_cues": [list(cue) for cue in analysis.unmatched_notable_cues],
+            },
+            "filename": f"dramatized_fixture_{timestamp}.json",
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to export dramatized fixture: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

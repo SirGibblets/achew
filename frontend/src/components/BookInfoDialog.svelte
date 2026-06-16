@@ -85,6 +85,49 @@
       close();
     }
   }
+
+  // Debug-only dramatized fixture export: shown only in the Vite dev server (./dev.sh).
+  // Runs the auto-detection probe on this book and downloads a test fixture tagged with
+  // the chosen ground-truth label. The backend probe only runs at the select_workflow step.
+  const isDev = import.meta.env.DEV;
+  let debugGroundTruth = $state<'standard' | 'dramatized'>('standard');
+  let fixtureLoading = $state(false);
+  let fixtureResult = $state<string | null>(null);
+  let fixtureError = $state<string | null>(null);
+  let canRunFixture = $derived($session.step === 'select_workflow');
+
+  async function runDramatizedFixture() {
+    fixtureLoading = true;
+    fixtureResult = null;
+    fixtureError = null;
+    try {
+      const { fixture, computed, filename } = await api.session.exportDramatizedFixture(debugGroundTruth);
+
+      // Surface the heuristic's verdict vs the ground truth (display only — not persisted).
+      const guessed = computed.is_dramatized;
+      const truth = debugGroundTruth === 'dramatized';
+      fixtureResult =
+        `Heuristic guessed: ${guessed ? 'Dramatized' : 'Standard'}\n` +
+        `${guessed === truth ? '✓ agrees' : '✗ disagrees'} ` +
+        `(standard ${computed.standard_cue_count}, VAD ${computed.vad_cue_count}, unmatched ${computed.unmatched_notable_cues.length})`;
+
+      // Download only the durable fixture.
+      const blob = new Blob([JSON.stringify(fixture, null, 2)], { type: 'application/json' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      fixtureError = err instanceof Error ? err.message : String(err);
+      console.error('Error exporting dramatized fixture:', err);
+    } finally {
+      fixtureLoading = false;
+    }
+  }
 </script>
 
 {#if isOpen}
@@ -209,6 +252,59 @@
                 View in Audiobookshelf
                 <ExternalLink size="15" />
               </a>
+            {/if}
+
+            {#if isDev}
+              <div class="section debug-section">
+                <div class="section-header">
+                  <span class="section-title">Auto-Detect Dramatized fixture</span>
+                </div>
+                <p class="debug-hint">
+                  Runs the auto-detection probe on this book and downloads a test fixture with the ground-truth type you
+                  select. Open during workflow selection to run.
+                </p>
+                <div class="debug-controls">
+                  <div class="segmented" role="radiogroup" aria-label="Ground truth type">
+                    <button
+                      type="button"
+                      class="segment {debugGroundTruth === 'standard' ? 'active' : ''}"
+                      role="radio"
+                      aria-checked={debugGroundTruth === 'standard'}
+                      onclick={() => (debugGroundTruth = 'standard')}
+                      disabled={fixtureLoading}
+                    >
+                      Standard
+                    </button>
+                    <button
+                      type="button"
+                      class="segment {debugGroundTruth === 'dramatized' ? 'active' : ''}"
+                      role="radio"
+                      aria-checked={debugGroundTruth === 'dramatized'}
+                      onclick={() => (debugGroundTruth = 'dramatized')}
+                      disabled={fixtureLoading}
+                    >
+                      Dramatized
+                    </button>
+                  </div>
+                  <button
+                    class="debug-run-btn"
+                    type="button"
+                    onclick={runDramatizedFixture}
+                    disabled={fixtureLoading || !canRunFixture}
+                  >
+                    {fixtureLoading ? 'Running…' : 'Run detection & export fixture'}
+                  </button>
+                </div>
+                {#if !canRunFixture}
+                  <p class="debug-note">Only available during workflow selection.</p>
+                {/if}
+                {#if fixtureResult}
+                  <p class="debug-result">{fixtureResult}</p>
+                {/if}
+                {#if fixtureError}
+                  <p class="debug-error">{fixtureError}</p>
+                {/if}
+              </div>
             {/if}
           {:else}
             <div class="empty-state">No book information available.</div>
@@ -443,10 +539,9 @@
   }
 
   .section-title {
-    font-size: 0.75rem;
-    text-transform: uppercase;
+    font-size: 0.825rem;
     letter-spacing: 0.03em;
-    color: var(--text-muted);
+    color: var(--text-secondary);
   }
 
   .section-summary {
@@ -517,6 +612,97 @@
     padding: 1rem 0;
     color: var(--text-muted);
     text-align: center;
+  }
+
+  .debug-section {
+    border-top: 1px dashed var(--border-color);
+    padding-top: 1rem;
+  }
+
+  .debug-hint {
+    margin-bottom: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+  }
+
+  .debug-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .segmented {
+    display: inline-flex;
+    border: 1px solid var(--border-color);
+    border-radius: 0.375rem;
+    overflow: hidden;
+  }
+
+  .segment {
+    padding: 0.35rem 0.85rem;
+    border: none;
+    border-right: 1px solid var(--border-color);
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .segment:last-child {
+    border-right: none;
+  }
+
+  .segment.active {
+    background: var(--primary);
+    color: white;
+    font-weight: 600;
+  }
+
+  .segment:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  .debug-run-btn {
+    padding: 0.35rem 0.85rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.375rem;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+
+  .debug-run-btn:hover:not(:disabled) {
+    background: var(--hover-bg);
+  }
+
+  .debug-run-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  .debug-note {
+    margin: 0;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+
+  .debug-result {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--text-primary);
+    white-space: pre-line;
+  }
+
+  .debug-error {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--danger);
   }
 
   @media (max-width: 768px) {

@@ -9,7 +9,12 @@ import tempfile
 import threading
 from typing import Any, Dict, List, Optional, Tuple
 
-from app.core.constants import MIN_SILENCE_DURATION
+from app.core.constants import (
+    MIN_SILENCE_DURATION,
+    VAD_MIN_SPEECH_DURATION_MS,
+    VAD_NEG_SPEECH_THRESHOLD,
+    VAD_SPEECH_THRESHOLD,
+)
 from app.core.system_info import get_worker_count
 from app.models.enums import Step
 from app.models.progress import ProgressCallback
@@ -172,6 +177,9 @@ class VadDetectionService:
             str(duration_to_use),
             str(MIN_SILENCE_DURATION),
             "true",  # Enable progress tracking
+            str(VAD_SPEECH_THRESHOLD),
+            str(VAD_NEG_SPEECH_THRESHOLD),
+            str(VAD_MIN_SPEECH_DURATION_MS),
         ]
 
         loop = asyncio.get_event_loop()

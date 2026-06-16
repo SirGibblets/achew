@@ -17,6 +17,7 @@ import type {
   CustomInstruction,
   CustomInstructionsResponse,
   DetectedCuesResponse,
+  DramatizedFixtureResponse,
   EditorSettings,
   EditorSettingsUpdateResponse,
   ChapterReference,
@@ -35,6 +36,7 @@ import type {
   ValidateItemResponse,
 } from '../types';
 import type { ChapterData } from '../types/chapter';
+import type { DetectionMode } from '../types/enums';
 
 const API_BASE = window.location.origin;
 
@@ -139,10 +141,17 @@ export const session = {
     return apiRequest<StatusResponse>('/status');
   },
 
-  startWorkflow(workflow: string, refId?: string, dramatized?: boolean, thorough?: boolean) {
+  startWorkflow(workflow: string, refId?: string, detectionMode?: DetectionMode, thorough?: boolean) {
     return apiRequest<unknown>('/pipeline/start-workflow', {
       method: 'POST',
-      body: { workflow, ref_id: refId, dramatized, thorough },
+      body: { workflow, ref_id: refId, detection_mode: detectionMode, thorough },
+    });
+  },
+
+  exportDramatizedFixture(groundTruth: 'standard' | 'dramatized') {
+    return apiRequest<DramatizedFixtureResponse>('/pipeline/dramatized-fixture', {
+      method: 'POST',
+      body: { ground_truth: groundTruth },
     });
   },
 

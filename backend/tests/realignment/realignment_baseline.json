@@ -345,6 +345,26 @@
       "correct": 20,
       "matchable": 20
     },
+    "real/realignment_fixture_20260614_233451": {
+      "confident_wrong": 0,
+      "correct": 29,
+      "matchable": 29
+    },
+    "real/realignment_fixture_20260615_194121": {
+      "confident_wrong": 9,
+      "correct": 177,
+      "matchable": 190
+    },
+    "real/realignment_fixture_20260616_002153": {
+      "confident_wrong": 2,
+      "correct": 31,
+      "matchable": 34
+    },
+    "real/realignment_fixture_20260616_003032": {
+      "confident_wrong": 0,
+      "correct": 54,
+      "matchable": 54
+    },
     "synthetic/clean/1": {
       "confident_wrong": 0,
       "correct": 19,
