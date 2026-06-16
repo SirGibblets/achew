@@ -1,5 +1,5 @@
 # Stage 1: Frontend build
-FROM node:22.18.0-bookworm-slim AS frontend-builder
+FROM node:24.16.0-alpine3.24 AS frontend-builder
 
 WORKDIR /app/frontend
 
@@ -16,8 +16,8 @@ COPY frontend/ ./
 RUN npm run build
 
 # Stage 2: Backend and final image
-FROM mwader/static-ffmpeg:7.1.1 AS ffmpeg
-FROM astral/uv:0.8.11-python3.11-trixie-slim
+FROM mwader/static-ffmpeg:8.1.1 AS ffmpeg
+FROM astral/uv:0.11.21-python3.11-trixie-slim
 
 # Build arguments for image metadata
 ARG VERSION="UNKNOWN"
@@ -55,7 +55,7 @@ WORKDIR /achew
 COPY backend/ ./
 
 # Install Python dependencies using uv
-RUN uv sync
+RUN uv sync --locked
 
 # When LEGACY_CPU=1, rebuild pywhispercpp from source without AVX2/FMA.
 # The pre-built PyPI wheel includes AVX2 instructions in libggml-cpu.so that cause
