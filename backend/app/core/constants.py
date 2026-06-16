@@ -24,3 +24,12 @@ REALIGN_PADDING_DEFAULT = 15.0
 
 # The padding used to determine the extraction window for thorough/expanded realignment
 REALIGN_PADDING_EXPANDED = 180.0
+
+# VAD speech-probability threshold (0-1) for entering a speech segment
+VAD_SPEECH_THRESHOLD = 0.6
+
+# VAD hysteresis floor (0-1) for leaving a speech segment once in it
+VAD_NEG_SPEECH_THRESHOLD = 0.55
+
+# VAD minimum speech-segment length in milliseconds
+VAD_MIN_SPEECH_DURATION_MS = 250

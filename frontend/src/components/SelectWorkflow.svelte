@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, type Snippet } from 'svelte';
   import { tooltip } from '../actions/tooltip';
   import { session } from '../stores/session';
   import { api } from '../utils/api';
@@ -12,6 +12,7 @@
   import ExternalLink from '@lucide/svelte/icons/external-link';
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 
+  import { DetectionMode } from '../types/enums';
   import type { ChapterReference } from '../types/references';
 
   interface LocalChapterRow {
@@ -25,8 +26,14 @@
   let selectedRealignRef = $state('');
   let selectedQuickEditRef = $state('');
   let activeTab = $state('smart_detect');
-  let isDramatized = $state(false);
+  let detectionMode = $state<DetectionMode>(DetectionMode.AUTO);
   let isThorough = $state(false);
+
+  const DETECTION_OPTIONS: { value: DetectionMode; label: string }[] = [
+    { value: DetectionMode.STANDARD, label: 'Standard' },
+    { value: DetectionMode.AUTO, label: 'Auto' },
+    { value: DetectionMode.DRAMATIZED, label: 'Dramatized' },
+  ];
   let chapterRefs = $state<ChapterReference[]>([]);
   let error = $state<string | null>(null);
 
@@ -71,14 +78,14 @@
     loading = true;
     try {
       if (activeTab === 'smart_detect') {
-        await api.session.startWorkflow('smart_detect', undefined, isDramatized);
+        await api.session.startWorkflow('smart_detect', undefined, detectionMode);
       } else if (activeTab === 'realign') {
         if (!selectedRealignRef) {
           alert('Please select a Chapter Reference.');
           loading = false;
           return;
         }
-        await api.session.startWorkflow('realign', selectedRealignRef, isDramatized, isThorough);
+        await api.session.startWorkflow('realign', selectedRealignRef, detectionMode, isThorough);
       } else if (activeTab === 'regenerate') {
         if (!selectedRegenerateRef) {
           alert('Please select a Chapter Reference.');
@@ -165,6 +172,79 @@
   onMount(async () => {});
 </script>
 
+{#snippet detectionModes()}
+  <div class="compound-modes" role="radiogroup" aria-label="Detection mode">
+    {#each DETECTION_OPTIONS as option (option.value)}
+      <button
+        type="button"
+        class="segment {detectionMode === option.value ? 'active' : ''}"
+        role="radio"
+        aria-checked={detectionMode === option.value}
+        onclick={() => (detectionMode = option.value)}
+        disabled={loading}
+      >
+        <span class="segment-label" data-label={option.label}>{option.label}</span>
+        {#if option.value === DetectionMode.AUTO}
+          <span
+            class="mode-help"
+            role="img"
+            aria-label="Detection mode help"
+            use:tooltip={{ content: detectionModeHelp, delay: 0 }}
+          >
+            <CircleQuestionMark size="13" />
+          </span>
+        {/if}
+      </button>
+    {/each}
+  </div>
+{/snippet}
+
+{#snippet detectionModeHelp()}
+  <div class="detection-help">
+    <div class="detection-help-title">Detection Mode</div>
+    <p><strong>Standard:</strong> For speech-only narration.</p>
+    <p><strong>Dramatized:</strong> For books with music or sound effects. Much slower than Standard mode.</p>
+    <p>
+      <strong>Auto:</strong> Attempts to select the best mode for your book by sampling a small portion of the audio.
+    </p>
+  </div>
+{/snippet}
+
+{#snippet compoundButton(action: Snippet)}
+  <div class="compound-button">
+    {@render detectionModes()}
+    {@render action()}
+  </div>
+{/snippet}
+
+{#snippet smartDetectAction()}
+  <button class="btn btn-verify compound-action" onclick={proceedWithSelection} disabled={loading}>
+    {#if loading}
+      <span class="btn-spinner"></span>
+      Processing…
+    {:else}
+      Start Smart Detect
+    {/if}
+  </button>
+{/snippet}
+
+{#snippet realignAction()}
+  <button
+    class="btn btn-verify compound-action"
+    onclick={proceedWithSelection}
+    disabled={loading || !selectedRealignRef}
+  >
+    {#if loading}
+      <span class="btn-spinner"></span>
+      Processing…
+    {:else if selectedRealignRef}
+      Realign {getOptionInfo(selectedRealignRef).title}
+    {:else}
+      Select a Chapter Reference
+    {/if}
+  </button>
+{/snippet}
+
 <div class="chapter-options">
   {#if error}
     <div class="alert alert-danger">
@@ -248,31 +328,8 @@
 
         <ReferenceFooter {chapterRefs} {titleRefs} showRefs={true} onAddReference={() => (showAddReference = true)} />
 
-        <div class="dramatized-toggle">
-          <label>
-            <input type="checkbox" bind:checked={isDramatized} disabled={loading} />
-            <span>Dramatized</span>
-          </label>
-          <div
-            class="help-icon"
-            use:tooltip={{
-              text: 'Select this if your audiobook contains non-speech elements like music and sound effects. Detection will be slower but more accurate.',
-              delay: 0,
-            }}
-          >
-            <CircleQuestionMark size="14" />
-          </div>
-        </div>
-
-        <div class="actions">
-          <button class="btn btn-verify" onclick={proceedWithSelection} disabled={loading}>
-            {#if loading}
-              <span class="btn-spinner"></span>
-              Processing…
-            {:else}
-              Start Smart Detect
-            {/if}
-          </button>
+        <div class="workflow-footer">
+          {@render compoundButton(smartDetectAction)}
         </div>
       {:else if activeTab === 'realign'}
         <p class="tab-description">
@@ -313,24 +370,18 @@
 
           <ReferenceFooter {titleRefs} onAddReference={() => (showAddReference = true)} />
 
-          <div class="detection-toggles">
-            <div class="dramatized-toggle">
-              <label>
-                <input type="checkbox" bind:checked={isDramatized} disabled={loading} />
-                <span>Dramatized</span>
-              </label>
-              <div
-                class="help-icon"
-                use:tooltip={{
-                  text: 'Select this if your audiobook contains non-speech elements like music and sound effects. Detection will be slower but more accurate.',
-                  delay: 0,
-                }}
-              >
-                <CircleQuestionMark size="14" />
-              </div>
+          {#if realignDurationMismatch}
+            <div class="duration-warning-card">
+              <TriangleAlert size="20" color="var(--warning)" />
+              <p class="duration-warning-text">
+                The duration of the selected Chapter Reference differs significantly from your book's duration.
+                Realignment may fail or produce inaccurate results.
+              </p>
             </div>
+          {/if}
 
-            <div class="dramatized-toggle">
+          <div class="workflow-footer">
+            <div class="option-toggle">
               <label>
                 <input type="checkbox" bind:checked={isThorough} disabled={loading} />
                 <span>Find large shifts</span>
@@ -345,29 +396,8 @@
                 <CircleQuestionMark size="14" />
               </div>
             </div>
-          </div>
 
-          {#if realignDurationMismatch}
-            <div class="duration-warning-card">
-              <TriangleAlert size="20" color="var(--warning)" />
-              <p class="duration-warning-text">
-                The duration of the selected reference differs significantly from your book's duration. Realignment may
-                fail or produce inaccurate results.
-              </p>
-            </div>
-          {/if}
-
-          <div class="actions">
-            <button class="btn btn-verify" onclick={proceedWithSelection} disabled={loading || !selectedRealignRef}>
-              {#if loading}
-                <span class="btn-spinner"></span>
-                Processing…
-              {:else if selectedRealignRef}
-                Realign {getOptionInfo(selectedRealignRef).title}
-              {:else}
-                Select a Chapter Reference
-              {/if}
-            </button>
+            {@render compoundButton(realignAction)}
           </div>
         {:else}
           <div class="no-references-card">
@@ -751,7 +781,7 @@
   }
 
   .mode-btn.active {
-    background: linear-gradient(135deg, var(--accent-gradient-start) 0%, var(--accent-gradient-end) 100%);
+    background: linear-gradient(135deg, var(--verify-gradient-start) 0%, var(--verify-gradient-end) 100%);
     color: white;
     font-weight: 600;
   }
@@ -771,28 +801,137 @@
     color: var(--text-primary);
   }
 
-  .dramatized-toggle {
+  .option-toggle {
     display: flex;
     align-items: center;
-    justify-content: center;
     gap: 0.5rem;
-    margin-top: 1.5rem;
   }
 
-  /* Row that holds the Dramatized + Thorough detection toggles side by side */
-  .detection-toggles {
+  .workflow-footer {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    justify-content: center;
-    gap: 2rem;
+    gap: 1rem;
     margin-top: 1.5rem;
   }
 
-  .detection-toggles .dramatized-toggle {
-    margin-top: 0;
+  .compound-button {
+    display: flex;
+    flex-direction: column;
+    background: color-mix(in srgb, var(--bg-tertiary) 60%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent-1) 15%, transparent);
+    border-radius: 0.7rem 0.7rem 0.6rem 0.6rem;
+    overflow: hidden;
   }
 
-  .dramatized-toggle label {
+  .detection-help-title {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .detection-help p {
+    margin: 0 0 0.4rem 0;
+    color: var(--text-primary);
+    font-size: 0.85rem;
+    line-height: 1.4;
+    text-align: left;
+  }
+
+  .detection-help p:last-child {
+    margin-bottom: 0;
+  }
+
+  .compound-modes {
+    display: flex;
+    gap: 0.3rem;
+    padding: 0.35rem;
+  }
+
+  .segment {
+    flex: 1;
+    padding: 0.3rem 1rem;
+    border: none;
+    border-radius: 999px;
+    background: transparent;
+    color: color-mix(in srgb, var(--text-primary) 60%, transparent);
+    font-weight: 500;
+    font-size: 0.85rem;
+    text-align: center;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .segment:first-child,
+  .segment:last-child {
+    min-width: 6.5rem;
+  }
+
+  .segment:has(.mode-help) {
+    padding-right: 0.7rem;
+  }
+
+  /* Size the label to a hidden bold copy of itself, stacked underneath in a
+     single-column grid. The cell is always as wide as the active (bold) weight,
+     so each button's width stays fixed across selection states — independent of
+     the Auto help icon, which sits outside this element. */
+  .segment-label {
+    display: inline-grid;
+    grid-template-columns: max-content;
+  }
+
+  .segment-label::after {
+    content: attr(data-label);
+    height: 0;
+    overflow: hidden;
+    visibility: hidden;
+    font-weight: 600;
+  }
+
+  .segment:hover:not(.active):not(:disabled) {
+    background: var(--segmented-button);
+    color: var(--text-primary);
+  }
+
+  .segment.active {
+    background: var(--segmented-button-active);
+    color: var(--text-primary);
+    font-weight: 600;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  }
+
+  .segment:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  .mode-help {
+    display: inline-flex;
+    vertical-align: middle;
+    margin-left: 0.1rem;
+    margin-top: -0.2rem;
+    color: inherit;
+    opacity: 0.75;
+    cursor: help;
+  }
+
+  .mode-help:hover {
+    opacity: 1;
+  }
+
+  .compound-action {
+    width: 100%;
+    border-radius: 0.5rem 0.5rem 0 0;
+  }
+
+  .compound-action,
+  .compound-action:hover:not(:disabled) {
+    border: none;
+  }
+
+  .option-toggle label {
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -802,7 +941,7 @@
     margin: 0;
   }
 
-  .dramatized-toggle input[type='checkbox'] {
+  .option-toggle input[type='checkbox'] {
     width: 16px;
     height: 16px;
     accent-color: var(--primary-color);

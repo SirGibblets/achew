@@ -37,3 +37,12 @@ export const RestartStep = {
 } as const;
 
 export type RestartStep = (typeof RestartStep)[keyof typeof RestartStep];
+
+// Detection strategy for the Smart Detect / Realign workflows
+export const DetectionMode = {
+  STANDARD: 'standard',
+  AUTO: 'auto',
+  DRAMATIZED: 'dramatized',
+} as const;
+
+export type DetectionMode = (typeof DetectionMode)[keyof typeof DetectionMode];

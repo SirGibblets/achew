@@ -1016,16 +1016,27 @@ class AudioProcessingService:
                             pass
                     break
 
+        # Two-stage seek: a fast input-side -ss to ~safe_margin before the block
+        # start, then an accurate output-side -ss to b_start, with -copyts so the
+        # segment muxer splits at the right boundaries. A single input -ss + -t
+        # can mis-cut the segments on certain files and fails to bound -t on some
+        # containers, erroneously shifting each segment's audio.
+        safe_margin = 60.0
+        fast_start = max(0.0, b_start - safe_margin)
+
         # noinspection SpellCheckingInspection
         cmd = [
             "ffmpeg",
             "-y",
             "-ss",
+            f"{fast_start:.6f}",
+            "-copyts",
+            "-i",
+            audio_file,
+            "-ss",
             f"{b_start:.6f}",
             "-t",
             f"{b_end - b_start:.6f}",
-            "-i",
-            audio_file,
             "-map",
             "0:a:0",
         ]

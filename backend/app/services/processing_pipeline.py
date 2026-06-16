@@ -20,7 +20,7 @@ from ..core.system_info import get_worker_count
 from ..models.ai_options import AIOptions
 from ..models.chapter import ChapterData, RealignmentData
 from ..models.chapter_operation import AICleanupOperation, BatchChapterOperation, ChapterOperation
-from ..models.enums import RestartStep, Step
+from ..models.enums import DetectionMode, RestartStep, Step
 from ..models.progress import ProgressCallback
 from ..models.references import (
     BasicChapter,
@@ -33,10 +33,20 @@ from .abs_service import ABSService
 from .asr_service_options import get_asr_buffer
 from .audio_service import AudioProcessingService, pick_segment_extension, probe_audio_info, probe_segment_extension
 from .chapter_aligner import ChapterAligner
+from .dramatized_detection import SAMPLE_WINDOW_SECONDS, DramatizedAnalysis, classify_dramatized
 from .reference_parsers import csv_parser, cue_parser, epub_parser, json_parser, text_parser
 from .vad_detection_service import VadDetectionService
 
 logger = logging.getLogger(__name__)
+
+
+def _silent_progress(step: Step, percent: float, message: str = "", details: Optional[Dict[str, Any]] = None) -> None:
+    """No-op ProgressCallback used by the silent (DEBUG fixture) dramatized probe"""
+    return None
+
+
+# Message shown during auto-probe for dramatized
+DRAMATIZED_PROBE_MESSAGE = "Detecting dramatized audio…"
 
 
 class ProcessingError(Exception):
@@ -73,6 +83,12 @@ class ProcessingPipeline:
         # captured when settings.DEBUG is set so the ChapterReview page can export a
         # test fixture. See _capture_realignment_snapshot / the debug export endpoint.
         self._realignment_snapshot: Optional[Dict[str, Any]] = None
+
+        # Cached result of the dramatized auto-detection probe
+        self._dramatized_analysis: Optional[DramatizedAnalysis] = None
+
+        # Raw cues/windows from the most recent probe (for the DEBUG fixture export)
+        self._dramatized_probe: Optional[Dict[str, Any]] = None
 
         # Create temporary directory
         sys_tmp_dir = tempfile.gettempdir()
@@ -879,7 +895,7 @@ class ProcessingPipeline:
         self,
         workflow: str,
         ref_id: Optional[str] = None,
-        dramatized: Optional[bool] = False,
+        detection_mode: DetectionMode = DetectionMode.STANDARD,
         thorough: Optional[bool] = False,
     ):
         """Run the user-selected workflow."""
@@ -891,6 +907,10 @@ class ProcessingPipeline:
                 await self._quick_edit(ref_id)
 
             elif workflow == "smart_detect":
+                dramatized = await self._resolve_dramatized(detection_mode)
+                if dramatized is None:
+                    # Auto probe was cancelled
+                    return
                 if dramatized:
                     await self._detect_cues_vad()
                 else:
@@ -910,7 +930,11 @@ class ProcessingPipeline:
             elif workflow == "realign":
                 if not ref_id:
                     raise ValueError("Reference ID is required for realign workflow")
-                await self.realign_chapters(ref_id, dramatized=dramatized or False, thorough=thorough or False)
+                dramatized = await self._resolve_dramatized(detection_mode)
+                if dramatized is None:
+                    # Auto probe was cancelled
+                    return
+                await self.realign_chapters(ref_id, dramatized=dramatized, thorough=thorough or False)
 
             else:
                 raise ValueError(f"Invalid workflow: {workflow}")
@@ -1307,6 +1331,162 @@ class ProcessingPipeline:
             self._vad_task = None
             await self.restart_at_step(RestartStep.SELECT_WORKFLOW, f"VAD detection failed: {str(e)}")
             raise ProcessingError(f"Error during VAD detection: {str(e)}")
+
+    async def _resolve_dramatized(self, detection_mode: DetectionMode) -> Optional[bool]:
+        """Determine whether to use dramatized detection mode based on the provided mode.
+        AUTO runs/reuses the dramatized probe and reports the outcome with a brief status
+        message. Returns None when the AUTO probe was cancelled."""
+        if detection_mode == DetectionMode.DRAMATIZED:
+            return True
+        if detection_mode == DetectionMode.STANDARD:
+            return False
+
+        # AUTO — reuse the cached probe for this book if present, else run it now
+        analysis = self._dramatized_analysis
+        if analysis is None:
+            analysis = await self._run_dramatized_probe(broadcast=True)
+            if analysis is None:
+                return None  # cancelled
+
+        message = (
+            "Detected dramatized audio — using detailed detection"
+            if analysis.is_dramatized
+            else "Detected standard narration — using standard detection"
+        )
+        self._notify_progress(Step.AUDIO_ANALYSIS, -1, message)
+        return analysis.is_dramatized
+
+    def _probe_windows(self) -> List[Tuple[float, float]]:
+        """Audio windows sampled for the dramatized probe: the first and last
+        SAMPLE_WINDOW_SECONDS of the book, coalesced (they merge for short books)."""
+        duration = self.book_duration
+        head = (0.0, min(SAMPLE_WINDOW_SECONDS, duration))
+        tail = (max(0.0, duration - SAMPLE_WINDOW_SECONDS), duration)
+        return self._merge_regions([head, tail])
+
+    async def _run_dramatized_probe(self, broadcast: bool) -> Optional[DramatizedAnalysis]:
+        """Sample the start and end of the book, run both standard and VAD detection on
+        those windows, and classify the book as dramatized.
+
+        When ``broadcast`` is True the probe drives the AUDIO_EXTRACTION/AUDIO_ANALYSIS/VAD
+        steps and is cancellable through the normal cancel route; when False it runs
+        silently (DEBUG fixture export) without disturbing ``self.step``. Returns None when
+        cancelled. Caches the result and the raw cues/windows for the fixture export."""
+        windows = self._probe_windows()
+        segment_extension = self.segment_extension or pick_segment_extension(self.audio_file_path)
+
+        # Use one consistent probe message, while keeping step + percent
+        if broadcast:
+            scoped = self._scoped_progress_callback()
+
+            def extraction_callback(
+                step: Step, percent: float, message: str = "", details: Optional[Dict[str, Any]] = None
+            ) -> None:
+                scoped(step, percent, DRAMATIZED_PROBE_MESSAGE, details or {})
+
+            def vad_callback(
+                step: Step, percent: float, message: str = "", details: Optional[Dict[str, Any]] = None
+            ) -> None:
+                self._notify_progress(step, percent, DRAMATIZED_PROBE_MESSAGE, details or {})
+        else:
+            extraction_callback = _silent_progress
+            vad_callback = _silent_progress
+
+        audio_service = AudioProcessingService(
+            extraction_callback, self._running_processes, process_lock=self._process_lock
+        )
+
+        if broadcast:
+            self._notify_progress(Step.AUDIO_EXTRACTION, 0, DRAMATIZED_PROBE_MESSAGE)
+
+        self._extraction_task = asyncio.create_task(
+            audio_service.extract_segments(
+                audio_file=self.audio_file_path,
+                timestamps=windows,
+                output_dir=self.temp_dir,
+                segment_extension=segment_extension,
+            )
+        )
+        extracted = await self._extraction_task
+        self._extraction_task = None
+
+        if extracted is None or (broadcast and self.step != Step.AUDIO_EXTRACTION):
+            return None  # cancelled
+        if len(extracted) != len(windows):
+            raise ProcessingError("Dramatized probe extracted an unexpected number of windows")
+
+        segments = [(window[0], path) for window, path in zip(windows, extracted)]
+
+        try:
+            if broadcast:
+                self._notify_progress(Step.AUDIO_ANALYSIS, -1, DRAMATIZED_PROBE_MESSAGE)
+
+            standard_cues = await self._probe_standard_cues(audio_service, segments)
+            if broadcast and self.step != Step.AUDIO_ANALYSIS:
+                return None  # cancelled
+
+            vad_service = VadDetectionService(
+                progress_callback=vad_callback,
+                running_processes=self._running_processes,
+                tmp_dir=self.temp_dir,
+            )
+            self._vad_task = asyncio.create_task(
+                vad_service.get_vad_silence_boundaries_from_segments(segments, duration=self.book_duration)
+            )
+            vad_silences = await self._vad_task
+            self._vad_task = None
+
+            if vad_silences is None or (broadcast and self.step not in (Step.VAD_PREP, Step.VAD_ANALYSIS)):
+                return None  # cancelled
+        finally:
+            for path in extracted:
+                try:
+                    os.remove(path)
+                except OSError:
+                    pass
+
+        vad_cues = [DetectedCue.from_silences(s, e) for s, e in vad_silences]
+
+        analysis = classify_dramatized(standard_cues, vad_cues)
+        self._dramatized_analysis = analysis
+        self._dramatized_probe = {
+            "book_duration": self.book_duration,
+            "windows": [[start, end] for start, end in windows],
+            "standard_cues": [[c.timestamp, c.gap] for c in standard_cues],
+            "vad_cues": [[c.timestamp, c.gap] for c in vad_cues],
+        }
+        logger.info(
+            f"Dramatized probe: standard={len(standard_cues)} vad={len(vad_cues)} "
+            f"unmatched={len(analysis.unmatched_notable_cues)} -> dramatized={analysis.is_dramatized}"
+        )
+        return analysis
+
+    async def _probe_standard_cues(
+        self,
+        audio_service: AudioProcessingService,
+        segments: List[Tuple[float, str]],
+    ) -> List[DetectedCue]:
+        """Run standard silence detection on each probe window in parallel and return the
+        detected cues on the book's absolute timeline. No book-end filtering: the probe
+        compares standard against VAD symmetrically."""
+        total = len(segments)
+        if total == 0:
+            return []
+
+        semaphore = asyncio.Semaphore(max(1, min(get_worker_count(), total)))
+
+        async def analyze_one(segment_start: float, segment_file: str) -> List[Tuple[float, float]]:
+            async with semaphore:
+                silences = await audio_service.get_silence_boundaries(segment_file, publish_progress=False)
+            if not silences:
+                return []
+            return [(s + segment_start, e + segment_start) for s, e in silences]
+
+        per_segment = await asyncio.gather(*(analyze_one(start, path) for start, path in segments))
+        silences: List[Tuple[float, float]] = sorted(
+            (item for segment in per_segment for item in segment), key=lambda s: s[0]
+        )
+        return [DetectedCue.from_silences(s, e) for s, e in silences]
 
     async def _transition_to_initial_chapter_selection(self):
         """Transition to the initial chapter selection step after silence detection is complete"""

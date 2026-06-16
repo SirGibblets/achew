@@ -30,9 +30,9 @@ The Smart Detect workflow finds chapter cues by analyzing the audio itself. This
 
 1. [**Select a book**](../getting-started/finding-a-book.md) from Achew's main screen.
 2. Choose **Smart Detect** on the *Select a Workflow* screen.
-3. Toggle the **Dramatized** checkbox for books that contain music or sound effects. Note that dramatized detection takes significantly longer than regular detection, so it is recommended to leave this unchecked for regular audiobooks.
+3. Choose a **Detection** mode. **Auto** (the default) samples a small portion of the audio to decide for you. Pick **Standard** for plain narration, or **Dramatized** for books that contain music or sound effects. Dramatized detection takes much longer, so Auto only switches to it if necessary.
 4. *(Optional)* Add or inspect existing [Chapter References](../getting-started/chapter-references.md) from this screen. These can be used for comparison once detection finishes.
-5. Click **Start Smart Detect**, and Achew will begin analyzing the audio. This process can take anywhere from a few seconds to several minutes depending on the length of the book, how powerful your machine is, and whether **Dramatized** was checked.
+5. Click **Start Smart Detect**, and Achew will begin analyzing the audio. This process can take anywhere from a few seconds to several minutes depending on the length of the book, how powerful your machine is, and which **Detection** mode was used.
 6. After detection has finished, use the **Initial Chapter Selection** screen (see below) to decide which cues will become chapters, then click **Create Chapters**.
 7. On the **Transcribe Titles** screen, choose your [transcription settings](../reference/transcription.md). If you have a [Reference](../getting-started/chapter-references.md) whose chapter timestamps line up with any of your chosen cues, you can optionally enable **Use aligned titles from** to pick and choose titles to use directly without transcribing them. See [Using aligned titles](../reference/transcription.md#using-aligned-titles) for details.
 8. Click **Transcribe Titles**. The first few seconds of audio at each chapter timestamp will be transcribed into a title.

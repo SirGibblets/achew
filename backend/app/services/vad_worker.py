@@ -7,7 +7,12 @@ in isolated subprocess environments to avoid shared memory issues and provide
 true parallelism for dramatized audiobook chapter detection.
 
 Usage:
-    python vad_worker.py <chunk_file> <chunk_index> <segment_duration> <min_silence_duration>
+    python vad_worker.py <chunks_json> <segment_duration> <min_silence_duration> <enable_progress> \
+        [threshold] [neg_threshold] [min_speech_duration_ms]
+
+The optional trailing args tune the Silero VAD speech/non-speech decision
+(see VAD_SPEECH_THRESHOLD / VAD_NEG_SPEECH_THRESHOLD / VAD_MIN_SPEECH_DURATION_MS
+in app.core.constants); when omitted they fall back to Silero's defaults.
 
 Returns:
     JSON object with chunk_index, gaps array, and error status
@@ -54,7 +59,15 @@ def find_gaps_in_speech(speech_timestamps, segment_start, segment_end, min_silen
     return gaps
 
 
-def process_multiple_chunks(chunk_files_with_indices, segment_duration, min_silence_duration, enable_progress=False):
+def process_multiple_chunks(
+    chunk_files_with_indices,
+    segment_duration,
+    min_silence_duration,
+    enable_progress=False,
+    threshold=0.5,
+    neg_threshold=0.35,
+    min_speech_duration_ms=250.0,
+):
     """Process multiple chunks sequentially in a single worker process"""
     results = []
 
@@ -154,15 +167,31 @@ def process_multiple_chunks(chunk_files_with_indices, segment_duration, min_sile
                 encoding = counting_encode(waveforms, sr, hop_size, 64)
                 segments = list(
                     model._merge_segments(
-                        model._find_segments((p[0] for p in encoding), hop_size, speech_pad_ms=30),
+                        model._find_segments(
+                            (p[0] for p in encoding),
+                            hop_size,
+                            threshold=threshold,
+                            neg_threshold=neg_threshold,
+                        ),
                         int(waveforms_len[0]),
                         sr,
+                        min_speech_duration_ms=min_speech_duration_ms,
                         speech_pad_ms=30,
                     )
                 )
                 emit_progress(100)
             else:
-                seg_results = list(model.segment_batch(waveforms, waveforms_len, 16000, speech_pad_ms=30))
+                seg_results = list(
+                    model.segment_batch(
+                        waveforms,
+                        waveforms_len,
+                        16000,
+                        threshold=threshold,
+                        neg_threshold=neg_threshold,
+                        min_speech_duration_ms=min_speech_duration_ms,
+                        speech_pad_ms=30,
+                    )
+                )
                 segments = list(seg_results[0]) if seg_results else []
 
             speech_timestamps = [{"start": s / sr, "end": e / sr} for s, e in segments]
@@ -197,7 +226,20 @@ if __name__ == "__main__":
         min_silence_duration = float(sys.argv[3])
         enable_progress = len(sys.argv) >= 5 and sys.argv[4].lower() == "true"
 
-        process_multiple_chunks(chunk_files_with_indices, segment_duration, min_silence_duration, enable_progress)
+        # Optional Silero VAD tuning args; fall back to Silero's defaults when absent.
+        threshold = float(sys.argv[5]) if len(sys.argv) >= 6 else 0.5
+        neg_threshold = float(sys.argv[6]) if len(sys.argv) >= 7 else threshold - 0.15
+        min_speech_duration_ms = float(sys.argv[7]) if len(sys.argv) >= 8 else 250.0
+
+        process_multiple_chunks(
+            chunk_files_with_indices,
+            segment_duration,
+            min_silence_duration,
+            enable_progress,
+            threshold=threshold,
+            neg_threshold=neg_threshold,
+            min_speech_duration_ms=min_speech_duration_ms,
+        )
 
     except (json.JSONDecodeError, ValueError) as e:
         print(json.dumps({"error": f"Failed to parse arguments: {str(e)}"}))
