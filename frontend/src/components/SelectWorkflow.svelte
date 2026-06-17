@@ -14,6 +14,8 @@
 
   import { DetectionMode } from '../types/enums';
   import type { ChapterReference } from '../types/references';
+  import { formatDuration } from '../utils/format';
+  import Clock from '@lucide/svelte/icons/clock';
 
   interface LocalChapterRow {
     timestamp: number;
@@ -50,6 +52,20 @@
     return Math.abs(bookDuration - ref.duration) > DURATION_MISMATCH_WARNING_SECONDS;
   });
 
+  // References within this many seconds of the book are treated as matching,
+  // so we don't surface a distracting delta for rounding-level differences.
+  const DURATION_DELTA_THRESHOLD_SECONDS = 1;
+
+  // Label describing how far a reference's duration is from the book's, e.g.
+  // "1m 12s longer". Null when within the threshold or the book duration is unknown.
+  function durationDeltaLabel(refDuration: number): string | null {
+    const bookDuration = $session.book?.duration;
+    if (bookDuration == null) return null;
+    const diff = refDuration - bookDuration;
+    if (Math.abs(diff) <= DURATION_DELTA_THRESHOLD_SECONDS) return null;
+    return `${formatDuration(Math.abs(diff), true)} ${diff > 0 ? 'longer' : 'shorter'}`;
+  }
+
   function handleReferenceAdded(newRef: { id: string; chapters?: unknown[] }) {
     if (newRef.chapters) {
       if (activeTab === 'realign') selectedRealignRef = newRef.id;
@@ -61,6 +77,8 @@
   let chapterModalOpen = $state(false);
   let chapterModalTitle = $state('');
   let chapterModalData = $state<LocalChapterRow[]>([]);
+  let chapterModalDuration = $state<number | undefined>(undefined);
+  let chapterModalDurationDelta = $state<string | null>(null);
   let chapterModalLoading = $state(false);
 
   $effect(() => {
@@ -139,6 +157,8 @@
     const ref = chapterRefs.find((s) => s.id === refId);
 
     chapterModalTitle = ref ? ref.name : 'Chapter Data';
+    chapterModalDuration = ref?.duration;
+    chapterModalDurationDelta = ref ? durationDeltaLabel(ref.duration) : null;
     chapterModalData = [];
     chapterModalOpen = true;
 
@@ -150,6 +170,8 @@
     chapterModalOpen = false;
     chapterModalData = [];
     chapterModalTitle = '';
+    chapterModalDuration = undefined;
+    chapterModalDurationDelta = null;
   }
 
   // Get the option display info
@@ -171,6 +193,47 @@
 
   onMount(async () => {});
 </script>
+
+{#snippet referenceCard(ref: ChapterReference, groupName: string, selectedId: string, onSelect: (id: string) => void)}
+  {@const delta = durationDeltaLabel(ref.duration)}
+  <div class="option-card" class:selected={selectedId === ref.id}>
+    <label>
+      <div class="option-layout">
+        <input
+          type="radio"
+          name={groupName}
+          checked={selectedId === ref.id}
+          onchange={() => onSelect(ref.id)}
+          disabled={loading}
+        />
+        <div class="option-content">
+          <div class="option-header">
+            <b>{getOptionInfo(ref.id).title}</b>
+            <div class="chapter-count-container">
+              <button
+                class="chapter-count clickable"
+                onclick={() => handleChapterCountClick(ref.id)}
+                use:tooltip={'Click to view chapter details'}
+              >
+                {ref.chapters.length} chapters
+                <ExternalLink size="12" />
+              </button>
+              {#if delta}
+                <span class="chapter-count">
+                  <Clock size="12" />
+                  {delta}
+                </span>
+              {/if}
+            </div>
+          </div>
+          <p class="description">
+            {getOptionInfo(ref.id).description}
+          </p>
+        </div>
+      </div>
+    </label>
+  </div>
+{/snippet}
 
 {#snippet detectionModes()}
   <div class="compound-modes" role="radiogroup" aria-label="Detection mode">
@@ -341,31 +404,7 @@
 
         {#if chapterRefs.length > 0}
           {#each chapterRefs as ref}
-            <div class="option-card" class:selected={selectedRealignRef === ref.id}>
-              <label>
-                <div class="option-layout">
-                  <input type="radio" bind:group={selectedRealignRef} value={ref.id} disabled={loading} />
-                  <div class="option-content">
-                    <div class="option-header">
-                      <b>{getOptionInfo(ref.id).title}</b>
-                      <div class="chapter-count-container">
-                        <button
-                          class="chapter-count clickable"
-                          onclick={() => handleChapterCountClick(ref.id)}
-                          use:tooltip={'Click to view chapter details'}
-                        >
-                          {ref.chapters.length} chapters
-                          <ExternalLink size="12" />
-                        </button>
-                      </div>
-                    </div>
-                    <p class="description">
-                      {getOptionInfo(ref.id).description}
-                    </p>
-                  </div>
-                </div>
-              </label>
-            </div>
+            {@render referenceCard(ref, 'realign', selectedRealignRef, (id) => (selectedRealignRef = id))}
           {/each}
 
           <ReferenceFooter {titleRefs} onAddReference={() => (showAddReference = true)} />
@@ -415,31 +454,7 @@
 
         {#if chapterRefs.length > 0}
           {#each chapterRefs as ref}
-            <div class="option-card" class:selected={selectedRegenerateRef === ref.id}>
-              <label>
-                <div class="option-layout">
-                  <input type="radio" bind:group={selectedRegenerateRef} value={ref.id} disabled={loading} />
-                  <div class="option-content">
-                    <div class="option-header">
-                      <b>{getOptionInfo(ref.id).title}</b>
-                      <div class="chapter-count-container">
-                        <button
-                          class="chapter-count clickable"
-                          onclick={() => handleChapterCountClick(ref.id)}
-                          use:tooltip={'Click to view chapter details'}
-                        >
-                          {ref.chapters.length} chapters
-                          <ExternalLink size="12" />
-                        </button>
-                      </div>
-                    </div>
-                    <p class="description">
-                      {getOptionInfo(ref.id).description}
-                    </p>
-                  </div>
-                </div>
-              </label>
-            </div>
+            {@render referenceCard(ref, 'regenerate', selectedRegenerateRef, (id) => (selectedRegenerateRef = id))}
           {/each}
 
           <ReferenceFooter {titleRefs} onAddReference={() => (showAddReference = true)} />
@@ -473,31 +488,7 @@
 
         {#if chapterRefs.length > 0}
           {#each chapterRefs as ref}
-            <div class="option-card" class:selected={selectedQuickEditRef === ref.id}>
-              <label>
-                <div class="option-layout">
-                  <input type="radio" bind:group={selectedQuickEditRef} value={ref.id} disabled={loading} />
-                  <div class="option-content">
-                    <div class="option-header">
-                      <b>{getOptionInfo(ref.id).title}</b>
-                      <div class="chapter-count-container">
-                        <button
-                          class="chapter-count clickable"
-                          onclick={() => handleChapterCountClick(ref.id)}
-                          use:tooltip={'Click to view chapter details'}
-                        >
-                          {ref.chapters.length} chapters
-                          <ExternalLink size="12" />
-                        </button>
-                      </div>
-                    </div>
-                    <p class="description">
-                      {getOptionInfo(ref.id).description}
-                    </p>
-                  </div>
-                </div>
-              </label>
-            </div>
+            {@render referenceCard(ref, 'quick_edit', selectedQuickEditRef, (id) => (selectedQuickEditRef = id))}
           {/each}
 
           <ReferenceFooter {titleRefs} onAddReference={() => (showAddReference = true)} />
@@ -530,6 +521,8 @@
 <ChapterModal
   bind:isOpen={chapterModalOpen}
   title={chapterModalTitle}
+  duration={chapterModalDuration}
+  durationDelta={chapterModalDurationDelta}
   chapters={chapterModalData}
   loading={chapterModalLoading}
   onclose={closeChapterModal}
@@ -625,18 +618,19 @@
     padding: 0.25rem 0.75rem;
     border-radius: 60px;
     font-size: 0.75rem;
+    line-height: normal;
     color: var(--text-primary);
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    border: none;
+    border: 1px solid transparent;
     cursor: default;
   }
 
   .chapter-count.clickable {
     cursor: pointer;
     transition: all 0.2s ease;
-    border: 1px solid transparent;
+    border: 1px solid color-mix(in srgb, var(--primary-color) 35%, transparent);
   }
 
   .chapter-count.clickable:hover {

@@ -185,7 +185,7 @@
                 {#if book.duration > 0}
                   <div class="meta-row">
                     <span class="meta-label">Duration</span>
-                    <span class="meta-value">{formatDuration(book.duration)}</span>
+                    <span class="meta-value">{formatDuration(book.duration, true)}</span>
                   </div>
                 {/if}
                 {#if codecLabel}
@@ -239,7 +239,7 @@
                     <div class="file-row">
                       <span class="file-name" title={file.metadata.filename}>{file.metadata.filename}</span>
                       <span class="file-detail"
-                        >{formatDuration(file.duration)} ({formatBytes(file.metadata.size)})</span
+                        >{formatDuration(file.duration, true)} ({formatBytes(file.metadata.size)})</span
                       >
                     </div>
                   {/each}
