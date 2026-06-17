@@ -1,13 +1,16 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import confetti from 'canvas-confetti';
   import { session } from '../stores/session';
   import { api } from '../utils/api';
+  import { getCoverColors, getThemeColors } from '../utils/coverColors';
 
   import ArrowRight from '@lucide/svelte/icons/arrow-right';
   import Check from '@lucide/svelte/icons/check';
   import ExternalLink from '@lucide/svelte/icons/external-link';
 
   let absUrl = $state('');
+  let coverImg = $state<HTMLImageElement>();
 
   let book = $derived($session.book);
   let title = $derived(book?.media.metadata.title ?? '');
@@ -31,6 +34,24 @@
     }
   });
 
+  onMount(async () => {
+    const fromCover = await getCoverColors(coverImg);
+    const colors = fromCover.length >= 2 ? fromCover : getThemeColors();
+    celebrate(colors);
+  });
+
+  function celebrate(colors: string[]) {
+    const defaults = { origin: { y: 0.7 }, colors, disableForReducedMotion: true };
+    const burst = (particleRatio: number, opts: confetti.Options) =>
+      confetti({ ...defaults, ...opts, particleCount: Math.floor(200 * particleRatio) });
+
+    burst(0.25, { spread: 26, startVelocity: 55 });
+    burst(0.2, { spread: 60 });
+    burst(0.35, { spread: 100, decay: 0.91, scalar: 0.8 });
+    burst(0.1, { spread: 120, startVelocity: 25, decay: 0.92, scalar: 1.2 });
+    burst(0.1, { spread: 120, startVelocity: 45 });
+  }
+
   function handleNewAudiobook() {
     session.deleteSession();
     api.audiobookshelf.clearAllCache().catch(console.error);
@@ -48,7 +69,7 @@
           rel="noopener noreferrer"
           aria-label={title ? `View ${title} in Audiobookshelf` : 'View in Audiobookshelf'}
         >
-          <img class="cover-image" src={coverImageUrl} alt="" />
+          <img class="cover-image" src={coverImageUrl} alt="" bind:this={coverImg} />
           {#if bookUrl}
             <div class="cover-hover">
               <span class="cover-hover-text">
@@ -95,11 +116,12 @@
     max-width: 720px;
     margin: 0 auto;
     width: 100%;
+    flex: 1;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 3.5rem;
-    padding-bottom: 1rem;
+    justify-content: center;
+    padding-bottom: 33vh;
   }
 
   .success-card {
