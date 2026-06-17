@@ -22,6 +22,7 @@
   import AICleanupDialog from './AICleanupDialog.svelte';
   import ApplyTitlesDialog from './apply_titles/ApplyTitlesDialog.svelte';
   import ShiftTimestampsDialog from './ShiftTimestampsDialog.svelte';
+  import ShiftTitlesDialog from './ShiftTitlesDialog.svelte';
   import Icon from './Icon.svelte';
 
   // Icons
@@ -38,6 +39,7 @@
   import MoreVertical from '@lucide/svelte/icons/more-vertical';
   import Wrench from '@lucide/svelte/icons/wrench';
   import Clock from '@lucide/svelte/icons/clock';
+  import ArrowDownUp from '@lucide/svelte/icons/arrow-down-up';
   import CircleQuestionMark from '@lucide/svelte/icons/circle-question-mark';
   import Trash2 from '@lucide/svelte/icons/trash-2';
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
@@ -62,6 +64,7 @@
   let showAIConfirmation = $state(false);
   let showAddChapterDialog = $state(false);
   let showShiftTimestampsDialog = $state(false);
+  let showShiftTitlesDialog = $state(false);
   let showApplyTitlesDialog = $state(false);
   let addChapterDialogChapterId = $state<string | null>(null);
   let addChapterDialogDefaultTab = $state<string | null>(null);
@@ -1322,6 +1325,16 @@
                 </button>
                 <button
                   class="btn btn-cancel btn-sm tool-btn full-width"
+                  use:tooltip={'Shift Titles'}
+                  onclick={() => (showShiftTitlesDialog = true)}
+                >
+                  <ArrowDownUp size="16" color="var(--primary-color)" />
+                  Shift Titles
+                </button>
+              </div>
+              <div class="tools-column">
+                <button
+                  class="btn btn-cancel btn-sm tool-btn full-width"
                   use:tooltip={'Transcribe Selected'}
                   onclick={transcribeSelected}
                   disabled={$selectionStats.selected === 0 || Object.keys($transcriptionStatuses).length > 0}
@@ -1329,8 +1342,6 @@
                   <Mic size="16" color="var(--primary-color)" />
                   Transcribe Selected
                 </button>
-              </div>
-              <div class="tools-column">
                 <button
                   class="btn btn-cancel btn-sm tool-btn full-width"
                   use:tooltip={'Delete Selected'}
@@ -1438,6 +1449,8 @@
 
 <!-- Shift Timestamps Dialog -->
 <ShiftTimestampsDialog bind:isOpen={showShiftTimestampsDialog} {editorSettings} />
+
+<ShiftTitlesDialog bind:isOpen={showShiftTitlesDialog} {editorSettings} />
 
 <!-- Apply Titles Dialog -->
 <ApplyTitlesDialog bind:isOpen={showApplyTitlesDialog} />

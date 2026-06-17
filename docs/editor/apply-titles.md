@@ -39,5 +39,6 @@ The two columns scroll in sync, and curved connectors visually link the pairs as
 ## Related
 
 - [Chapter References](../getting-started/chapter-references.md)
+- [Shift Titles](shift-titles.md)
 - [AI Cleanup](ai-cleanup.md)
 - [Undo and Redo](undo-redo.md)

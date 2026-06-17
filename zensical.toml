@@ -125,6 +125,7 @@ default = "latest"
   { "Adding Chapters" = "editor/add-chapter-dialog.md" },
   { "Apply Titles" = "editor/apply-titles.md" },
   { "Shift Timestamps" = "editor/shift-timestamps.md" },
+  { "Shift Titles" = "editor/shift-titles.md" },
   { "Undo and Redo" = "editor/undo-redo.md" },
   { "Keyboard Shortcuts" = "editor/keyboard-shortcuts.md" },
   { "AI Cleanup" = "editor/ai-cleanup.md" },

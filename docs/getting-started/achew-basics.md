@@ -62,7 +62,8 @@ The [Chapter Editor](../editor/overview.md) is where most of the interactive wor
 - Preview chapter audio
 - Transcribe individual chapter titles
 - Bulk-shift timestamps
-- Apply titles from another reference
+- Apply titles from another Reference
+- Shift titles between chapters
 - Undo and redo everything
 
 ## 7. Review and submit
