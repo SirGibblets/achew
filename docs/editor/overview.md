@@ -57,6 +57,7 @@ Clicking the menu button (:lucide-ellipsis-vertical:{ .icon-token }) on the Acti
 
 - **[Apply Titles](apply-titles.md) from...** allows you to set titles from [Chapter References](../getting-started/chapter-references.md). 
 - **[Shift Timestamps](shift-timestamps.md)** allows you to shift timestamps in bulk. 
+- **[Shift Titles](shift-titles.md)** moves chapter titles forward or backward across chapters in bulk. 
 - **Transcribe Selected** transcribes the selected chapters using current [transcription settings](../reference/transcription.md#configuring-transcription).
 - **Delete Selected/Unselected** deletes every selected (or unselected) chapter. 
 
@@ -69,4 +70,5 @@ When the chapter list looks right, click **Review Selected** to move to the [Rev
 - [Adding Chapters](add-chapter-dialog.md)
 - [Apply Titles](apply-titles.md)
 - [Shift Timestamps](shift-timestamps.md)
+- [Shift Titles](shift-titles.md)
 - [Keyboard Shortcuts](keyboard-shortcuts.md)
