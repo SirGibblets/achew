@@ -6,6 +6,7 @@
 
   import { tooltip } from '../actions/tooltip';
   import { audio, currentSegmentId, isPlaying } from '../stores/audio';
+  import { formatDuration } from '../utils/format';
 
   interface ChapterRow {
     timestamp?: number | string | null;
@@ -16,12 +17,22 @@
   interface Props {
     isOpen?: boolean;
     title?: string;
+    duration?: number;
+    durationDelta?: string | null;
     chapters?: ChapterRow[];
     loading?: boolean;
     onclose?: () => void;
   }
 
-  let { isOpen = $bindable(false), title = '', chapters = [], loading = false, onclose }: Props = $props();
+  let {
+    isOpen = $bindable(false),
+    title = '',
+    duration,
+    durationDelta,
+    chapters = [],
+    loading = false,
+    onclose,
+  }: Props = $props();
 
   let dialog = $state<HTMLDialogElement | null>(null);
 
@@ -80,7 +91,17 @@
 <dialog bind:this={dialog} onclick={handleDialogClick} onclose={closeModal}>
   <div class="modal-container">
     <div class="modal-header">
-      <h3>{title}</h3>
+      <div class="modal-title-group">
+        <h3>{title}</h3>
+        {#if duration}
+          <span class="modal-duration">
+            {formatDuration(duration, true)}
+            {#if durationDelta}
+              <span class="modal-duration-delta">{durationDelta}</span>
+            {/if}
+          </span>
+        {/if}
+      </div>
       <button class="close-button" onclick={closeModal} aria-label="Close modal">
         <X size="24" />
       </button>
@@ -170,11 +191,40 @@
     border-bottom: 1px solid var(--border-color);
   }
 
+  .modal-title-group {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 0;
+  }
+
   .modal-header h3 {
     margin: 0;
     color: var(--text-primary);
     font-size: 1.25rem;
     font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .modal-duration {
+    flex-shrink: 0;
+    background: var(--bg-tertiary);
+    padding: 0.25rem 0.75rem;
+    border-radius: 60px;
+    font-size: 0.75rem;
+    color: var(--text-primary);
+    white-space: nowrap;
+  }
+
+  .modal-duration-delta {
+    color: var(--text-secondary);
+  }
+
+  .modal-duration-delta::before {
+    content: '·';
+    margin-right: 0.35rem;
   }
 
   .close-button {

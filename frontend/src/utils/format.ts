@@ -1,12 +1,34 @@
-/** Format a duration in seconds as a compact `Xh Ym` / `Ym` string. */
-export function formatDuration(seconds: number | null | undefined): string {
+/**
+ * Format a duration in seconds as a compact `Xh Ym` / `Ym` string.
+ *
+ * Pass `includeSeconds` to append `Zs` — useful where second-level precision
+ * matters, e.g. comparing a chapter reference's duration against the book's.
+ *
+ * Leading and trailing zero-value units are dropped (`12h 0m 0s` → `12h`,
+ * `5m 0s` → `5m`, `1m 12s`, `30s`), but interior zeros are kept so the most
+ * significant unit stays anchored (`1h 0m 5s`).
+ */
+export function formatDuration(seconds: number | null | undefined, includeSeconds = false): string {
   if (!seconds) return '';
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
-  if (hours > 0) {
-    return `${hours}h ${minutes}m`;
-  }
-  return `${minutes}m`;
+  const secs = Math.floor(seconds % 60);
+
+  const units: { value: number; suffix: string }[] = [
+    { value: hours, suffix: 'h' },
+    { value: minutes, suffix: 'm' },
+  ];
+  if (includeSeconds) units.push({ value: secs, suffix: 's' });
+
+  let start = 0;
+  let end = units.length - 1;
+  while (start < end && units[start].value === 0) start++;
+  while (end > start && units[end].value === 0) end--;
+
+  return units
+    .slice(start, end + 1)
+    .map((u) => `${u.value}${u.suffix}`)
+    .join(' ');
 }
 
 /** Format a byte count as a human-readable size (one decimal, binary units). */
