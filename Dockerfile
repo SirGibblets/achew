@@ -15,6 +15,9 @@ COPY frontend/ ./
 # Build the frontend
 RUN npm run build
 
+# Create license notices for frontend dependencies
+RUN node scripts/generate-notices.mjs > frontend-notices.txt
+
 # Stage 2: Backend and final image
 FROM mwader/static-ffmpeg:8.1.1 AS ffmpeg
 FROM astral/uv:0.11.21-python3.11-trixie-slim
@@ -72,6 +75,14 @@ RUN if [ "$LEGACY_CPU" = "1" ]; then \
 
 # Copy in built frontend
 COPY --from=frontend-builder /app/frontend/dist ../frontend/dist
+
+# Create license notices for backend dependencies, combine with frontend notices
+COPY --from=frontend-builder /app/frontend/frontend-notices.txt ./frontend-notices.txt
+RUN uv run python scripts/generate_notices.py \
+    --title "Achew — Python dependencies" \
+    --prepend frontend-notices.txt \
+    --output THIRD_PARTY_NOTICES.txt \
+    && rm frontend-notices.txt
 
 # Expose port 8000
 EXPOSE 8000

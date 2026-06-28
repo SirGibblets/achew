@@ -24,7 +24,7 @@ Both single-file and multi-file audiobooks are supported.
 - **CSV**
 - **CUE sheet**
 - **TXT**
-- **EPUB**
+- **E-Book** (`.epub`, `.mobi`, `.azw`, `.azw3`)
 
 See [Chapter References](../getting-started/chapter-references.md) for more details.
 

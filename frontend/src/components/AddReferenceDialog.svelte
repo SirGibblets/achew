@@ -42,7 +42,7 @@
   loadProviders();
 
   const CHAPTER_EXTS = '.json, .csv, .cue';
-  const TITLE_EXTS = '.txt, .epub';
+  const TITLE_EXTS = '.txt, .epub, .mobi, .azw, .azw3';
   const ALL_EXTS = `${CHAPTER_EXTS}, ${TITLE_EXTS}`;
 
   let showHelp = $state(false);

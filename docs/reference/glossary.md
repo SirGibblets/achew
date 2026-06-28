@@ -71,7 +71,7 @@ An auto-added [Chapter Reference](../getting-started/chapter-references.md) for 
 The screen Achew shows after Smart Detect finishes analyzing audio. You use the [Cue Selection Slider](#cue-selection-slider), Intro/Outro Sensitivity slider, and (optionally) Reference comparison to choose which detected cues become chapters. See [Smart Detect → Initial Chapter Selection](../workflows/smart-detect.md#initial-chapter-selection).
 
 ## Library Files
-Files stored in the same folder alongside the original audiobook files, visible in the **Library Files** section of the book's detail page. Achew auto-loads [Chapter References](../getting-started/chapter-references.md) from files named `chapters.json`, `chapters.csv`, `*.cue`, `titles.txt`, or `*.epub`.
+Files stored in the same folder alongside the original audiobook files, visible in the **Library Files** section of the book's detail page. Achew auto-loads [Chapter References](../getting-started/chapter-references.md) from files named `chapters.json`, `chapters.csv`, `*.cue`, `titles.txt`, `*.epub`, `*.mobi`, `*.azw`, or `*.azw3`.
 
 ## LLM
 Large Language Model. The AI Cleanup feature uses one of several LLMs: OpenAI, Anthropic Claude, Google Gemini, OpenRouter, GitHub Copilot, Ollama, or LM Studio.

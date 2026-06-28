@@ -21,6 +21,7 @@ class ChapterRefType(str, Enum):
 class TitleRefType(str, Enum):
     TEXT = "text"
     EPUB = "epub"
+    MOBI = "mobi"
     CUSTOM = "custom"
 
 

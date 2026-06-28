@@ -109,11 +109,11 @@ Auto-added from **Library Files**[^2] named `titles.txt`.
 Can also be uploaded via the **Add Chapter Reference** dialog.
 </div>
 
-### :material-book-open-variant: EPUB File
-An `.epub` e-book file. Chapter titles are extracted from its Table of Contents.
+### :material-book-open-variant: E-book File
+An EPUB (`.epub`) or Mobipocket/Kindle (`.mobi`, `.azw`, `.azw3`) e-book file. Chapter titles are extracted from its Table of Contents. DRM-protected files are not supported.
 
 <div class="muted-section" markdown>
-Auto-added from **Library Files**[^2] named `*.epub`.
+Auto-added from **Library Files**[^2] named `*.epub`, `*.mobi`, `*.azw`, or `*.azw3`.
 <br>
 Can also be uploaded via the **Add Chapter Reference** dialog.
 </div>
@@ -154,11 +154,11 @@ Supported Formats:
 | [CSV file](#csv-file) | `.csv` | Chapter Reference |
 | [Cue sheet](#cue-sheet) | `.cue` | Chapter Reference |
 | [Text file](#text-file) | `.txt` | Title Reference |
-| [EPUB file](#epub-file) | `.epub` | Title Reference |
+| [E-book file](#e-book-file) | `.epub`, `.mobi`, `.azw`, `.azw3` | Title Reference |
 
 <div markdown>
 !!! tip
-    Although Title References (`.txt` or `.epub`) cannot be used to start a workflow, you are allowed to upload them from the workflow selection screen; you'll be able to use them later when [Applying Titles](../editor/apply-titles.md) or running [AI Cleanup](../editor/ai-cleanup.md).
+    Although Title References (`.txt` or e-book files) cannot be used to start a workflow, you are allowed to upload them from the workflow selection screen; you'll be able to use them later when [Applying Titles](../editor/apply-titles.md) or running [AI Cleanup](../editor/ai-cleanup.md).
 </div>
 
 </div>
