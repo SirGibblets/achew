@@ -140,6 +140,12 @@
             extension are automatically detected and added.
           </li>
           <li>
+            <strong>MOBI</strong> — a Mobipocket/Kindle e-book file (<em>".mobi"</em>, <em>".azw"</em>, or
+            <em>".azw3"</em>); chapter titles are extracted from its table of contents. These can be uploaded through
+            the Add Chapter Reference dialog. Any Library Files* with the <em>".mobi"</em>, <em>".azw"</em>, or
+            <em>".azw3"</em> extension are automatically detected and added. DRM-protected files are not supported.
+          </li>
+          <li>
             <strong>Custom Titles</strong> — a user-defined list of chapter titles. An empty list is automatically added,
             and can be edited directly in Achew.
           </li>

@@ -22,6 +22,7 @@ from ...services.reference_parsers import (
     cue_parser,
     epub_parser,
     json_parser,
+    mobi_parser,
     text_parser,
 )
 
@@ -76,7 +77,7 @@ async def upload_reference(file: UploadFile = File(...)):
     filename = file.filename or "upload"
     ext = os.path.splitext(filename)[1].lower()
 
-    supported_exts = {".json", ".csv", ".cue", ".txt", ".epub"}
+    supported_exts = {".json", ".csv", ".cue", ".txt", ".epub", ".mobi", ".azw", ".azw3"}
     if ext not in supported_exts:
         raise HTTPException(
             status_code=400,
@@ -111,6 +112,10 @@ async def upload_reference(file: UploadFile = File(...)):
 
         elif ext == ".epub":
             new_ref = epub_parser.parse(tmp_path, ref_name=filename)
+            pipeline.title_refs.append(new_ref)
+
+        elif ext in (".mobi", ".azw", ".azw3"):
+            new_ref = mobi_parser.parse(tmp_path, ref_name=filename)
             pipeline.title_refs.append(new_ref)
 
         else:

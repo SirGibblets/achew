@@ -34,7 +34,7 @@ from .asr_service_options import get_asr_buffer
 from .audio_service import AudioProcessingService, pick_segment_extension, probe_audio_info, probe_segment_extension
 from .chapter_aligner import ChapterAligner
 from .dramatized_detection import SAMPLE_WINDOW_SECONDS, DramatizedAnalysis, classify_dramatized
-from .reference_parsers import csv_parser, cue_parser, epub_parser, json_parser, text_parser
+from .reference_parsers import csv_parser, cue_parser, epub_parser, json_parser, mobi_parser, text_parser
 from .vad_detection_service import VadDetectionService
 
 logger = logging.getLogger(__name__)
@@ -595,7 +595,9 @@ class ProcessingPipeline:
                 or (ext == ".csv" and filename == "chapters.csv")
                 or ext == ".cue"
             )
-            is_title_ref_candidate = ext == ".epub" or (ext == ".txt" and stem in _TITLE_STEMS)
+            is_title_ref_candidate = ext in (".epub", ".mobi", ".azw", ".azw3") or (
+                ext == ".txt" and stem in _TITLE_STEMS
+            )
 
             if not is_chapter_ref_candidate and not is_title_ref_candidate:
                 continue
@@ -625,6 +627,8 @@ class ProcessingPipeline:
                     self.title_refs.append(text_parser.parse(tmp_path, ref_name=original_name))
                 elif ext == ".epub":
                     self.title_refs.append(epub_parser.parse(tmp_path, ref_name=original_name))
+                elif ext in (".mobi", ".azw", ".azw3"):
+                    self.title_refs.append(mobi_parser.parse(tmp_path, ref_name=original_name))
 
             except ValueError as e:
                 logger.warning(f"Failed to parse library file {original_name}: {e}")

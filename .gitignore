@@ -2,6 +2,10 @@
 backend/app/config/
 frontend/dist/
 
+# Generated for Docker build (not committed)
+THIRD_PARTY_NOTICES.txt
+frontend-notices.txt
+
 # Environments
 .venv
 

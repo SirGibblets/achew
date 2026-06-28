@@ -35,6 +35,16 @@ export default tseslint.config(
     },
   },
   {
+    // Standalone Node build/tooling scripts:
+    // lint without the type-aware project service, which is scoped to the typed
+    // browser app via tsconfig and would otherwise reject these files.
+    files: ['scripts/**/*.{js,mjs,cjs}'],
+    languageOptions: {
+      globals: { ...globals.node },
+      parserOptions: { projectService: false },
+    },
+  },
+  {
     rules: {
       '@typescript-eslint/no-unused-vars': [
         'warn',

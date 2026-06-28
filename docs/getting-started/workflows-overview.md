@@ -39,7 +39,7 @@ Three of the four workflows (Realign, Regenerate, Quick Edit) require you to pic
 ![View Reference chapters](../img/reference-view-chapters-light.webp#only-light){ width="480"; .center }
 ![View Reference chapters](../img/reference-view-chapters-dark.webp#only-dark){ width="480"; .center }
 
-If the Reference you want is not shown, click the **Add Chapter Reference** button. This will open a dialog where you can upload JSON, CSV, CUE, TXT, or EPUB files containing chapter data, or you can search for an Audnexus Reference by title and/or author. See [Chapter References](chapter-references.md).
+If the Reference you want is not shown, click the **Add Chapter Reference** button. This will open a dialog where you can upload JSON, CSV, CUE, TXT, or e-book files containing chapter data, or you can search for an Audnexus Reference by title and/or author. See [Chapter References](chapter-references.md).
 
 ## Changing your mind
 
