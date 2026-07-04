@@ -8,7 +8,7 @@ Achew supports several LLM providers for [AI Cleanup](../editor/ai-cleanup.md). 
 If you don't have any paid accounts, three providers work well at no cost:
 
 - **[Google Gemini, free tier](#gemini-google):** (Recommended) Easiest to set up. Requires a Google account. Rate-limited, but generally fine for casual use.
-- **[GitHub Copilot Free](#github-copilot):** Requires a GitHub account. Limited to [50 requests/month](https://docs.github.com/en/copilot/concepts/billing/individual-plans#github-copilot-free){:target="_blank"} on the free tier.
+- **[GitHub Copilot Free](#github-copilot):** Requires a GitHub account. Usage is limited by a monthly allowance of [GitHub AI credits](https://docs.github.com/en/copilot/concepts/billing/usage-based-billing-for-individuals){:target="_blank"} on the free tier.
 - **[Ollama](#ollama) or [LM Studio](#lm-studio):** Free, unlimited, and private, at the cost of running the model yourself. 16B+ parameter models recommended; smaller ones often produce unusable results.
 
 See the relevant provider card below for setup steps.
@@ -21,7 +21,7 @@ See the relevant provider card below for setup steps.
 | [Anthropic Claude](#claude-anthropic) | Paid | API key | Prefer `Sonnet` models for general use, `Haiku` models for simple tasks and light cleanup, and `Opus` only for very complex cleanup. |
 | [Google Gemini](#gemini-google) | Free/Paid | API key | Free tier has limited model selection and [rate limits](https://ai.google.dev/gemini-api/docs/rate-limits){:target="_blank"}. <br><br> Prefer `Flash` models for most tasks, `Lite` models for simple cleanup, and `Pro` models for complex cleanup. |
 | [OpenRouter](#openrouter) | Free/Paid | API key | Free tier has limited [model selection](https://openrouter.ai/collections/free-models){:target="_blank"}, a limit of [50 requests/day](https://openrouter.ai/pricing){:target="_blank"}, and spotty service. Small models do not work well; try to use 16B+ parameter models. |
-| [GitHub Copilot](#github-copilot) | Free/Paid | Personal access token | Free tier has limited [model selection](https://docs.github.com/en/copilot/reference/ai-models/supported-models#supported-ai-models-per-copilot-plan){:target="_blank"} and a limit of [50 requests/month](https://docs.github.com/en/copilot/concepts/billing/individual-plans#github-copilot-free){:target="_blank"} |
+| [GitHub Copilot](#github-copilot) | Free/Paid | Personal access token | Free tier has limited [model selection](https://docs.github.com/en/copilot/reference/ai-models/supported-models#supported-ai-models-per-copilot-plan){:target="_blank"} and a limited monthly allowance of [GitHub AI credits](https://docs.github.com/en/copilot/concepts/billing/usage-based-billing-for-individuals){:target="_blank"}, consumed based on token usage. |
 | [Ollama](#ollama) | Free (self-hosted) | Host URL | Local, private, unlimited. Small models do not work well; try to use 16B+ parameter models. |
 | [LM Studio](#lm-studio) | Free (self-hosted) | Host URL | Local, private, unlimited. Small models do not work well; try to use 16B+ parameter models. |
 

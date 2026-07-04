@@ -1,17 +1,26 @@
 import asyncio
 import json
 import logging
+import os
 import re
+import time
 from typing import List, Optional
 
-from copilot import CopilotClient, SubprocessConfig
+import httpx
+from copilot import CopilotClient
 from copilot.session import PermissionHandler
+from copilot.session_events import AssistantMessageDeltaData, SessionIdleData
 
 from app.models.abs import Book
 
 from .base import AIService, IncrementalJSONParser, ModelInfo, ProviderInfo
 
 logger = logging.getLogger(__name__)
+
+# Abort on a quiet runtime rather than on total duration: response length
+# scales with the book's chapter count, so a fixed deadline kills large runs.
+INACTIVITY_TIMEOUT_SECONDS = 120.0
+TOTAL_TIMEOUT_SECONDS = 600.0
 
 
 class CopilotService(AIService):
@@ -38,7 +47,25 @@ class CopilotService(AIService):
         if not github_token:
             raise ValueError("GitHub token is required")
 
-        return CopilotClient(SubprocessConfig(github_token=github_token))
+        return CopilotClient(github_token=github_token)
+
+    async def _ensure_runtime(self) -> bool:
+        """Pre-download the CLI runtime so the one-time download surfaces as a
+        progress message; client startup would do it silently. Returns True if
+        a download was performed.
+        """
+        # Private SDK module; there is no public cache-inspection API.
+        from copilot._cli_download import get_cached_cli_path, get_or_download_cli
+
+        # The cases in which client startup itself won't download anything.
+        skip_download = os.environ.get("COPILOT_SKIP_CLI_DOWNLOAD", "").lower() in ("1", "true", "yes")
+        if skip_download or os.environ.get("COPILOT_CLI_PATH") or get_cached_cli_path():
+            return False
+
+        logger.info("Copilot CLI runtime not cached; downloading")
+        self._notify_progress(0, "Downloading GitHub Copilot runtime (one-time setup)…")
+        await asyncio.get_event_loop().run_in_executor(None, get_or_download_cli)
+        return True
 
     async def load_saved_config(self) -> dict:
         """Load saved configuration for Copilot provider"""
@@ -173,6 +200,7 @@ class CopilotService(AIService):
             return False, "GitHub token is required"
 
         try:
+            await self._ensure_runtime()
             client = self._create_client(github_token)
             async with client:
                 try:
@@ -180,8 +208,8 @@ class CopilotService(AIService):
                     if not models:
                         return False, "Unable to validate. Ensure GitHub Copilot is enabled on your account."
                 except Exception as e:
-                    error_str = str(e)
-                    if "403" in error_str or "unauthorized" in error_str.lower():
+                    error_str = str(e).lower()
+                    if "403" in error_str or "unauthorized" in error_str or "not authenticated" in error_str:
                         return False, "Not authorized for GitHub Copilot. Ensure Copilot is enabled on your account."
                     raise
                 return True, "Valid"
@@ -190,20 +218,57 @@ class CopilotService(AIService):
             return False, f"Validation failed: {type(e).__name__}: {e}"
 
     """
-    Known Copilot models to use as a fallback when the models.list API
-    is unavailable (returns 403 with fine-grained PATs).
+    Last resort when both the runtime and the models API yield no models.
+    Verified usable on a free-tier account (2026-07).
     """
     KNOWN_MODELS = [
         ModelInfo(id="gpt-4o", name="GPT-4o", supports_streaming=True),
+        ModelInfo(id="gpt-4o-mini", name="GPT-4o mini", supports_streaming=True),
         ModelInfo(id="gpt-4.1", name="GPT-4.1", supports_streaming=True),
         ModelInfo(id="gpt-5-mini", name="GPT-5 mini", supports_streaming=True),
-        ModelInfo(id="gpt-5.1", name="GPT-5.1", supports_streaming=True),
-        ModelInfo(id="gpt-5.2", name="GPT-5.2", supports_streaming=True),
-        ModelInfo(id="claude-sonnet-4", name="Claude Sonnet 4", supports_streaming=True),
-        ModelInfo(id="claude-sonnet-4.5", name="Claude Sonnet 4.5", supports_streaming=True),
         ModelInfo(id="claude-haiku-4.5", name="Claude Haiku 4.5", supports_streaming=True),
-        ModelInfo(id="gemini-2.5-pro", name="Gemini 2.5 Pro", supports_streaming=True),
     ]
+
+    async def _fetch_models_from_api(self, github_token: str) -> List[ModelInfo]:
+        """Fetch usable chat models from the Copilot models API, which honors
+        PAT tokens even though the CLI runtime won't list models for them."""
+        headers = {
+            "Authorization": f"Bearer {github_token}",
+            "Copilot-Integration-Id": "copilot-developer-cli",
+            "Accept": "application/json",
+        }
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get("https://api.githubcopilot.com/models", headers=headers)
+            response.raise_for_status()
+            data = response.json()
+
+        models = []
+        seen_names = set()
+        for item in data.get("data", []):
+            capabilities = item.get("capabilities", {})
+            if capabilities.get("type") != "chat":
+                continue
+            # Policy-disabled models (user's Copilot settings) fail at request time.
+            policy = item.get("policy")
+            if policy and policy.get("state") == "disabled":
+                continue
+            # Dated snapshots share their alias's display name (e.g. "GPT-4o").
+            name = item.get("name") or item["id"]
+            if name in seen_names:
+                continue
+            seen_names.add(name)
+            models.append(
+                ModelInfo(
+                    id=item["id"],
+                    name=name,
+                    context_length=capabilities.get("limits", {}).get("max_context_window_tokens"),
+                    supports_streaming=True,
+                )
+            )
+
+        models.sort(key=lambda m: m.name.lower())
+        return models
 
     async def get_available_models(self) -> List[ModelInfo]:
         """Get list of available Copilot models, falling back to known models if list_models() fails"""
@@ -212,49 +277,36 @@ class CopilotService(AIService):
             return []
 
         try:
+            await self._ensure_runtime()
             client = self._create_client(github_token)
             async with client:
                 models = await client.list_models()
                 model_list = []
 
                 for model in models:
-                    if isinstance(model, str):
-                        model_id = model
-                        model_name = model
-                        context_length = None
-                    elif isinstance(model, dict):
-                        model_id = model.get("id", str(model))
-                        model_name = model.get("name", model_id)
-                        context_length = None
-                    elif hasattr(model, "id"):
-                        model_id = model.id
-                        model_name = getattr(model, "name", model_id)
-                        context_length = None
-                        caps = getattr(model, "capabilities", None)
-                        if caps:
-                            limits = getattr(caps, "limits", None)
-                            if limits:
-                                context_length = getattr(limits, "max_context_window_tokens", None)
-                    else:
-                        model_id = str(model)
-                        model_name = model_id
-                        context_length = None
-
+                    # Drop the "auto" pseudo-model — users pick a concrete model.
+                    if model.id == "auto":
+                        continue
                     model_list.append(
                         ModelInfo(
-                            id=model_id,
-                            name=model_name,
-                            context_length=context_length,
+                            id=model.id,
+                            name=model.name or model.id,
+                            context_length=model.capabilities.limits.max_context_window_tokens,
                             supports_streaming=True,
                         )
                     )
+
+                # Under PAT auth the runtime lists nothing but "auto", though
+                # named models still work — fetch the real list from the API.
+                if not model_list:
+                    model_list = await self._fetch_models_from_api(github_token)
 
                 if model_list:
                     model_list.sort(key=lambda m: m.name.lower())
                     return model_list
 
         except Exception as e:
-            logger.warning(f"Copilot list_models() unavailable, using fallback model list: {e}")
+            logger.warning(f"Copilot model listing unavailable, using fallback model list: {e}")
 
         return list(self.KNOWN_MODELS)
 
@@ -301,12 +353,14 @@ class CopilotService(AIService):
 
             content_received = ""
             done = asyncio.Event()
+            last_activity = time.monotonic()
 
             def on_event(event):
-                nonlocal content_received
-                match event.type.value:
-                    case "assistant.message_delta":
-                        delta = event.data.delta_content or ""
+                nonlocal content_received, last_activity
+                last_activity = time.monotonic()
+                match event.data:
+                    case AssistantMessageDeltaData() as data:
+                        delta = data.delta_content or ""
                         if delta:
                             content_received += delta
                             result = parser.feed(delta)
@@ -316,8 +370,11 @@ class CopilotService(AIService):
                                     progress,
                                     f"Processed {result['total_parsed']}/{total_chapters} chapters",
                                 )
-                    case "session.idle":
+                    case SessionIdleData():
                         done.set()
+
+            if await self._ensure_runtime():
+                self._notify_progress(0, "Sending request to GitHub Copilot…")
 
             client = self._create_client(github_token)
             async with client:
@@ -325,16 +382,28 @@ class CopilotService(AIService):
                     on_permission_request=PermissionHandler.approve_all,
                     model=model_id,
                     streaming=True,
+                    # Text-only task: no agent tools, no instruction files from the server's cwd.
+                    available_tools=[],
+                    skip_custom_instructions=True,
+                    enable_config_discovery=False,
                 ) as session:
                     session.on(on_event)
 
                     message = f"{system_prompt}\n\n{json.dumps(chapter_data)}"
                     await session.send(message)
 
-                    try:
-                        await asyncio.wait_for(done.wait(), timeout=60.0)
-                    except asyncio.TimeoutError:
-                        raise TimeoutError("Copilot request timed out after 60 seconds")
+                    start = time.monotonic()
+                    while not done.is_set():
+                        try:
+                            await asyncio.wait_for(done.wait(), timeout=5.0)
+                        except asyncio.TimeoutError:
+                            now = time.monotonic()
+                            if now - last_activity > INACTIVITY_TIMEOUT_SECONDS:
+                                raise TimeoutError(
+                                    f"Copilot stopped responding ({INACTIVITY_TIMEOUT_SECONDS:.0f}s without activity)"
+                                )
+                            if now - start > TOTAL_TIMEOUT_SECONDS:
+                                raise TimeoutError(f"Copilot request exceeded {TOTAL_TIMEOUT_SECONDS:.0f} seconds")
 
             self._notify_progress(100, "Processing AI response…")
 

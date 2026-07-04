@@ -43,7 +43,7 @@ If you're not sure which model to use, view the notes in the [provider summary](
     AI Cleanup generally costs only a few cents (or less) with most cloud LLM providers. However, if you don't want to sign up for paid access or just want a way to get started for free, you can try these options:
 
     - **Google Gemini, free tier:** Requires a Google account. Rate-limited but enough for occasional cleanup.
-    - **GitHub Copilot Free:** Requires a GitHub account. Strict monthly request limit.
+    - **GitHub Copilot Free:** Requires a GitHub account. Strict monthly usage allowance.
     - **Local LLM via Ollama or LM Studio:** Free, unlimited, and private, but requires powerful hardware.
 
     See [Free options](../getting-started/setup-llm-providers.md#free-options) for more information.

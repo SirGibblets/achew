@@ -1,5 +1,6 @@
 import logging
-from typing import Any, Dict, List, Optional, Type
+import time
+from typing import Any, Dict, List, Optional, Tuple, Type
 
 from app.models.enums import Step
 
@@ -19,11 +20,17 @@ def _noop_progress(step: Step, percent: float, message: str = "", details: Optio
     """No-op progress callback used for transient provider instances (state/validation queries)."""
 
 
+# Fetching models can take several seconds depending on the Provider.
+# Config is part of the cache key, so a changed key/host needs no invalidation.
+MODEL_CACHE_TTL_SECONDS = 3600
+
+
 class ProviderRegistry:
     """Registry for LLM providers"""
 
     def __init__(self):
         self._providers: Dict[str, Type[AIService]] = {}
+        self._model_cache: Dict[tuple, Tuple[float, List[ModelInfo]]] = {}
         self._register_builtin_providers()
 
     def _register_builtin_providers(self):
@@ -152,11 +159,22 @@ class ProviderRegistry:
             return False
 
     async def get_provider_models(self, provider_id: str, **config) -> List[ModelInfo]:
-        """Get available models for a provider"""
+        """Get available models for a provider (cached per provider+config)"""
+        cache_key = (provider_id, tuple(sorted(config.items())))
+        cached = self._model_cache.get(cache_key)
+        if cached:
+            fetched_at, models = cached
+            if time.monotonic() - fetched_at < MODEL_CACHE_TTL_SECONDS:
+                return list(models)
+
         try:
             provider = self.create_provider(provider_id, _noop_progress, **config)
             if provider:
-                return await provider.get_available_models()
+                models = await provider.get_available_models()
+                # Providers signal failure with an empty list — don't cache it.
+                if models:
+                    self._model_cache[cache_key] = (time.monotonic(), models)
+                return models
             return []
         except Exception as e:
             logger.error(f"Failed to get models for provider {provider_id}: {e}")
