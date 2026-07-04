@@ -24,7 +24,7 @@ Achew supports multiple LLM providers:
 | **Anthropic Claude** | Cloud API | No |
 | **Google Gemini** | Cloud API | Yes, limited [free tier](https://ai.google.dev/gemini-api/docs/rate-limits){:target="_blank"} |
 | **OpenRouter** | Cloud API | Varies |
-| **GitHub Copilot** | Cloud API | Yes, [50 requests/month](https://docs.github.com/en/copilot/concepts/billing/individual-plans#github-copilot-free){:target="_blank"} |
+| **GitHub Copilot** | Cloud API | Yes, limited [monthly credits](https://docs.github.com/en/copilot/concepts/billing/usage-based-billing-for-individuals){:target="_blank"} |
 | **Ollama** | Local server | Free, unlimited |
 | **LM Studio** | Local server | Free, unlimited |
 
