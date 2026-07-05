@@ -36,3 +36,11 @@ repos:
         files: ^frontend/.*\.(ts|svelte)$
         pass_filenames: false
         require_serial: true
+
+      - id: vitest
+        name: vitest (frontend)
+        entry: bash -c 'cd frontend && npm run test'
+        language: system
+        files: ^frontend/.*\.(ts|svelte)$
+        pass_filenames: false
+        require_serial: true

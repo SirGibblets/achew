@@ -8,7 +8,7 @@ This page gives a few examples of real problems that can be addressed using snap
 
 **Problem.** You ran [Realign](../workflows/realign-chapters.md) against a Chapter Reference that has generic titles. Timestamps are now correct but the generic titles (`Chapter 1`, `Chapter 2`, …) need to be re-transcribed.
 
-You *could* just click **Transcribe Selected** in the editor, and that's fine for a short book. But for books with many chapters, the [Regenerate](../workflows/regenerate-titles.md) workflow can be meaningfully faster for transcription.
+You *could* just click **Transcribe** in the editor, and that's fine for a short book. But for books with many chapters, the [Regenerate](../workflows/regenerate-titles.md) workflow can be meaningfully faster for transcription.
 
 **Steps:**
 
