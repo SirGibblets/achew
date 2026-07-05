@@ -122,13 +122,14 @@ default = "latest"
 "Chapter Editor" = [
   "editor/index.md",
   { "Overview" = "editor/overview.md" },
+  { "AI Cleanup" = "editor/ai-cleanup.md" },
   { "Adding Chapters" = "editor/add-chapter-dialog.md" },
+  { "Edit Titles" = "editor/edit-titles.md" },
+  { "Shift Titles" = "editor/shift-titles.md" },
   { "Apply Titles" = "editor/apply-titles.md" },
   { "Shift Timestamps" = "editor/shift-timestamps.md" },
-  { "Shift Titles" = "editor/shift-titles.md" },
   { "Undo and Redo" = "editor/undo-redo.md" },
   { "Keyboard Shortcuts" = "editor/keyboard-shortcuts.md" },
-  { "AI Cleanup" = "editor/ai-cleanup.md" },
   { "Review and Submit" = "editor/review-submit-export.md" },
 ]
 

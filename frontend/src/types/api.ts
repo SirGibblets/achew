@@ -1,6 +1,7 @@
 import type { AudioInfo, Book } from './book';
 import type { BasicChapter, ChapterData, SelectionStats } from './chapter';
 import type { ChapterReference, TitleReference } from './references';
+import type { TidyOptions } from '../utils/titleTools';
 
 export interface ProgressState {
   step: string;
@@ -122,6 +123,7 @@ export interface EditorSettings {
   show_fractional_seconds?: boolean;
   hide_transcriptions?: boolean;
   tab_navigation?: boolean;
+  tidy_options?: Partial<TidyOptions>;
   [key: string]: unknown;
 }
 

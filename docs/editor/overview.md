@@ -32,7 +32,7 @@ The editor shows a list of chapters and an Action Bar at the bottom.
 | 10 | :lucide-trash-2:{ .icon-token .danger } Delete | Deletes the chapter. Recoverable using the Undo button, or via the **Deleted** tab in the [Add Chapter Dialog](add-chapter-dialog.md). The very first chapter (timestamp `0`) cannot be deleted. |
 | 11 | Action bar | The sticky bar at the bottom of the screen. Shows the selection count and buttons for additional actions. |
 | 12 | :lucide-undo:{ .icon-token } Undo <br> :lucide-redo:{ .icon-token } Redo | Step backward and forward through edits you've made (title edits, timestamp edits, deletions, AI Cleanup, etc). See [Undo and Redo](undo-redo.md). |
-| 13 | :lucide-ellipsis-vertical:{ .icon-token } Menu | Opens the [Action Bar Menu](#action-bar-menu) containing additional tools and settings. |
+| 13 | :lucide-ellipsis-vertical:{ .icon-token } Menu | Opens the [Action Bar Menu](#action-bar-menu) containing settings, editing tools, and quick actions. |
 | 14 | :material-creation:{ .icon-token .inverted-primary } AI Cleanup | Opens the [AI Cleanup](ai-cleanup.md) dialog, which uses an LLM to help you normalize the capitalization, numbering, punctuation, etc. of the selected chapters.|
 | 15 | :lucide-arrow-right:{ .icon-token .primary } Review | Proceeds to the [Review and Submit](review-submit-export.md) screen using the selected chapters. |
 
@@ -41,7 +41,7 @@ The editor shows a list of chapters and an Action Bar at the bottom.
 
 ## Action Bar Menu
 
-Clicking the menu button (:lucide-ellipsis-vertical:{ .icon-token }) on the Action Bar will open a panel that contains the editor settings and additional editing tools. 
+Clicking the menu button (:lucide-ellipsis-vertical:{ .icon-token }) on the Action Bar will open a panel that contains the editor settings, editing tools, and quick actions. 
 
 ![Action bar](../img/action-bar-light.webp#only-light)
 ![Action bar](../img/action-bar-dark.webp#only-dark)
@@ -53,13 +53,22 @@ Clicking the menu button (:lucide-ellipsis-vertical:{ .icon-token }) on the Acti
 - **Format Timestamps:** If enabled, timestamps will be displayed using the `HH:MM:SS` format instead of displaying raw seconds.
     - **Fractional Seconds:** If enabled, formatted timestamps will display hundredths of a second, e.g. `01:23.45`. Only available when **Format Timestamps** is enabled; unformatted timestamps always show fractional seconds.
 
-### Additional Tools
+### Tools
 
+Tools open a dialog where you can configure and preview operations before applying them.
+
+- **[Edit Titles](edit-titles.md)** allows you to manually edit titles in bulk: find & replace, change case, add sequential numbering, and more. 
+- **[Shift Titles](shift-titles.md)** moves chapter titles forward or backward across chapters in bulk. 
 - **[Apply Titles](apply-titles.md) from...** allows you to set titles from [Chapter References](../getting-started/chapter-references.md). 
 - **[Shift Timestamps](shift-timestamps.md)** allows you to shift timestamps in bulk. 
-- **[Shift Titles](shift-titles.md)** moves chapter titles forward or backward across chapters in bulk. 
-- **Transcribe Selected** transcribes the selected chapters using current [transcription settings](../reference/transcription.md#configuring-transcription).
-- **Delete Selected/Unselected** deletes every selected (or unselected) chapter. 
+
+### Actions
+
+Actions apply immediately to the currently selected chapters.
+
+- **[Quick Tidy](edit-titles.md#quick-tidy)** applies your whitespace, punctuation, numbering, and casing preferences to the selected titles. You can use the gear icon :lucide-settings:{ .icon-token } to set your preferences. 
+- **Transcribe** transcribes the selected chapters using current [transcription settings](../reference/transcription.md#configuring-transcription).
+- **Delete / Delete Unselected** deletes every selected (or unselected) chapter. 
 
 ## Proceeding to Review
 

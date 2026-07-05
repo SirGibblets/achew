@@ -69,6 +69,7 @@ class EditorSettings(BaseModel):
     hide_transcriptions: bool = False
     show_formatted_time: bool = True
     show_fractional_seconds: bool = True
+    tidy_options: Dict[str, Any] = Field(default_factory=dict)
 
 
 class CustomInstruction(BaseModel):

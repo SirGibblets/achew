@@ -18,9 +18,11 @@
     transcriptionStatuses,
   } from '../stores/session';
   import { api, handleApiError } from '../utils/api';
+  import { resolveTidyOptions, tidyTitle, type TidyOptions } from '../utils/titleTools';
   import AddChapterDialog from './AddChapterDialog.svelte';
   import AICleanupDialog from './AICleanupDialog.svelte';
   import ApplyTitlesDialog from './apply_titles/ApplyTitlesDialog.svelte';
+  import EditTitlesDialog from './EditTitlesDialog.svelte';
   import ShiftTimestampsDialog from './ShiftTimestampsDialog.svelte';
   import ShiftTitlesDialog from './ShiftTitlesDialog.svelte';
   import Icon from './Icon.svelte';
@@ -40,15 +42,18 @@
   import Wrench from '@lucide/svelte/icons/wrench';
   import Clock from '@lucide/svelte/icons/clock';
   import ArrowDownUp from '@lucide/svelte/icons/arrow-down-up';
+  import BrushCleaning from '@lucide/svelte/icons/brush-cleaning';
   import CircleQuestionMark from '@lucide/svelte/icons/circle-question-mark';
+  import PencilLine from '@lucide/svelte/icons/pencil-line';
   import Trash2 from '@lucide/svelte/icons/trash-2';
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
   import Undo from '@lucide/svelte/icons/undo';
   import X from '@lucide/svelte/icons/x';
+  import Zap from '@lucide/svelte/icons/zap';
   import CircleHelp from '@lucide/svelte/icons/circle-help';
   import Mic from '@lucide/svelte/icons/mic';
 
-  import type { DetectedCueEntry, EditorSettings } from '../types/api';
+  import type { ApplyTitleMapping, DetectedCueEntry, EditorSettings } from '../types/api';
 
   interface AICleanupErrorInfo {
     message: string;
@@ -66,6 +71,8 @@
   let showShiftTimestampsDialog = $state(false);
   let showShiftTitlesDialog = $state(false);
   let showApplyTitlesDialog = $state(false);
+  let showEditTitlesDialog = $state(false);
+  let editTitlesInitialMode = $state<'find-replace' | 'tidy'>('find-replace');
   let addChapterDialogChapterId = $state<string | null>(null);
   let addChapterDialogDefaultTab = $state<string | null>(null);
 
@@ -466,6 +473,35 @@
     } catch (err) {
       error = handleApiError(err);
     }
+  }
+
+  async function quickTidy() {
+    showSettings = false;
+    const options = resolveTidyOptions(editorSettings.tidy_options);
+    const mappings: ApplyTitleMapping[] = [];
+    for (const chapter of $chapters) {
+      if (chapter.deleted || !chapter.selected) continue;
+      const newTitle = tidyTitle(chapter.title, options).trim();
+      if (newTitle !== chapter.title) {
+        mappings.push({ chapter_id: chapter.id, new_title: newTitle });
+      }
+    }
+    if (mappings.length === 0) return;
+    try {
+      await api.chapters.applyTitles(mappings);
+    } catch (err) {
+      error = handleApiError(err);
+    }
+  }
+
+  function openEditTitlesDialog(mode: 'find-replace' | 'tidy') {
+    editTitlesInitialMode = mode;
+    showEditTitlesDialog = true;
+  }
+
+  async function saveTidyDefaults(options: TidyOptions) {
+    const response = await api.config.updateEditorSettings({ tidy_options: options });
+    editorSettings = response.editor_settings;
   }
 
   // Audio playback
@@ -1303,64 +1339,98 @@
               <Wrench size="12" />
               Tools
             </h5>
-            <div class="tools-split-layout">
-              <div class="tools-column">
-                {#if ($session.chapterRefs || []).length > 0}
-                  <button
-                    class="btn btn-cancel btn-sm tool-btn full-width"
-                    use:tooltip={'Apply titles from a chapter reference'}
-                    onclick={() => (showApplyTitlesDialog = true)}
-                  >
-                    <BookMarked size="16" color="var(--primary-color)" />
-                    Apply titles from...
-                  </button>
-                {/if}
+            <div class="tools-column">
+              <button
+                class="btn btn-cancel btn-sm tool-btn full-width"
+                use:tooltip={'Bulk-edit titles: find & replace, change case, number sequences, and more'}
+                onclick={() => openEditTitlesDialog('find-replace')}
+              >
+                <PencilLine size="16" color="var(--primary-color)" />
+                Edit Titles
+              </button>
+              <button
+                class="btn btn-cancel btn-sm tool-btn full-width"
+                use:tooltip={'Move titles forward or backward across chapters, e.g. when every title is off by one'}
+                onclick={() => (showShiftTitlesDialog = true)}
+              >
+                <ArrowDownUp size="16" color="var(--primary-color)" />
+                Shift Titles
+              </button>
+              {#if ($session.chapterRefs || []).length > 0}
                 <button
                   class="btn btn-cancel btn-sm tool-btn full-width"
-                  use:tooltip={'Shift Timestamps'}
-                  onclick={() => (showShiftTimestampsDialog = true)}
+                  use:tooltip={'Apply titles from a Chapter Reference'}
+                  onclick={() => (showApplyTitlesDialog = true)}
                 >
-                  <Clock size="16" color="var(--primary-color)" />
-                  Shift Timestamps
+                  <BookMarked size="16" color="var(--primary-color)" />
+                  Apply titles from...
                 </button>
+              {/if}
+              <button
+                class="btn btn-cancel btn-sm tool-btn full-width"
+                use:tooltip={'Shift the timestamps of multiple chapters by a fixed amount of time'}
+                onclick={() => (showShiftTimestampsDialog = true)}
+              >
+                <Clock size="16" color="var(--primary-color)" />
+                Shift Timestamps
+              </button>
+            </div>
+          </div>
+
+          <div class="popover-divider"></div>
+
+          <div class="popover-section tools-section">
+            <h5 class="popover-header">
+              <Zap size="12" />
+              Actions
+            </h5>
+            <div class="tools-column">
+              <div class="segmented-button full-width">
                 <button
-                  class="btn btn-cancel btn-sm tool-btn full-width"
-                  use:tooltip={'Shift Titles'}
-                  onclick={() => (showShiftTitlesDialog = true)}
-                >
-                  <ArrowDownUp size="16" color="var(--primary-color)" />
-                  Shift Titles
-                </button>
-              </div>
-              <div class="tools-column">
-                <button
-                  class="btn btn-cancel btn-sm tool-btn full-width"
-                  use:tooltip={'Transcribe Selected'}
-                  onclick={transcribeSelected}
-                  disabled={$selectionStats.selected === 0 || Object.keys($transcriptionStatuses).length > 0}
-                >
-                  <Mic size="16" color="var(--primary-color)" />
-                  Transcribe Selected
-                </button>
-                <button
-                  class="btn btn-cancel btn-sm tool-btn full-width"
-                  use:tooltip={'Delete Selected'}
-                  onclick={() => deleteBySelection('selected')}
+                  class="btn btn-cancel btn-sm tool-btn segmented-left"
+                  use:tooltip={'Applies your saved Tidy settings to each selected title. Use the gear icon to view or change settings.'}
+                  onclick={quickTidy}
                   disabled={$selectionStats.selected === 0}
                 >
-                  <Trash2 size="16" color="var(--danger)" />
-                  Delete Selected
+                  <BrushCleaning size="16" color="var(--primary-color)" />
+                  Quick Tidy
                 </button>
                 <button
-                  class="btn btn-cancel btn-sm tool-btn full-width"
-                  use:tooltip={'Delete Unselected'}
-                  onclick={() => deleteBySelection('unselected')}
-                  disabled={$selectionStats.unselected === 0}
+                  class="btn btn-cancel btn-sm tool-btn segmented-right"
+                  aria-label="Configure Quick Tidy"
+                  use:tooltip={'View or change the Quick Tidy settings'}
+                  onclick={() => openEditTitlesDialog('tidy')}
                 >
-                  <Trash2 size="16" color="var(--danger)" />
-                  Delete Unselected
+                  <SettingsIcon size="14" color="var(--text-secondary)" />
                 </button>
               </div>
+              <button
+                class="btn btn-cancel btn-sm tool-btn full-width"
+                use:tooltip={'Transcribe the audio of each selected chapter using the current transcription settings'}
+                onclick={transcribeSelected}
+                disabled={$selectionStats.selected === 0 || Object.keys($transcriptionStatuses).length > 0}
+              >
+                <Mic size="16" color="var(--primary-color)" />
+                Transcribe
+              </button>
+              <button
+                class="btn btn-cancel btn-sm tool-btn full-width"
+                use:tooltip={'Delete every selected chapter'}
+                onclick={() => deleteBySelection('selected')}
+                disabled={$selectionStats.selected === 0}
+              >
+                <Trash2 size="16" color="var(--danger)" />
+                Delete
+              </button>
+              <button
+                class="btn btn-cancel btn-sm tool-btn full-width"
+                use:tooltip={'Delete every chapter that is not selected'}
+                onclick={() => deleteBySelection('unselected')}
+                disabled={$selectionStats.unselected === 0}
+              >
+                <Trash2 size="16" color="var(--danger)" />
+                Delete Unselected
+              </button>
             </div>
           </div>
         </div>
@@ -1451,6 +1521,14 @@
 <ShiftTimestampsDialog bind:isOpen={showShiftTimestampsDialog} {editorSettings} />
 
 <ShiftTitlesDialog bind:isOpen={showShiftTitlesDialog} {editorSettings} />
+
+<!-- Edit Titles Dialog -->
+<EditTitlesDialog
+  bind:isOpen={showEditTitlesDialog}
+  {editorSettings}
+  initialMode={editTitlesInitialMode}
+  onsavetidy={saveTidyDefaults}
+/>
 
 <!-- Apply Titles Dialog -->
 <ApplyTitlesDialog bind:isOpen={showApplyTitlesDialog} />
@@ -2238,7 +2316,7 @@
   }
 
   .popover-section.tools-section {
-    flex: 2;
+    flex: 1;
   }
 
   .popover-header {
@@ -2261,6 +2339,7 @@
   .settings-grid {
     display: flex;
     flex-direction: column;
+    padding-top: 0.45rem;
     gap: 0.75rem;
   }
 
@@ -2284,11 +2363,6 @@
     font-size: 0.8rem;
     font-weight: 400;
     color: var(--text-secondary);
-  }
-
-  .tools-split-layout {
-    display: flex;
-    gap: 0.75rem;
   }
 
   .tools-column {
@@ -2315,15 +2389,35 @@
     width: 100%;
   }
 
+  .segmented-button {
+    display: flex;
+  }
+
+  .segmented-button .segmented-left {
+    flex: 1;
+    min-width: 0;
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+    border-right: 0.05rem solid var(--border-color);
+  }
+
+  .segmented-button .segmented-right {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    padding: 0 0.5rem;
+    border-left: 0;
+    transition: none;
+  }
+
+  .segmented-button .segmented-right:hover {
+    border-left: 0.05rem solid var(--text-primary);
+    transition: none;
+  }
+
   @media (max-width: 600px) {
     .tools-popover {
       flex-direction: column;
       gap: 1rem;
-    }
-
-    .tools-split-layout {
-      flex-direction: column;
-      gap: 0.5rem;
     }
 
     .popover-divider {

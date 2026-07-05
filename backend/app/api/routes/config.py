@@ -705,6 +705,7 @@ class EditorSettingsRequest(BaseModel):
     hide_transcriptions: Optional[bool] = None
     show_formatted_time: Optional[bool] = None
     show_fractional_seconds: Optional[bool] = None
+    tidy_options: Optional[Dict[str, Any]] = None
 
 
 @router.get("/config/editor-settings")

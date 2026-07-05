@@ -12,9 +12,10 @@ The Chapter Editor is where most of the interactive work happens. After finishin
 ## Actions and dialogs
 
 - **[Adding Chapters](add-chapter-dialog.md):**  Insert chapters from cues, References, or manually.
+- **[Edit Titles](edit-titles.md):**  Manually edit titles in bulk: find & replace, change case, tidy up, etc.
+- **[Shift Titles](shift-titles.md):**  Move chapter titles between chapters in bulk.
 - **[Apply Titles](apply-titles.md):**  Apply titles from References to chapters in the editor.
 - **[Shift Timestamps](shift-timestamps.md):**  Shift multiple chapter timestamps at once.
-- **[Shift Titles](shift-titles.md):**  Move chapter titles between chapters in bulk.
 - **[AI Cleanup](ai-cleanup.md):**  Refine titles using an LLM.
 - **[Review and Submit](review-submit-export.md):**  Submit to Audiobookshelf or export to another format.
 
