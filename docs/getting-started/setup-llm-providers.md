@@ -24,6 +24,7 @@ See the relevant provider card below for setup steps.
 | [GitHub Copilot](#github-copilot) | Free/Paid | Personal access token | Free tier has limited [model selection](https://docs.github.com/en/copilot/reference/ai-models/supported-models#supported-ai-models-per-copilot-plan){:target="_blank"} and a limited monthly allowance of [GitHub AI credits](https://docs.github.com/en/copilot/concepts/billing/usage-based-billing-for-individuals){:target="_blank"}, consumed based on token usage. |
 | [Ollama](#ollama) | Free (self-hosted) | Host URL | Local, private, unlimited. Small models do not work well; try to use 16B+ parameter models. |
 | [LM Studio](#lm-studio) | Free (self-hosted) | Host URL | Local, private, unlimited. Small models do not work well; try to use 16B+ parameter models. |
+| [OpenAI-Compatible](#openai-compatible) | Varies | Base URL + optional API key | Connect to any OpenAI-compatible endpoint (e.g. LiteLLM, vLLM). Available models and cost depend on the endpoint you point it at. |
 
 ---
 
@@ -102,6 +103,18 @@ See the relevant provider card below for setup steps.
     Install [LM Studio](https://lmstudio.ai/){:target="_blank"}, download a model from the **Discover** tab, then start the local server from the **Developer** tab. LM Studio listens on `http://localhost:1234` by default.
 
     In Achew, go to **Settings -> LLM Setup** and enable the LM Studio card. Enter the host URL into the input field, then click **Validate**. Once validated, you can use LM Studio as a provider for AI Cleanup in the chapter editor.
+
+    !!! tip "Model size matters"
+        Small models rarely produce usable results. Try to use 16B+ parameter models if possible.
+
+<a id="openai-compatible"></a>
+??? example "OpenAI-Compatible"
+    This provider connects to any endpoint that implements the OpenAI REST API — for example [LiteLLM](https://docs.litellm.ai/){:target="_blank"}, [vLLM](https://docs.vllm.ai/){:target="_blank"}, or another self-hosted gateway. It lists whatever models the endpoint advertises, so you pick the specific model at cleanup time.
+
+    In Achew, go to **Settings -> LLM Setup** and enable the OpenAI-Compatible card. Enter the **Base URL** of the endpoint's API root — the path that serves `/models` and `/chat/completions`, commonly ending in `/v1` (e.g. `http://litellm.local:4000/v1`). Provide an **API Key** if the endpoint requires one, or leave it blank for keyless gateways. Click **Validate**, and once connected you can use it as a provider for AI Cleanup in the chapter editor.
+
+    !!! tip "Docker networking"
+        If Achew runs in a container, `localhost` refers to the container itself. Point the Base URL at the host or LAN IP instead (e.g. `http://host.docker.internal:4000/v1` on macOS/Windows).
 
     !!! tip "Model size matters"
         Small models rarely produce usable results. Try to use 16B+ parameter models if possible.

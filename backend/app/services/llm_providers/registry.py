@@ -10,6 +10,7 @@ from .copilot_service import CopilotService
 from .gemini_service import GeminiService
 from .lm_studio_service import LMStudioService
 from .ollama_service import OllamaService
+from .openai_compatible_service import OpenAICompatibleService
 from .openai_service import OpenAIService
 from .openrouter_service import OpenRouterService
 
@@ -42,6 +43,7 @@ class ProviderRegistry:
         self.register_provider(OpenRouterService)
         self.register_provider(OllamaService)
         self.register_provider(LMStudioService)
+        self.register_provider(OpenAICompatibleService)
 
     def register_provider(self, provider_class: Type[AIService]):
         """Register a new provider"""
