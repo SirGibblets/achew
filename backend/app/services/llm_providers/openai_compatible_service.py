@@ -59,6 +59,24 @@ class OpenAICompatibleService(AIService):
             headers["Authorization"] = f"Bearer {api_key}"
         return headers
 
+    @staticmethod
+    def _strip_code_fences(text: str) -> str:
+        """Strip Markdown code fences some models wrap JSON in despite instructions.
+
+        Handles blocks like ``` ```json ... ``` ``` by dropping the opening fence
+        line (with any language hint) and the closing fence. Returns the input
+        unchanged when no leading fence is present.
+        """
+        stripped = text.strip()
+        if not stripped.startswith("```"):
+            return stripped
+
+        lines = stripped.splitlines()
+        lines = lines[1:]  # Drop the opening fence (e.g. ``` or ```json).
+        if lines and lines[-1].strip().startswith("```"):
+            lines = lines[:-1]  # Drop the closing fence.
+        return "\n".join(lines).strip()
+
     async def load_saved_config(self) -> dict:
         """Load saved configuration for the OpenAI-compatible provider."""
         from ...core.config import get_app_config
@@ -393,7 +411,7 @@ class OpenAICompatibleService(AIService):
             self._notify_progress(100, "Processing AI response…")
 
             try:
-                response_data = json.loads(content_received)
+                response_data = json.loads(self._strip_code_fences(content_received))
 
                 if isinstance(response_data, list):
                     processed_chapters = response_data

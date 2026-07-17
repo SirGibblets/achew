@@ -15,14 +15,20 @@ from app.services.llm_providers.openai_compatible_service import OpenAICompatibl
 BASE_URL = "http://litellm.test/v1"
 
 
-@pytest.fixture
-def configured(monkeypatch):
-    """Install a saved config pointing at the mocked endpoint."""
+@pytest.fixture(autouse=True)
+def isolated_config(monkeypatch):
+    """Use an isolated default config for tests."""
     app_cfg = C.AppConfig()
-    app_cfg.llm.openai_compatible.base_url = BASE_URL
-    app_cfg.llm.openai_compatible.api_key = "sk-test"
     monkeypatch.setattr(C, "_app_config", app_cfg)
     return app_cfg
+
+
+@pytest.fixture
+def configured(isolated_config):
+    """Point the isolated config at the mocked endpoint."""
+    isolated_config.llm.openai_compatible.base_url = BASE_URL
+    isolated_config.llm.openai_compatible.api_key = "sk-test"
+    return isolated_config
 
 
 def make_service():
@@ -100,6 +106,17 @@ async def test_process_chapter_titles_falls_back_without_response_format(configu
     assert len(requests) == 2
     assert "response_format" in json.loads(requests[0].content)
     assert "response_format" not in json.loads(requests[1].content)
+
+
+async def test_process_chapter_titles_strips_markdown_fences(configured, httpx_mock):
+    obj = {"chapters": [{"id": 0, "title": "Chapter 1"}]}
+    fenced = "```json\n" + json.dumps(obj) + "\n```"
+    delta = {"choices": [{"delta": {"content": fenced}}]}
+    content = ("data: " + json.dumps(delta) + "\n\n" + "data: [DONE]\n\n").encode()
+    httpx_mock.add_response(url=f"{BASE_URL}/chat/completions", content=content)
+
+    result = await make_service().process_chapter_titles(["chapter one"], "gpt-4o-mini")
+    assert result == ["Chapter 1"]
 
 
 async def test_process_chapter_titles_empty_input():
