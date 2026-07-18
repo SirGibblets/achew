@@ -1,6 +1,7 @@
 from .base import AIService, ModelInfo, ProviderInfo
 from .copilot_service import CopilotService
 from .ollama_service import OllamaService
+from .openai_compatible_service import OpenAICompatibleService
 from .openai_service import OpenAIService
 from .openrouter_service import OpenRouterService
 from .registry import create_provider, get_all_providers, get_registry, register_provider
@@ -12,6 +13,7 @@ __all__ = [
     "OpenAIService",
     "OllamaService",
     "OpenRouterService",
+    "OpenAICompatibleService",
     "CopilotService",
     "get_registry",
     "register_provider",

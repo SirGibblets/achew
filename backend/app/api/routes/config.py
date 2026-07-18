@@ -540,6 +540,13 @@ async def get_llm_provider_models(provider_id: str):
             provider_config = {"host": config.llm.ollama.host or "http://localhost:11434"}
         elif provider_id == "lm_studio":
             provider_config = {"host": config.llm.lm_studio.host or "http://localhost:1234"}
+        elif provider_id == "openai_compatible":
+            if not config.llm.openai_compatible.base_url:
+                raise HTTPException(status_code=400, detail="OpenAI-compatible provider not configured")
+            provider_config = {
+                "base_url": config.llm.openai_compatible.base_url,
+                "api_key": config.llm.openai_compatible.api_key,
+            }
 
         models = await get_provider_models(provider_id, **provider_config)
         return LLMModelsResponse(models=models)
@@ -656,6 +663,9 @@ async def cancel_llm_provider_changes(provider_id: str):
         elif provider_id == "lm_studio":
             config.llm.lm_studio.config_changed = False
             save_llm_provider_config("lm_studio", config.llm.lm_studio)
+        elif provider_id == "openai_compatible":
+            config.llm.openai_compatible.config_changed = False
+            save_llm_provider_config("openai_compatible", config.llm.openai_compatible)
 
         # Refresh global config cache
         refresh_app_config()

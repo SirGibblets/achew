@@ -29,6 +29,7 @@ class LLMProviderConfig(BaseModel):
 
     api_key: str = ""
     host: str = ""  # For providers like Ollama
+    base_url: str = ""  # For OpenAI-compatible endpoints (e.g. LiteLLM)
     validated: bool = False
     last_validated: Optional[datetime] = None
     enabled: bool = False  # Default to disabled
@@ -47,6 +48,7 @@ class LLMConfig(BaseModel):
     openrouter: LLMProviderConfig = LLMProviderConfig()
     ollama: LLMProviderConfig = LLMProviderConfig()
     lm_studio: LLMProviderConfig = LLMProviderConfig()
+    openai_compatible: LLMProviderConfig = LLMProviderConfig()
 
     # AI cleanup preferences
     last_used_provider: str = ""
