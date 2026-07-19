@@ -22,8 +22,8 @@ See the relevant provider card below for setup steps.
 | [Google Gemini](#gemini-google) | Free/Paid | API key | Free tier has limited model selection and [rate limits](https://ai.google.dev/gemini-api/docs/rate-limits){:target="_blank"}. <br><br> Prefer `Flash` models for most tasks, `Lite` models for simple cleanup, and `Pro` models for complex cleanup. |
 | [OpenRouter](#openrouter) | Free/Paid | API key | Free tier has limited [model selection](https://openrouter.ai/collections/free-models){:target="_blank"}, a limit of [50 requests/day](https://openrouter.ai/pricing){:target="_blank"}, and spotty service. Small models do not work well; try to use 16B+ parameter models. |
 | [GitHub Copilot](#github-copilot) | Free/Paid | Personal access token | Free tier has limited [model selection](https://docs.github.com/en/copilot/reference/ai-models/supported-models#supported-ai-models-per-copilot-plan){:target="_blank"} and a limited monthly allowance of [GitHub AI credits](https://docs.github.com/en/copilot/concepts/billing/usage-based-billing-for-individuals){:target="_blank"}, consumed based on token usage. |
-| [Ollama](#ollama) | Free (self-hosted) | Host URL | Local, private, unlimited. Small models do not work well; try to use 16B+ parameter models. |
-| [LM Studio](#lm-studio) | Free (self-hosted) | Host URL | Local, private, unlimited. Small models do not work well; try to use 16B+ parameter models. |
+| [Ollama](#ollama) | Free (self-hosted) | Server URL | Local, private, unlimited. Small models do not work well; try to use 16B+ parameter models. |
+| [LM Studio](#lm-studio) | Free (self-hosted) | Server URL + optional API token | Local, private, unlimited. Small models do not work well; try to use 16B+ parameter models. |
 | [OpenAI-Compatible](#openai-compatible) | Varies | Base URL + optional API key | Connect to any OpenAI-compatible endpoint (e.g. LiteLLM, vLLM). Available models and cost depend on the endpoint you point it at. |
 
 ---
@@ -93,7 +93,9 @@ See the relevant provider card below for setup steps.
 ??? example "Ollama"
     Install [Ollama](https://ollama.com/download){:target="_blank"} on your machine and pull a model (e.g. `ollama pull qwen3.6:27b`). Ollama runs a local server at `http://localhost:11434` by default.
 
-    In Achew, go to **Settings -> LLM Setup** and enable the Ollama card. Enter the Ollama host URL into the input field, then click **Validate**. If Achew is running in Docker and Ollama is on the same host, use `http://host.docker.internal:11434` on macOS/Windows, or your LAN IP on Linux. Once validated, you'll be able to use Ollama as a provider for AI Cleanup in the chapter editor.
+    In Achew, go to **Settings -> LLM Setup** and enable the Ollama card. Enter the **Server URL** into the input field (with or without `http://`/`https://` — plain host:port defaults to `http://`), then click **Validate**. If Achew is running in Docker and Ollama is on the same host, use `http://host.docker.internal:11434` on macOS/Windows, or your LAN IP on Linux. Once validated, you'll be able to use Ollama as a provider for AI Cleanup in the chapter editor.
+
+    If you expose Ollama over HTTPS with a self-signed certificate, check **Skip SSL certificate verification**. Only enable this for servers you trust.
 
     !!! tip "Model size matters"
         Small models rarely produce usable results. Try to use 16B+ parameter models if possible.
@@ -102,7 +104,9 @@ See the relevant provider card below for setup steps.
 ??? example "LM Studio"
     Install [LM Studio](https://lmstudio.ai/){:target="_blank"}, download a model from the **Discover** tab, then start the local server from the **Developer** tab. LM Studio listens on `http://localhost:1234` by default.
 
-    In Achew, go to **Settings -> LLM Setup** and enable the LM Studio card. Enter the host URL into the input field, then click **Validate**. Once validated, you can use LM Studio as a provider for AI Cleanup in the chapter editor.
+    In Achew, go to **Settings -> LLM Setup** and enable the LM Studio card. Enter the **Server URL** into the input field (with or without `http://`/`https://` — plain host:port defaults to `http://`), then click **Validate**. Once validated, you can use LM Studio as a provider for AI Cleanup in the chapter editor.
+
+    If you've enabled authentication on the LM Studio server ([API tokens](https://lmstudio.ai/docs/developer/core/authentication){:target="_blank"}), paste a token into the **API Token** field; otherwise leave it blank. If the server is behind HTTPS with a self-signed certificate, check **Skip SSL certificate verification**. Only enable this for servers you trust.
 
     !!! tip "Model size matters"
         Small models rarely produce usable results. Try to use 16B+ parameter models if possible.
@@ -111,7 +115,7 @@ See the relevant provider card below for setup steps.
 ??? example "OpenAI-Compatible"
     This provider connects to any endpoint that implements the OpenAI REST API — for example [LiteLLM](https://docs.litellm.ai/){:target="_blank"}, [vLLM](https://docs.vllm.ai/){:target="_blank"}, or another self-hosted gateway. It lists whatever models the endpoint advertises, so you pick the specific model at cleanup time.
 
-    In Achew, go to **Settings -> LLM Setup** and enable the OpenAI-Compatible card. Enter the **Base URL** of the endpoint's API root — the path that serves `/models` and `/chat/completions`, commonly ending in `/v1` (e.g. `http://litellm.local:4000/v1`). Provide an **API Key** if the endpoint requires one, or leave it blank for keyless gateways. Click **Validate**, and once connected you can use it as a provider for AI Cleanup in the chapter editor.
+    In Achew, go to **Settings -> LLM Setup** and enable the OpenAI-Compatible card. Enter the **Base URL** of the endpoint's API root — the path that serves `/models` and `/chat/completions`, commonly ending in `/v1` (e.g. `http://litellm.local:4000/v1`). Provide an **API Key** if the endpoint requires one, or leave it blank for keyless gateways. If the endpoint uses HTTPS with a self-signed certificate, check **Skip SSL certificate verification** (only for servers you trust). Click **Validate**, and once connected you can use it as a provider for AI Cleanup in the chapter editor.
 
     !!! tip "Docker networking"
         If Achew runs in a container, `localhost` refers to the container itself. Point the Base URL at the host or LAN IP instead (e.g. `http://host.docker.internal:4000/v1` on macOS/Windows).

@@ -30,6 +30,7 @@ class LLMProviderConfig(BaseModel):
     api_key: str = ""
     host: str = ""  # For providers like Ollama
     base_url: str = ""  # For OpenAI-compatible endpoints (e.g. LiteLLM)
+    skip_ssl_verify: bool = False  # Skip TLS certificate verification (self-signed certs)
     validated: bool = False
     last_validated: Optional[datetime] = None
     enabled: bool = False  # Default to disabled

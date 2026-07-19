@@ -2,7 +2,6 @@ import asyncio
 import json
 import logging
 import os
-import re
 import time
 from typing import List, Optional
 
@@ -339,8 +338,6 @@ class CopilotService(AIService):
             book=book,
         )
 
-        chapter_data = [{"id": idx, "title": text} for idx, text in enumerate(titles)]
-
         try:
             github_token = self._get_github_token()
             if not github_token:
@@ -389,7 +386,7 @@ class CopilotService(AIService):
                 ) as session:
                     session.on(on_event)
 
-                    message = f"{system_prompt}\n\n{json.dumps(chapter_data)}"
+                    message = f"{system_prompt}\n\n{self._build_chapter_input(titles)}"
                     await session.send(message)
 
                     start = time.monotonic()
@@ -407,29 +404,8 @@ class CopilotService(AIService):
 
             self._notify_progress(100, "Processing AI response…")
 
-            # Strip markdown code block wrapping (```json ... ```) that may have been added
-            stripped = content_received.strip()
-            match = re.match(r"^```(?:json)?\s*\n?(.*?)\n?\s*```$", stripped, re.DOTALL)
-            if match:
-                stripped = match.group(1).strip()
-
             try:
-                response_data = json.loads(stripped)
-
-                if isinstance(response_data, list):
-                    processed_chapters = response_data
-                elif isinstance(response_data, dict) and "chapters" in response_data:
-                    processed_chapters = response_data["chapters"]
-                else:
-                    processed_chapters = []
-                    for value in response_data.values() if isinstance(response_data, dict) else []:
-                        if isinstance(value, list):
-                            processed_chapters = value
-                            break
-
-                if not processed_chapters:
-                    raise ValueError("No chapter array found in response")
-
+                processed_chapters = self._extract_chapter_array(content_received)
             except (json.JSONDecodeError, ValueError) as e:
                 logger.error(f"Failed to parse Copilot response: {e}")
                 logger.error(f"Raw response: {content_received!r}")

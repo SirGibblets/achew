@@ -303,8 +303,7 @@ class GeminiService(AIService):
         )
 
         # Create JSON input for all chapters
-        chapter_data = [{"id": idx, "title": text} for idx, text in enumerate(titles)]
-        user_message = f"Input data:\n{json.dumps(chapter_data)}"
+        user_message = f"Input data:\n{self._build_chapter_input(titles)}"
 
         # Retry on JSON decode errors
         max_retries = 1
@@ -383,10 +382,9 @@ class GeminiService(AIService):
 
                 # Parse the response
                 try:
-                    response_data = json.loads(content_received)
-                    processed_chapters = response_data.get("chapters", [])
+                    processed_chapters = self._extract_chapter_array(content_received)
 
-                except json.JSONDecodeError as e:
+                except (json.JSONDecodeError, ValueError) as e:
                     logger.error(f"Gemini Failed to parse Gemini response as JSON: {e}")
                     logger.error(f"Gemini Raw response: {content_received}")
 

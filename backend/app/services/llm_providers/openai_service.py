@@ -335,7 +335,6 @@ class OpenAIService(AIService):
         )
 
         # Create JSON input for all chapters
-        chapter_data = [{"id": idx, "title": text} for idx, text in enumerate(titles)]
 
         try:
             client = self._create_client()
@@ -347,7 +346,7 @@ class OpenAIService(AIService):
         try:
             # Use structured output parsing
             system_message = EasyInputMessageParam(role="system", content=system_prompt)
-            user_message = EasyInputMessageParam(role="user", content=json.dumps(chapter_data))
+            user_message = EasyInputMessageParam(role="user", content=self._build_chapter_input(titles))
 
             # Initialize incremental parser for progress tracking
             parser = IncrementalJSONParser()

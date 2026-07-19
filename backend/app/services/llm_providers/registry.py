@@ -162,19 +162,23 @@ class ProviderRegistry:
 
     async def get_provider_models(self, provider_id: str, **config) -> List[ModelInfo]:
         """Get available models for a provider (cached per provider+config)"""
+        provider_class = self.get_provider_class(provider_id)
+        cacheable = provider_class.CACHE_MODELS if provider_class else True
+
         cache_key = (provider_id, tuple(sorted(config.items())))
-        cached = self._model_cache.get(cache_key)
-        if cached:
-            fetched_at, models = cached
-            if time.monotonic() - fetched_at < MODEL_CACHE_TTL_SECONDS:
-                return list(models)
+        if cacheable:
+            cached = self._model_cache.get(cache_key)
+            if cached:
+                fetched_at, models = cached
+                if time.monotonic() - fetched_at < MODEL_CACHE_TTL_SECONDS:
+                    return list(models)
 
         try:
             provider = self.create_provider(provider_id, _noop_progress, **config)
             if provider:
                 models = await provider.get_available_models()
                 # Providers signal failure with an empty list — don't cache it.
-                if models:
+                if cacheable and models:
                     self._model_cache[cache_key] = (time.monotonic(), models)
                 return models
             return []

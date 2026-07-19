@@ -13,6 +13,13 @@ from app.models.progress import ProgressCallback
 logger = logging.getLogger(__name__)
 
 
+def coerce_bool(value: Any) -> bool:
+    """Coerce a config value to bool, treating the strings "false"/"0"/"" as False."""
+    if isinstance(value, str):
+        return value.strip().lower() not in ("", "0", "false", "no", "off")
+    return bool(value)
+
+
 class Chapter(BaseModel):
     id: float
     title: Optional[str]
@@ -20,6 +27,42 @@ class Chapter(BaseModel):
 
 class ChapterList(BaseModel):
     chapters: list[Chapter]
+
+
+# JSON schema for the chapter list every provider requests and parses. The
+# array is wrapped in an object because OpenAI-style structured outputs forbid
+# root arrays; the shared prompt and input data use the same wrapper, so the
+# machine constraint and the prompt agree. Backends that ignore the schema
+# still work: _extract_chapter_array accepts a bare array too.
+CHAPTERS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "chapters": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "integer"},
+                    "title": {"type": ["string", "null"]},
+                },
+                "required": ["id", "title"],
+                "additionalProperties": False,
+            },
+        }
+    },
+    "required": ["chapters"],
+    "additionalProperties": False,
+}
+
+# The same schema in OpenAI-style chat-completions response_format clothing.
+CHAPTERS_RESPONSE_FORMAT = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "chapters",
+        "strict": True,
+        "schema": CHAPTERS_SCHEMA,
+    },
+}
 
 
 class IncrementalJSONParser:
@@ -97,6 +140,10 @@ class ProviderInfo(BaseModel):
 class AIService(ABC):
     """Abstract base class for LLM providers"""
 
+    # Whether model lists may be cached (see registry). Self-hosted providers
+    # disable this so newly added/removed models show up immediately.
+    CACHE_MODELS: bool = True
+
     def __init__(self, progress_callback: ProgressCallback, **config):
         self.progress_callback = progress_callback
         self.config = config
@@ -106,6 +153,56 @@ class AIService(ABC):
     def _notify_progress(self, percent: float, message: str = ""):
         """Notify progress via callback"""
         self.progress_callback(Step.AI_CLEANUP, percent, message, {})
+
+    @staticmethod
+    def _strip_code_fences(text: str) -> str:
+        """Strip Markdown code fences some models wrap JSON in despite instructions.
+
+        Handles blocks like ``` ```json ... ``` ``` by dropping the opening fence
+        line (with any language hint) and the closing fence. Returns the input
+        unchanged when no leading fence is present.
+        """
+        stripped = text.strip()
+        if not stripped.startswith("```"):
+            return stripped
+
+        lines = stripped.splitlines()
+        lines = lines[1:]  # Drop the opening fence (e.g. ``` or ```json).
+        if lines and lines[-1].strip().startswith("```"):
+            lines = lines[:-1]  # Drop the closing fence.
+        return "\n".join(lines).strip()
+
+    @staticmethod
+    def _build_chapter_input(titles: List[str]) -> str:
+        """Serialize the input titles as the {"chapters": [...]} JSON the prompt describes."""
+        return json.dumps({"chapters": [{"id": idx, "title": text} for idx, text in enumerate(titles)]})
+
+    @staticmethod
+    def _extract_chapter_array(content: str) -> list:
+        """Pull the chapter array out of a raw model response.
+
+        Strips Markdown code fences, then accepts a bare array, a
+        ``{"chapters": [...]}`` wrapper, or any object containing a list value.
+        Raises ``json.JSONDecodeError`` or ``ValueError`` when no chapter array
+        can be found.
+        """
+        response_data = json.loads(AIService._strip_code_fences(content))
+
+        if isinstance(response_data, list):
+            processed_chapters = response_data
+        elif isinstance(response_data, dict) and isinstance(response_data.get("chapters"), list):
+            processed_chapters = response_data["chapters"]
+        else:
+            processed_chapters = []
+            for value in response_data.values() if isinstance(response_data, dict) else []:
+                if isinstance(value, list):
+                    processed_chapters = value
+                    break
+
+        if not processed_chapters:
+            raise ValueError("No chapter array found in response")
+
+        return processed_chapters
 
     @classmethod
     @abstractmethod
@@ -168,8 +265,8 @@ class AIService(ABC):
 
         # Base prompt
         base_prompt = """You are a helpful assistant that validates and cleans up audiobook chapter titles.
-You will receive a JSON array of objects, each containing a chapter index (int) and a raw text transcript of the title. Note that there may be inaccuracies in the transcripts.
-You will output the same array, but with processed titles. You must respond with ONLY the raw JSON data - no additional text, comments, or markdown."""
+You will receive a JSON object with a "chapters" array, each item containing a chapter index (int) and a raw text transcript of the title. Note that there may be inaccuracies in the transcripts.
+You will output the same structure, but with processed titles. You must respond with ONLY the raw JSON data - no additional text, comments, or markdown."""
 
         if book_title and book_author:
             base_prompt += f'\n\nThe book is titled "{book_title}" by {book_author}.'

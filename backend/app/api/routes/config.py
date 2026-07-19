@@ -537,15 +537,23 @@ async def get_llm_provider_models(provider_id: str):
                 raise HTTPException(status_code=400, detail="OpenRouter provider not configured")
             provider_config = {"api_key": config.llm.openrouter.api_key}
         elif provider_id == "ollama":
-            provider_config = {"host": config.llm.ollama.host or "http://localhost:11434"}
+            provider_config = {
+                "host": config.llm.ollama.host or "http://localhost:11434",
+                "skip_ssl_verify": config.llm.ollama.skip_ssl_verify,
+            }
         elif provider_id == "lm_studio":
-            provider_config = {"host": config.llm.lm_studio.host or "http://localhost:1234"}
+            provider_config = {
+                "host": config.llm.lm_studio.host or "http://localhost:1234",
+                "api_key": config.llm.lm_studio.api_key,
+                "skip_ssl_verify": config.llm.lm_studio.skip_ssl_verify,
+            }
         elif provider_id == "openai_compatible":
             if not config.llm.openai_compatible.base_url:
                 raise HTTPException(status_code=400, detail="OpenAI-compatible provider not configured")
             provider_config = {
                 "base_url": config.llm.openai_compatible.base_url,
                 "api_key": config.llm.openai_compatible.api_key,
+                "skip_ssl_verify": config.llm.openai_compatible.skip_ssl_verify,
             }
 
         models = await get_provider_models(provider_id, **provider_config)
