@@ -6,7 +6,7 @@ import anthropic
 
 from app.models.abs import Book
 
-from .base import AIService, Chapter, IncrementalJSONParser, ModelInfo, ProviderInfo
+from .base import AIService, ChapterList, IncrementalJSONParser, ModelInfo, ProviderInfo
 
 logger = logging.getLogger(__name__)
 
@@ -286,8 +286,7 @@ class ClaudeService(AIService):
         )
 
         # Create JSON input for all chapters
-        chapter_data = [{"id": idx, "title": text} for idx, text in enumerate(titles)]
-        user_message = f"Input data:\n{json.dumps(chapter_data)}"
+        user_message = f"Input data:\n{self._build_chapter_input(titles)}"
 
         try:
             # Get API key and create client
@@ -328,7 +327,7 @@ class ClaudeService(AIService):
 
             if supports_structured_output:
                 stream_kwargs["betas"] = ["structured-outputs-2025-11-13"]
-                stream_kwargs["output_format"] = List[Chapter]
+                stream_kwargs["output_format"] = ChapterList
 
             async with processing_client.beta.messages.stream(**stream_kwargs) as stream:
                 async for text in stream.text_stream:
@@ -351,9 +350,9 @@ class ClaudeService(AIService):
 
             # Parse the response
             try:
-                processed_chapters = json.loads(content_received)
+                processed_chapters = self._extract_chapter_array(content_received)
 
-            except json.JSONDecodeError as e:
+            except (json.JSONDecodeError, ValueError) as e:
                 logger.error(f"Claude Failed to parse Claude response as JSON: {e}")
                 logger.error(f"Claude Raw response: {content_received}")
                 raise

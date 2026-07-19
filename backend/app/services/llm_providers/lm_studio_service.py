@@ -1,28 +1,37 @@
-import asyncio
 import json
 import logging
 import time
 from typing import List, Optional
 
-from lmstudio import AsyncClient
+import httpx
 
 from app.models.abs import Book
 
-from .base import AIService, IncrementalJSONParser, ModelInfo, ProviderInfo
+from .base import CHAPTERS_RESPONSE_FORMAT, AIService, IncrementalJSONParser, ModelInfo, ProviderInfo, coerce_bool
 
 logger = logging.getLogger(__name__)
 
+# Model loading can take a while on first use, so allow generous read timeouts.
+REQUEST_TIMEOUT = httpx.Timeout(300.0, connect=10.0)
+
 
 class LMStudioService(AIService):
-    """LM Studio implementation of AIService for local models"""
+    """LM Studio implementation of AIService for local models.
+
+    Talks to LM Studio's REST API over HTTP(S): ``GET {host}/api/v0/models``
+    for model discovery (with a fallback to the OpenAI-compatible
+    ``/v1/models``) and ``POST {host}/v1/chat/completions`` for generation.
+    Using the REST API instead of the websocket SDK allows optional API token
+    authentication and HTTPS hosts (including self-signed certificates).
+    """
+
+    # Self-hosted: the user controls the model list, so always fetch it fresh.
+    CACHE_MODELS = False
 
     def __init__(self, progress_callback, **config):
         super().__init__(progress_callback, **config)
 
-        # Do not create client or validate host here - defer until needed
-        # This allows safe instantiation for config/state purposes
-
-    def _get_host(self, config=None):
+    def _get_host(self, config=None) -> Optional[str]:
         """Get the current host from config or saved configuration"""
         # First try from passed config
         if config and config.get("host"):
@@ -41,23 +50,69 @@ class LMStudioService(AIService):
         if not host.startswith(("http://", "https://")):
             host = f"http://{host}"
 
-        return host
+        return host.rstrip("/")
 
-    def _create_client(self, host=None):
-        """Create an LM Studio client with the given or current host"""
-        if not host:
-            host = self._get_host()
+    def _get_api_key(self, config=None) -> str:
+        """Get the current API token. Optional unless authentication is enabled in LM Studio."""
+        if config and config.get("api_key"):
+            return config["api_key"]
 
-        if not host:
-            raise ValueError("LM Studio host configuration is required")
+        from ...core.config import get_app_config
 
-        # Remove http:// or https:// prefix for LM Studio client
-        if host.startswith("http://"):
-            host = host[7:]
-        elif host.startswith("https://"):
-            host = host[8:]
+        app_config = get_app_config()
+        return app_config.llm.lm_studio.api_key
 
-        return AsyncClient(host)
+    def _get_skip_ssl_verify(self, config=None) -> bool:
+        """Get whether TLS certificate verification should be skipped."""
+        if config and "skip_ssl_verify" in config:
+            return coerce_bool(config["skip_ssl_verify"])
+
+        from ...core.config import get_app_config
+
+        app_config = get_app_config()
+        return app_config.llm.lm_studio.skip_ssl_verify
+
+    def _create_headers(self, api_key: str = "") -> dict:
+        """Build request headers, including auth only when a token is set."""
+        headers = {"Content-Type": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        return headers
+
+    @staticmethod
+    def _extract_error_message(error_text: str) -> str:
+        """Pull the human-readable message out of an OpenAI-style JSON error body.
+
+        Falls back to the raw (truncated) body when it isn't JSON; returns an
+        empty string when there is no useful detail.
+        """
+        try:
+            error = json.loads(error_text).get("error", "")
+            if isinstance(error, dict):
+                error = error.get("message", "")
+            if isinstance(error, str):
+                return error.strip()[:300]
+        except (json.JSONDecodeError, AttributeError):
+            pass
+        return error_text.strip()[:300]
+
+    async def _model_not_loaded(self, client: httpx.AsyncClient, host: str, headers: dict, model_id: str) -> bool:
+        """Check whether a chat failure is explained by an unloaded model.
+
+        LM Studio only loads models on demand when JIT model loading is enabled
+        in its server settings; with it disabled, requests against an unloaded
+        model fail. Best-effort: any error here means "don't know", not "yes".
+        """
+        try:
+            response = await client.get(f"{host}/api/v0/models", headers=headers, timeout=10.0)
+            if response.status_code != 200:
+                return False
+            for model in response.json().get("data", []):
+                if model.get("id") == model_id:
+                    return model.get("state") == "not-loaded"
+        except Exception as e:
+            logger.debug(f"LM Studio model state check failed: {e}")
+        return False
 
     async def load_saved_config(self) -> dict:
         """Load saved configuration for LM Studio provider"""
@@ -66,6 +121,8 @@ class LMStudioService(AIService):
         config = get_app_config()
         return {
             "host": config.llm.lm_studio.host or "",
+            "api_key": config.llm.lm_studio.api_key,
+            "skip_ssl_verify": config.llm.lm_studio.skip_ssl_verify,
             "enabled": config.llm.lm_studio.enabled,
             "validated": config.llm.lm_studio.validated,
             "validation_status": config.llm.lm_studio.validation_status,
@@ -82,14 +139,21 @@ class LMStudioService(AIService):
             # Get and validate host
             host = self._get_host(config)
             if not host:
-                return False, "LM Studio host configuration is required"
+                return False, "LM Studio server URL is required"
 
             # Validate first
             valid, message = await self.validate_config(**config)
 
+            # The frontend omits the api_key field when it is unchanged (it only
+            # ever sees a masked value), so fall back to the saved token rather
+            # than wiping it. An explicit empty string still clears it.
+            api_key = config["api_key"] if "api_key" in config else self._get_api_key()
+
             # Save configuration
             provider_config = LLMProviderConfig(
                 host=host,
+                api_key=api_key,
+                skip_ssl_verify=self._get_skip_ssl_verify(config),
                 enabled=config.get("enabled", True),
                 validated=valid,
                 last_validated=datetime.now(timezone.utc) if valid else None,
@@ -115,9 +179,8 @@ class LMStudioService(AIService):
         config = get_app_config()
         return config.llm.lm_studio.enabled
 
-    @classmethod
-    async def set_enabled_static(cls, enabled: bool) -> bool:
-        """Enable or disable this provider (class method that doesn't require instance)"""
+    async def set_enabled(self, enabled: bool) -> bool:
+        """Enable or disable this provider"""
         from ...core.config import get_app_config, save_llm_provider_config
 
         try:
@@ -135,15 +198,13 @@ class LMStudioService(AIService):
         except Exception:
             return False
 
-    async def set_enabled(self, enabled: bool) -> bool:
-        """Enable or disable this provider (instance method for compatibility)"""
-        return await self.set_enabled_static(enabled)
-
     def has_config_changed(self, **new_config) -> bool:
         """Check if configuration has changed from saved state"""
         if not self._saved_config:
             # Load saved config if not cached
             try:
+                import asyncio
+
                 saved = asyncio.run(self.load_saved_config())
                 self._saved_config = saved
             except Exception:
@@ -153,7 +214,11 @@ class LMStudioService(AIService):
         new_host = self._get_host(new_config) or ""
         saved_host = self._saved_config.get("host", "")
 
-        return new_host != saved_host
+        return (
+            new_host != saved_host
+            or new_config.get("api_key", "") != self._saved_config.get("api_key", "")
+            or self._get_skip_ssl_verify(new_config) != coerce_bool(self._saved_config.get("skip_ssl_verify", False))
+        )
 
     def get_provider_state(self) -> ProviderInfo:
         """Get current provider state including enabled/configured status"""
@@ -193,11 +258,25 @@ class LMStudioService(AIService):
                 {
                     "name": "host",
                     "type": "text",
-                    "label": "LM Studio Host URL",
-                    "placeholder": "localhost:1234",
-                    "required": False,
+                    "label": "Server URL",
+                    "placeholder": "Server URL (e.g. http://localhost:1234)",
+                    "required": True,
                     "help_url": "https://lmstudio.ai/docs/app/api",
-                }
+                },
+                {
+                    "name": "api_key",
+                    "type": "password",
+                    "label": "API Token",
+                    "placeholder": "API Token (leave blank if authentication is disabled)",
+                    "required": False,
+                },
+                {
+                    "name": "skip_ssl_verify",
+                    "type": "checkbox",
+                    "label": "Skip SSL certificate verification",
+                    "help_text": "Allows HTTPS servers with self-signed certificates. Only enable this for servers you trust.",
+                    "required": False,
+                },
             ],
             is_available=True,
         )
@@ -209,76 +288,84 @@ class LMStudioService(AIService):
 
         # Host is required
         if not host:
-            return False, "LM Studio host configuration is required"
+            return False, "LM Studio server URL is required"
 
         try:
-            # Create client using helper method
-            async with self._create_client(host) as client:
-                # Add 5-second timeout to the validation
-                try:
-                    await asyncio.wait_for(client.llm.list_downloaded(), timeout=5.0)
-                    return True, "Connected successfully"
-                except asyncio.TimeoutError:
-                    logger.error("LM Studio Connection timeout after 5 seconds")
-                    return False, "Connection timeout (5s) - check URL and network"
+            headers = self._create_headers(self._get_api_key(config))
+            verify = not self._get_skip_ssl_verify(config)
+            async with httpx.AsyncClient(timeout=10.0, verify=verify) as client:
+                response = await client.get(f"{host}/v1/models", headers=headers)
 
+                if response.status_code == 200:
+                    return True, "Connected successfully"
+                elif response.status_code in (401, 403):
+                    return False, "Authentication failed - check your API token"
+                elif response.status_code == 404:
+                    return False, "LM Studio API not found - ensure the server is running"
+                else:
+                    detail = self._extract_error_message(response.text)
+                    return False, f"LM Studio error: HTTP {response.status_code}" + (f" - {detail}" if detail else "")
+
+        except httpx.TimeoutException:
+            logger.error("LM Studio Connection timeout")
+            return False, "Connection timeout - check URL and network"
         except Exception as e:
             logger.error(f"LM Studio Validation exception: {type(e).__name__}: {e}", exc_info=True)
             return False, f"Connection failed: {str(e)}"
 
     async def get_available_models(self) -> List[ModelInfo]:
         """Get list of available LM Studio models"""
+        host = self._get_host()
+        if not host:
+            logger.warning("LM Studio No host configured, returning empty model list")
+            return []
+
         try:
-            # Get host and create client
-            host = self._get_host()
-            if not host:
-                logger.warning("LM Studio No host configured, returning empty model list")
-                return []
+            headers = self._create_headers(self._get_api_key())
+            verify = not self._get_skip_ssl_verify()
 
-            async with self._create_client(host) as client:
-                models = await client.llm.list_downloaded()
+            async with httpx.AsyncClient(timeout=30.0, verify=verify) as client:
+                # Prefer the native REST API, which includes model metadata such
+                # as architecture and context length.
+                response = await client.get(f"{host}/api/v0/models", headers=headers)
+                if response.status_code != 200:
+                    logger.info(f"LM Studio /api/v0/models returned HTTP {response.status_code}, trying /v1/models")
+                    response = await client.get(f"{host}/v1/models", headers=headers)
 
-                model_list = []
+                if response.status_code != 200:
+                    logger.error(f"Failed to get LM Studio models: HTTP {response.status_code}")
+                    return []
 
-                for model in models:
-                    logger.debug(f"LM Studio Processing model: {model}")
-
-                    try:
-                        model_info = model.info
-                        model_key = model_info.model_key
-                        display_name = model_info.display_name
-
-                        if model_key and display_name:
-                            # Get model size info if available
-                            size_info = ""
-                            if model_info.size_bytes:
-                                size_gb = model_info.size_bytes / (1024**3)
-                                size_info = f" ({size_gb:.1f}GB)"
-
-                            description = f"Local model: {model_key}"
-                            if model_info.architecture:
-                                description += f" ({model_info.architecture})"
-
-                            model_info_obj = ModelInfo(
-                                id=model_key,
-                                name=f"{display_name}{size_info}",
-                                description=description,
-                                supports_streaming=True,
-                            )
-                            model_list.append(model_info_obj)
-                            logger.debug(f"LM Studio Added model: {model_info_obj.name} (id: {model_info_obj.id})")
-                        else:
-                            logger.warning(
-                                f"LM Studio model missing required attributes: model_key={model_key}, display_name={display_name}"
-                            )
-                    except Exception as e:
-                        logger.error(f"Error processing LM Studio model {model}: {e}")
+                models = []
+                for model in response.json().get("data", []):
+                    model_id = model.get("id", "")
+                    if not model_id:
                         continue
 
-                # Sort by name for better UX
-                model_list.sort(key=lambda m: m.name.lower())
+                    # Skip non-LLM entries (e.g. embedding models) when the
+                    # native API reports a type.
+                    model_type = model.get("type")
+                    if model_type and model_type not in ("llm", "vlm"):
+                        continue
 
-                return model_list
+                    description = f"Local model: {model_id}"
+                    if model.get("arch"):
+                        description += f" ({model['arch']})"
+
+                    models.append(
+                        ModelInfo(
+                            id=model_id,
+                            name=model_id,
+                            description=description,
+                            context_length=model.get("max_context_length"),
+                            supports_streaming=True,
+                        )
+                    )
+
+                # Sort by name for better UX
+                models.sort(key=lambda m: m.name.lower())
+
+                return models
 
         except Exception as e:
             logger.error(f"Failed to get LM Studio models: {e}", exc_info=True)
@@ -315,126 +402,155 @@ class LMStudioService(AIService):
             book=book,
         )
 
-        # Create JSON input for all chapters
-        chapter_data = [{"id": idx, "title": text} for idx, text in enumerate(titles)]
-        user_message = f"Input data:\n{json.dumps(chapter_data)}"
-
         try:
-            # Get host and create client
             host = self._get_host()
             if not host:
-                raise ValueError("LM Studio host configuration is required")
+                raise ValueError("LM Studio server URL is required")
 
-            async with self._create_client(host) as client:
-                # Load the model
-                model = await client.llm.model(model_id)
-                model_info = await model.get_info()
+            headers = self._create_headers(self._get_api_key())
+            verify = not self._get_skip_ssl_verify()
 
-                is_gpt_oss = model_info.architecture == "gpt-oss"
+            total_chapters = len(titles)
 
-                # Initialize incremental parser for progress tracking
-                parser = IncrementalJSONParser()
-                total_chapters = len(titles)
+            base_payload = {
+                "model": model_id,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"Input data:\n{self._build_chapter_input(titles)}"},
+                ],
+                "stream": True,
+            }
 
-                # Stream the response for progress updates
-                stream_count = 0
-                content_received = ""
-                last_thinking_update = 0
+            structured_payload = {
+                **base_payload,
+                "response_format": CHAPTERS_RESPONSE_FORMAT,
+            }
 
-                # Combine system prompt and user message
-                combined_prompt = f"{system_prompt}\n\n{user_message}"
+            # Response from gpt-oss models is currently broken when using
+            # structured outputs. Seems to work well enough without it.
+            if "gpt-oss" in model_id.lower():
+                attempts = [base_payload]
+            else:
+                # Request structured output, but fall back to a plain request if
+                # the model rejects response_format.
+                attempts = [structured_payload, base_payload]
 
-                logger.info(f"LM Studio Combined prompt:\n{combined_prompt}")
+            content_received = ""
 
-                if is_gpt_oss:
-                    # Response from gpt-oss models is currently broken when using structured outputs. Seems to work well enough without it.
-                    response_format = None
-                else:
-                    response_format = {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "id": {"type": "number"},
-                                "title": {"type": ["string", "null"]},
-                            },
-                            "required": ["id", "title"],
-                        },
-                    }
+            async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT, verify=verify) as client:
+                for attempt_index, payload in enumerate(attempts):
+                    is_last_attempt = attempt_index == len(attempts) - 1
+                    parser = IncrementalJSONParser()
+                    content_received = ""
+                    last_thinking_update = 0
 
-                async for chunk in await model.respond_stream(combined_prompt, response_format=response_format):
-                    stream_count += 1
-                    logger.debug(f"LM Studio Received chunk {stream_count}: {chunk}")
+                    async with client.stream(
+                        "POST",
+                        f"{host}/v1/chat/completions",
+                        headers=headers,
+                        json=payload,
+                    ) as response:
+                        if response.status_code != 200:
+                            await response.aread()
+                            error_text = response.text
+                            # Retry without response_format if that is what was rejected.
+                            if not is_last_attempt and response.status_code == 400:
+                                logger.warning(
+                                    f"LM Studio rejected structured output; retrying without it: {error_text}"
+                                )
+                                continue
+                            logger.error(f"LM Studio API error: {response.status_code} - {error_text}")
 
-                    # Handle thinking mode for models that support it
-                    if hasattr(chunk, "reasoning_type") and chunk.reasoning_type != "none":
-                        current_time = time.time()
-                        if current_time - last_thinking_update >= 1.0:  # Limit to once per second
-                            self._notify_progress(0, "Thinking…")
-                            last_thinking_update = current_time
-                        continue
+                            if response.status_code in (400, 404) and await self._model_not_loaded(
+                                client, host, headers, model_id
+                            ):
+                                raise Exception(
+                                    f'Model "{model_id}" is not loaded and JIT model loading appears to be '
+                                    "disabled in LM Studio - load the model in LM Studio (or enable JIT "
+                                    "model loading in its server settings) and try again"
+                                )
 
-                    if hasattr(chunk, "content") and chunk.content:
-                        content = chunk.content
-                        content_received += content
-                        logger.debug(f"LM Studio Content chunk: '{content}'")
-
-                        result = parser.feed(content)
-                        if result["new_chapters"]:
-                            progress_percent = result["total_parsed"] / total_chapters * 100
-                            self._notify_progress(
-                                progress_percent,
-                                f"Processed {result['total_parsed']}/{total_chapters} chapters",
+                            detail = self._extract_error_message(error_text)
+                            raise Exception(
+                                f"LM Studio API error: {response.status_code}" + (f" - {detail}" if detail else "")
                             )
 
-                if not content_received:
-                    logger.error("LM Studio No content received from streaming!")
+                        async for line in response.aiter_lines():
+                            if not line or not line.strip():
+                                continue
 
-                self._notify_progress(100, "Processing AI response…")
+                            line = line.strip()
+                            if not line.startswith("data: "):
+                                continue
 
-                # Parse the response
-                try:
-                    try:
-                        if is_gpt_oss:
-                            # For gpt-oss, take only content after "<|message|>"
-                            # Ideally this would be handled by LM Studio or with openai-harmony
-                            if "<|message|>" in content_received:
-                                content_received = content_received.split("<|message|>")[-1]
-                    except Exception as e:
-                        logger.debug(f"Could not get model info for architecture check: {e}")
+                            data_str = line[6:]  # Remove "data: " prefix
+                            if data_str == "[DONE]":
+                                break
 
-                    processed_chapters = json.loads(content_received)
+                            try:
+                                chunk = json.loads(data_str)
+                            except json.JSONDecodeError:
+                                continue
 
-                except json.JSONDecodeError as e:
-                    logger.error(f"LM Studio Failed to parse response as JSON: {e}")
-                    logger.error(f"LM Studio Raw response: {content_received}")
-                    raise
+                            if "choices" in chunk and len(chunk["choices"]) > 0:
+                                delta = chunk["choices"][0].get("delta", {})
 
-                # Convert to title list
-                chapters = [
-                    None if chapter.get("title") == "null" or chapter.get("title") is None else chapter.get("title")
-                    for chapter in processed_chapters
-                ]
+                                # Handle thinking mode for models that support it
+                                if delta.get("reasoning_content") or delta.get("reasoning"):
+                                    current_time = time.time()
+                                    if current_time - last_thinking_update >= 1.0:  # Limit to once per second
+                                        self._notify_progress(0, "Thinking…")
+                                        last_thinking_update = current_time
+                                    continue
 
-                valid_chapters = len([t for t in chapters if t])
+                                content = delta.get("content")
+                                if content:
+                                    content_received += content
 
-                self._notify_progress(100, f"Generated {valid_chapters} chapter titles")
+                                    result = parser.feed(content)
+                                    if result["new_chapters"]:
+                                        progress_percent = result["total_parsed"] / total_chapters * 100
+                                        self._notify_progress(
+                                            progress_percent,
+                                            f"Processed {result['total_parsed']}/{total_chapters} chapters",
+                                        )
 
-                return chapters
+                    # Stream completed successfully; no need to try further variants.
+                    break
 
-        except asyncio.TimeoutError as e:
+            if not content_received:
+                logger.error("LM Studio No content received from streaming!")
+
+            self._notify_progress(100, "Processing AI response…")
+
+            # Parse the response
+            try:
+                processed_chapters = self._extract_chapter_array(content_received)
+            except (json.JSONDecodeError, ValueError) as e:
+                logger.error(f"LM Studio Failed to parse response as JSON: {e}")
+                logger.error(f"LM Studio Raw response: {content_received}")
+                raise
+
+            # Convert to title list
+            chapters = [
+                None if chapter.get("title") == "null" or chapter.get("title") is None else chapter.get("title")
+                for chapter in processed_chapters
+            ]
+
+            valid_chapters = len([t for t in chapters if t])
+
+            self._notify_progress(100, f"Generated {valid_chapters} chapter titles")
+
+            return chapters
+
+        except httpx.TimeoutException as e:
             error_msg = f"LM Studio request timed out - server may be overloaded: {str(e)}"
             logger.error(f"LM Studio timeout error: {e}")
             self._notify_progress(0, error_msg)
             raise
-        except ConnectionError as e:
+        except httpx.RequestError as e:
             error_msg = f"Failed to connect to LM Studio - please ensure LM Studio is running and accessible: {str(e)}"
             logger.error(f"LM Studio connection error: {e}")
-            self._notify_progress(0, error_msg)
-            raise
-        except OSError as e:
-            error_msg = f"Network error connecting to LM Studio - check host and port: {str(e)}"
-            logger.error(f"LM Studio network error: {e}")
             self._notify_progress(0, error_msg)
             raise
         except json.JSONDecodeError as e:

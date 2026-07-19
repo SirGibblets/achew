@@ -8,13 +8,16 @@ import ollama
 
 from app.models.abs import Book
 
-from .base import AIService, IncrementalJSONParser, ModelInfo, ProviderInfo
+from .base import CHAPTERS_SCHEMA, AIService, IncrementalJSONParser, ModelInfo, ProviderInfo, coerce_bool
 
 logger = logging.getLogger(__name__)
 
 
 class OllamaService(AIService):
     """Ollama implementation of AIService for local models"""
+
+    # Self-hosted: the user controls the model list, so always fetch it fresh.
+    CACHE_MODELS = False
 
     def __init__(self, progress_callback, **config):
         super().__init__(progress_callback, **config)
@@ -43,7 +46,17 @@ class OllamaService(AIService):
 
         return host
 
-    def _create_client(self, host=None):
+    def _get_skip_ssl_verify(self, config=None) -> bool:
+        """Get whether TLS certificate verification should be skipped."""
+        if config and "skip_ssl_verify" in config:
+            return coerce_bool(config["skip_ssl_verify"])
+
+        from ...core.config import get_app_config
+
+        app_config = get_app_config()
+        return app_config.llm.ollama.skip_ssl_verify
+
+    def _create_client(self, host=None, skip_ssl_verify=None):
         """Create an Ollama client with the given or current host"""
         if not host:
             host = self._get_host()
@@ -56,7 +69,11 @@ class OllamaService(AIService):
         if not parsed.netloc:
             raise ValueError(f"Invalid host URL: {host}")
 
-        return ollama.AsyncClient(host=host)
+        if skip_ssl_verify is None:
+            skip_ssl_verify = self._get_skip_ssl_verify()
+
+        # Extra kwargs are forwarded to the underlying httpx client
+        return ollama.AsyncClient(host=host, verify=not skip_ssl_verify)
 
     async def load_saved_config(self) -> dict:
         """Load saved configuration for Ollama provider"""
@@ -65,6 +82,7 @@ class OllamaService(AIService):
         config = get_app_config()
         return {
             "host": config.llm.ollama.host or "",
+            "skip_ssl_verify": config.llm.ollama.skip_ssl_verify,
             "enabled": config.llm.ollama.enabled,
             "validated": config.llm.ollama.validated,
             "validation_status": config.llm.ollama.validation_status,
@@ -89,6 +107,7 @@ class OllamaService(AIService):
             # Save configuration
             provider_config = LLMProviderConfig(
                 host=host,
+                skip_ssl_verify=self._get_skip_ssl_verify(config),
                 enabled=config.get("enabled", True),
                 validated=valid,
                 last_validated=datetime.now(timezone.utc) if valid else None,
@@ -154,7 +173,9 @@ class OllamaService(AIService):
         new_host = self._get_host(new_config) or ""
         saved_host = self._saved_config.get("host", "")
 
-        return new_host != saved_host
+        return new_host != saved_host or self._get_skip_ssl_verify(new_config) != coerce_bool(
+            self._saved_config.get("skip_ssl_verify", False)
+        )
 
     def get_provider_state(self) -> ProviderInfo:
         """Get current provider state including enabled/configured status"""
@@ -194,11 +215,18 @@ class OllamaService(AIService):
                 {
                     "name": "host",
                     "type": "text",
-                    "label": "Ollama Host URL",
-                    "placeholder": "http://localhost:11434",
-                    "required": False,
+                    "label": "Server URL",
+                    "placeholder": "Server URL (e.g. http://localhost:11434)",
+                    "required": True,
                     "help_url": "https://github.com/ollama/ollama/blob/66fb8575ced090a969c9529c88ee57a8df1259c2/docs/faq.md#how-can-i-expose-ollama-on-my-network",
-                }
+                },
+                {
+                    "name": "skip_ssl_verify",
+                    "type": "checkbox",
+                    "label": "Skip SSL certificate verification",
+                    "help_text": "Allows HTTPS servers with self-signed certificates. Only enable this for servers you trust.",
+                    "required": False,
+                },
             ],
             is_available=True,
         )
@@ -214,7 +242,7 @@ class OllamaService(AIService):
 
         try:
             # Create client using helper method
-            client = self._create_client(host)
+            client = self._create_client(host, self._get_skip_ssl_verify(config))
 
             # Add 5-second timeout to the validation
             import asyncio
@@ -313,8 +341,7 @@ class OllamaService(AIService):
         )
 
         # Create JSON input for all chapters
-        chapter_data = [{"id": idx, "title": text} for idx, text in enumerate(titles)]
-        user_message = f"Input data:\n{json.dumps(chapter_data)}"
+        user_message = f"Input data:\n{self._build_chapter_input(titles)}"
 
         try:
             # Get host and create client
@@ -348,17 +375,7 @@ class OllamaService(AIService):
                 # Response from gpt-oss models is currently broken when using structured outputs. Seems to work well enough without it.
                 format = None
             else:
-                format = {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "id": {"type": "number"},
-                            "title": {"type": ["string", "null"]},
-                        },
-                        "required": ["id", "title"],
-                    },
-                }
+                format = CHAPTERS_SCHEMA
 
             async for chunk in await processing_client.generate(
                 model=model_id,
@@ -395,9 +412,9 @@ class OllamaService(AIService):
 
             # Parse the response
             try:
-                processed_chapters = json.loads(content_received)
+                processed_chapters = self._extract_chapter_array(content_received)
 
-            except json.JSONDecodeError as e:
+            except (json.JSONDecodeError, ValueError) as e:
                 logger.error(f"Ollama Failed to parse Ollama response as JSON: {e}")
                 logger.error(f"Ollama Raw response: {content_received}")
                 raise

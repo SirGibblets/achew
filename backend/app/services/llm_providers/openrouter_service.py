@@ -1,13 +1,13 @@
 import json
 import logging
 import time
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 import httpx
 
 from app.models.abs import Book
 
-from .base import AIService, IncrementalJSONParser, ModelInfo, ProviderInfo
+from .base import CHAPTERS_RESPONSE_FORMAT, AIService, IncrementalJSONParser, ModelInfo, ProviderInfo
 
 logger = logging.getLogger(__name__)
 
@@ -274,8 +274,6 @@ class OpenRouterService(AIService):
             book=book,
         )
 
-        chapter_data = [{"id": idx, "title": text} for idx, text in enumerate(titles)]
-
         try:
             api_key = self._get_api_key()
             if not api_key:
@@ -285,104 +283,119 @@ class OpenRouterService(AIService):
 
             headers = self._create_headers(api_key)
 
-            parser = IncrementalJSONParser()
             total_chapters = len(titles)
 
             is_thinking_model = any(term in model_id.lower() for term in ["reasoning", "thinking"])
 
-            payload = {
+            base_payload: Dict[str, Any] = {
                 "model": model_id,
                 "messages": [
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": json.dumps(chapter_data)},
+                    {"role": "user", "content": self._build_chapter_input(titles)},
                 ],
                 "stream": True,
-                "response_format": {"type": "json_object"},
             }
 
             if is_thinking_model:
-                payload["reasoning"] = {"max_tokens": 1024}
+                base_payload["reasoning"] = {"max_tokens": 1024}
+
+            # Try progressively less constrained output modes. The strict schema
+            # can express the array shape the prompt asks for; json_object alone
+            # cannot, so it is only a fallback for models that reject schemas.
+            # A mode may be rejected outright (HTTP 400) or accepted but produce
+            # the wrong shape, so both outcomes advance to the next attempt.
+            attempts = [
+                {**base_payload, "response_format": CHAPTERS_RESPONSE_FORMAT},
+                {**base_payload, "response_format": {"type": "json_object"}},
+                base_payload,
+            ]
 
             content_received = ""
-            last_thinking_update = 0
+            processed_chapters = []
 
             async with httpx.AsyncClient(timeout=120.0) as client:
-                async with client.stream(
-                    "POST",
-                    "https://openrouter.ai/api/v1/chat/completions",
-                    headers=headers,
-                    json=payload,
-                    timeout=60.0,
-                ) as response:
-                    if response.status_code != 200:
-                        await response.aread()
-                        error_text = response.text
-                        logger.error(f"OpenRouter API error: {response.status_code} - {error_text}")
-                        raise Exception(f"OpenRouter API error: {response.status_code}")
+                for attempt_index, payload in enumerate(attempts):
+                    is_last_attempt = attempt_index == len(attempts) - 1
+                    parser = IncrementalJSONParser()
+                    content_received = ""
+                    last_thinking_update = 0
 
-                    async for line in response.aiter_lines():
-                        if not line or not line.strip():
-                            continue
+                    async with client.stream(
+                        "POST",
+                        "https://openrouter.ai/api/v1/chat/completions",
+                        headers=headers,
+                        json=payload,
+                        timeout=60.0,
+                    ) as response:
+                        if response.status_code != 200:
+                            await response.aread()
+                            error_text = response.text
+                            # Retry with a less constrained mode if the format was rejected.
+                            format_rejected = response.status_code == 400 and any(
+                                term in error_text for term in ("response_format", "json_schema", "json_object")
+                            )
+                            if not is_last_attempt and format_rejected:
+                                logger.warning("OpenRouter rejected the response format; retrying with a simpler one")
+                                continue
+                            logger.error(f"OpenRouter API error: {response.status_code} - {error_text}")
+                            raise Exception(f"OpenRouter API error: {response.status_code}")
 
-                        line = line.strip()
-                        if not line.startswith("data: "):
-                            continue
-
-                        data_str = line[6:]  # Remove "data: " prefix
-                        if data_str == "[DONE]":
-                            break
-
-                        try:
-                            chunk = json.loads(data_str)
-                        except json.JSONDecodeError:
-                            continue
-
-                        if "choices" in chunk and len(chunk["choices"]) > 0:
-                            choice = chunk["choices"][0]
-
-                            if "delta" in choice and choice["delta"].get("reasoning"):
-                                current_time = time.time()
-                                if current_time - last_thinking_update >= 1.0:
-                                    self._notify_progress(0, "Thinking…")
-                                    last_thinking_update = current_time
+                        async for line in response.aiter_lines():
+                            if not line or not line.strip():
                                 continue
 
-                            if "delta" in choice and "content" in choice["delta"]:
-                                content = choice["delta"]["content"]
-                                if content:
-                                    content_received += content
+                            line = line.strip()
+                            if not line.startswith("data: "):
+                                continue
 
-                                    result = parser.feed(content)
-                                    if result["new_chapters"]:
-                                        progress_percent = result["total_parsed"] / total_chapters * 100
-                                        self._notify_progress(
-                                            progress_percent,
-                                            f"Processed {result['total_parsed']}/{total_chapters} chapters",
-                                        )
+                            data_str = line[6:]  # Remove "data: " prefix
+                            if data_str == "[DONE]":
+                                break
 
-            self._notify_progress(100, "Processing AI response…")
+                            try:
+                                chunk = json.loads(data_str)
+                            except json.JSONDecodeError:
+                                continue
 
-            try:
-                response_data = json.loads(content_received)
+                            if "choices" in chunk and len(chunk["choices"]) > 0:
+                                choice = chunk["choices"][0]
 
-                if isinstance(response_data, list):
-                    processed_chapters = response_data
-                elif isinstance(response_data, dict) and "chapters" in response_data:
-                    processed_chapters = response_data["chapters"]
-                else:
-                    processed_chapters = []
-                    for value in response_data.values() if isinstance(response_data, dict) else []:
-                        if isinstance(value, list):
-                            processed_chapters = value
-                            break
+                                if "delta" in choice and choice["delta"].get("reasoning"):
+                                    current_time = time.time()
+                                    if current_time - last_thinking_update >= 1.0:
+                                        self._notify_progress(0, "Thinking…")
+                                        last_thinking_update = current_time
+                                    continue
 
-                if not processed_chapters:
-                    raise ValueError("No chapter array found in response")
+                                if "delta" in choice and "content" in choice["delta"]:
+                                    content = choice["delta"]["content"]
+                                    if content:
+                                        content_received += content
 
-            except (json.JSONDecodeError, ValueError) as e:
-                logger.error(f"Failed to parse OpenRouter response: {e}")
-                logger.error(f"Raw response: {content_received}")
-                raise
+                                        result = parser.feed(content)
+                                        if result["new_chapters"]:
+                                            progress_percent = result["total_parsed"] / total_chapters * 100
+                                            self._notify_progress(
+                                                progress_percent,
+                                                f"Processed {result['total_parsed']}/{total_chapters} chapters",
+                                            )
+
+                    self._notify_progress(100, "Processing AI response…")
+
+                    try:
+                        processed_chapters = self._extract_chapter_array(content_received)
+                    except (json.JSONDecodeError, ValueError) as e:
+                        # A model can accept a response_format yet still produce
+                        # the wrong shape. Fall back to the next attempt.
+                        if not is_last_attempt:
+                            logger.warning(f"Could not parse response ({e}); retrying with a simpler response format")
+                            continue
+                        logger.error(f"Failed to parse OpenRouter response: {e}")
+                        logger.error(f"Raw response: {content_received}")
+                        raise
+
+                    # Stream parsed successfully; no need to try further variants.
+                    break
 
             chapters = []
             for chapter in processed_chapters:

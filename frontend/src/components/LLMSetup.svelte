@@ -1,10 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { llm } from '../utils/api';
+  import { tooltip } from '../actions/tooltip';
   import DocLink from './DocLink.svelte';
   import Icon from './Icon.svelte';
 
   import Check from '@lucide/svelte/icons/check';
+  import CircleQuestionMark from '@lucide/svelte/icons/circle-question-mark';
   import ExternalLink from '@lucide/svelte/icons/external-link';
   import Info from '@lucide/svelte/icons/info';
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
@@ -19,16 +21,18 @@
 
   type ProviderInfo = LLMProvider;
 
+  type FieldValue = string | boolean;
+
   let providers = $state<ProviderInfo[]>([]);
-  let providerConfigs = $state<Record<string, Record<string, string>>>({});
-  let originalConfigs = $state<Record<string, Record<string, string>>>({});
+  let providerConfigs = $state<Record<string, Record<string, FieldValue>>>({});
+  let originalConfigs = $state<Record<string, Record<string, FieldValue>>>({});
   let loading = $state(false);
   let validating = $state<Record<string, boolean>>({});
 
   let debounceTimers: Record<string, ReturnType<typeof setTimeout>> = {};
 
   // Auto-validate when provider configs change
-  function handleProviderConfigChange(providerId: string, fieldName: string, value: string) {
+  function handleProviderConfigChange(providerId: string, fieldName: string, value: FieldValue) {
     // Update the config
     providerConfigs[providerId][fieldName] = value;
     providerConfigs = { ...providerConfigs };
@@ -62,8 +66,9 @@
         // Initialize config fields based on setup_fields
         for (const field of provider.setup_fields) {
           // Always start with empty values, don't use placeholder as default
-          providerConfigs[provider.id][field.name] = '';
-          originalConfigs[provider.id][field.name] = '';
+          const emptyValue = field.type === 'checkbox' ? false : '';
+          providerConfigs[provider.id][field.name] = emptyValue;
+          originalConfigs[provider.id][field.name] = emptyValue;
         }
       }
 
@@ -80,11 +85,14 @@
       // Load actual saved configs from backend for each provider
       for (const provider of providers) {
         try {
-          const result = (await llm.getProviderConfig(provider.id)) as { config?: Record<string, string> };
+          const result = (await llm.getProviderConfig(provider.id)) as { config?: Record<string, FieldValue> };
           if (result && result.config) {
             for (const field of provider.setup_fields) {
               const savedValue = result.config[field.name];
-              if (savedValue) {
+              if (field.type === 'checkbox') {
+                providerConfigs[provider.id][field.name] = Boolean(savedValue);
+                originalConfigs[provider.id][field.name] = Boolean(savedValue);
+              } else if (savedValue) {
                 if (field.type === 'password') {
                   // Show placeholder for password fields if configured
                   providerConfigs[provider.id][field.name] = '••••••••••••••••••••••••••••••••••••••••••••••••••••';
@@ -113,14 +121,16 @@
   function saveProviderConfigsToStorage() {
     try {
       // Save non-sensitive configs to localStorage
-      const configsToSave: Record<string, Record<string, string>> = {};
+      const configsToSave: Record<string, Record<string, FieldValue>> = {};
       for (const provider of providers) {
         configsToSave[provider.id] = {};
         for (const field of provider.setup_fields) {
           // Only save non-password fields
           if (field.type !== 'password') {
             const value = providerConfigs[provider.id][field.name];
-            if (value && !value.startsWith('••••')) {
+            if (typeof value === 'boolean') {
+              configsToSave[provider.id][field.name] = value;
+            } else if (value && !value.startsWith('••••')) {
               configsToSave[provider.id][field.name] = value;
             }
           }
@@ -226,14 +236,16 @@
     }
   }
 
-  function getProviderConfigForValidation(providerId: string): Record<string, string> {
-    const config: Record<string, string> = {};
+  function getProviderConfigForValidation(providerId: string): Record<string, FieldValue> {
+    const config: Record<string, FieldValue> = {};
     const provider = providers.find((p) => p.id === providerId);
     if (!provider) return config;
 
     for (const field of provider.setup_fields) {
       const value = providerConfigs[providerId][field.name];
-      if (value && !value.startsWith('••••')) {
+      if (typeof value === 'boolean') {
+        config[field.name] = value;
+      } else if (value && !value.startsWith('••••')) {
         config[field.name] = value;
       } else if (originalConfigs[providerId][field.name] === '***') {
         // Keep existing config - don't send placeholder
@@ -255,7 +267,7 @@
       const originalValue = originalConfigs[providerId][field.name];
 
       // For password fields, if current value is placeholder, no change
-      if (field.type === 'password' && currentValue && currentValue.startsWith('••••')) {
+      if (field.type === 'password' && typeof currentValue === 'string' && currentValue.startsWith('••••')) {
         continue;
       }
 
@@ -445,21 +457,40 @@
             {/if}
 
             <div class="form-group">
-              <input
-                id="{provider.id}-{field.name}"
-                type={field.type === 'password' ? 'password' : 'text'}
-                autocomplete="off"
-                data-1p-ignore
-                data-lpignore="true"
-                data-bwignore
-                data-form-type="other"
-                bind:value={providerConfigs[provider.id][field.name]}
-                placeholder={field.placeholder || field.label}
-                disabled={loading || !provider.is_enabled}
-                required={field.required}
-                oninput={() =>
-                  handleProviderConfigChange(provider.id, field.name, providerConfigs[provider.id][field.name])}
-              />
+              {#if field.type === 'checkbox'}
+                <label class="checkbox-field">
+                  <input
+                    id="{provider.id}-{field.name}"
+                    type="checkbox"
+                    checked={Boolean(providerConfigs[provider.id][field.name])}
+                    disabled={loading || !provider.is_enabled}
+                    onchange={(e) =>
+                      handleProviderConfigChange(provider.id, field.name, (e.target as HTMLInputElement).checked)}
+                  />
+                  <span>{field.label}</span>
+                  {#if field.help_text}
+                    <div class="help-icon" use:tooltip={{ text: field.help_text, delay: 0 }}>
+                      <CircleQuestionMark size="14" />
+                    </div>
+                  {/if}
+                </label>
+              {:else}
+                <input
+                  id="{provider.id}-{field.name}"
+                  type={field.type === 'password' ? 'password' : 'text'}
+                  autocomplete="off"
+                  data-1p-ignore
+                  data-lpignore="true"
+                  data-bwignore
+                  data-form-type="other"
+                  value={String(providerConfigs[provider.id][field.name] ?? '')}
+                  placeholder={field.placeholder || field.label}
+                  disabled={loading || !provider.is_enabled}
+                  required={field.required}
+                  oninput={(e) =>
+                    handleProviderConfigChange(provider.id, field.name, (e.target as HTMLInputElement).value)}
+                />
+              {/if}
             </div>
           {/each}
 
@@ -708,6 +739,7 @@
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
+    margin-top: 1.25rem;
   }
 
   .form-group {
@@ -720,7 +752,6 @@
   .field-hint {
     font-size: 0.75rem;
     color: var(--text-secondary);
-    margin-top: 0.5rem;
     margin-bottom: 0;
     display: flex;
     align-items: center;
@@ -734,6 +765,46 @@
 
   .field-hint a:hover {
     text-decoration: underline;
+  }
+
+  .checkbox-field {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    width: fit-content;
+  }
+
+  .checkbox-field input[type='checkbox'] {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    accent-color: var(--primary-color);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .checkbox-field input[type='checkbox']:disabled {
+    cursor: not-allowed;
+  }
+
+  .help-icon {
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    padding: 2px;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+    position: relative;
+    cursor: help;
+    display: flex;
+  }
+
+  .help-icon:hover {
+    color: var(--primary-color);
+    background: var(--bg-tertiary);
   }
 
   .provider-actions {
