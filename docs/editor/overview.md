@@ -7,11 +7,15 @@
         margin: 1em 1em 0 0;
         padding-top: 0.35em;
     }
+    .md-typeset figcaption {
+        font-size: 0.85em;
+        color: var(--md-default-fg-color--light);
+    }
 </style>
 
 # Chapter Editor Overview
 
-The editor shows a list of chapters and an Action Bar at the bottom.
+The editor shows a list of chapters and an Action Bar.
 
 ![Chapter editor components](../img/editor-components-light.webp#only-light)
 ![Chapter editor components](../img/editor-components-dark.webp#only-dark)
@@ -35,13 +39,14 @@ The editor shows a list of chapters and an Action Bar at the bottom.
 | 13 | :lucide-ellipsis-vertical:{ .icon-token } Menu | Opens the [Action Bar Menu](#action-bar-menu) containing settings, editing tools, and quick actions. |
 | 14 | :material-creation:{ .icon-token .inverted-primary } AI Cleanup | Opens the [AI Cleanup](ai-cleanup.md) dialog, which uses an LLM to help you normalize the capitalization, numbering, punctuation, etc. of the selected chapters.|
 | 15 | :lucide-arrow-right:{ .icon-token .primary } Review | Proceeds to the [Review and Submit](review-submit-export.md) screen using the selected chapters. |
+| 16 | :lucide-panel-left:{ .icon-token } / :lucide-panel-right:{ .icon-token } Dock | Docks the Action Bar to the left or right edge of the screen (hidden on small screens). See [Docking the Action Bar](#docking-the-action-bar). |
 
 !!! info "Need to redo an earlier step?"
     The **Back** button at the top-left of the screen opens the [Back Menu](../reference/glossary.md#back-menu), which lets you jump back to earlier steps (workflow selection, initial chapter selection, transcription, etc). Picking **New Audiobook** abandons the current book entirely and returns you to book selection. Note that any chapter edits and undo history will be lost.
 
 ## Action Bar Menu
 
-Clicking the menu button (:lucide-ellipsis-vertical:{ .icon-token }) on the Action Bar will open a panel that contains the editor settings, editing tools, and quick actions. 
+When the Action Bar is docked at the bottom of the screen, most items are hidden to save space. Clicking the menu button (:lucide-ellipsis-vertical:{ .icon-token }) reveals these other settings, tools, and actions.
 
 ![Action bar](../img/action-bar-light.webp#only-light)
 ![Action bar](../img/action-bar-dark.webp#only-dark)
@@ -69,6 +74,29 @@ Actions apply immediately to the currently selected chapters.
 - **[Quick Tidy](edit-titles.md#quick-tidy)** applies your whitespace, punctuation, numbering, and casing preferences to the selected titles. You can use the gear icon :lucide-settings:{ .icon-token } to set your preferences. 
 - **Transcribe** transcribes the selected chapters using current [transcription settings](../reference/transcription.md#configuring-transcription).
 - **Delete / Delete Unselected** deletes every selected (or unselected) chapter. 
+
+## Docking the Action Bar
+
+Clicking the :lucide-panel-left:{ .icon-token } or :lucide-panel-right:{ .icon-token } button on either side of the Action Bar will dock the Action Bar to that edge of the screen.
+
+![Docked action bar](../img/action-bar-docked-light.webp#only-light){ width="560" .center }
+![Docked action bar](../img/action-bar-docked-dark.webp#only-dark){ width="560" .center }
+/// caption
+Action Bar docked to the left (expanded/collapsed)
+///
+
+
+Every item from the [Action Bar Menu](#action-bar-menu) is shown directly in the toolbar, in sections from top to bottom: **Tools**, **Actions**, **Settings**, and then the Action Bar items (selection count, Undo/Redo, Clean Up Selected, and Review Selected), followed by buttons to dock the bar back to the bottom (:lucide-panel-bottom:{ .icon-token }) or to the opposite side.
+
+### Collapsing the docked toolbar
+
+The small toggle (:lucide-chevrons-left:{ .icon-token } or :lucide-chevrons-right:{ .icon-token }) at the top of the toolbar collapses it into a narrow, icon-only strip to stay out of your way. While collapsed:
+
+- Buttons show only their icons; hover over any button to see its function.
+- The **Settings** section and the Quick Tidy gear are hidden. Expand the toolbar to reach them.
+- The selection count is shortened (e.g. `3/12`).
+
+Your chosen dock position and collapsed state are remembered by your browser. On small screens (such as phones) the Action Bar always stays docked to the bottom and the dock buttons are hidden.
 
 ## Proceeding to Review
 

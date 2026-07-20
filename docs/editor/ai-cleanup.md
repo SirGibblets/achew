@@ -8,7 +8,7 @@
 
 AI Cleanup sends your selected chapter titles to a Large Language Model and asks it to clean them up: consistent capitalization, chapter number formatting, punctuation, etc. It works on the chapters currently selected in the editor and applies the processed titles when finished.
 
-To access the AI Cleanup dialog, click the :material-creation:{ .icon-token .inverted-primary } **Clean Up Selected** button in the Action Bar at the bottom of the chapter editor.
+To access the AI Cleanup dialog, click the :material-creation:{ .icon-token .inverted-primary } **Clean Up Selected** button in the editor's Action Bar.
 
 ![AI Cleanup dialog](../img/ai-cleanup-dialog-light.webp#only-light)
 ![AI Cleanup dialog](../img/ai-cleanup-dialog-dark.webp#only-dark)

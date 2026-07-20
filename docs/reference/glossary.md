@@ -5,7 +5,7 @@
 ![Action Bar](../img/glossary-action-bar-dark.webp#only-dark){ width="540" }
 ![Action Bar](../img/glossary-action-bar-light.webp#only-light){ width="540" }
 
-The sticky bar at the bottom of the [Chapter Editor](../editor/overview.md). Holds the selection count, undo/redo, the tools/settings menu, the AI Cleanup button, and the Review button.
+The sticky bar at the bottom of the [Chapter Editor](../editor/overview.md). Holds the selection count, undo/redo, the tools/settings menu, the AI Cleanup button, and the Review button. It can be [docked to the left or right edge](../editor/overview.md#docking-the-action-bar) of the screen as a vertical toolbar, where the menu items appear inline.
 
 ## Additional Instructions
 Per-session formatting rules for [AI Cleanup](../editor/ai-cleanup.md). Unlike Custom Instructions, these are not saved across sessions; use them for book-specific tweaks.
@@ -40,7 +40,7 @@ A custom vocabulary passed to Whisper to bias the model toward specific spelling
 A timestamp + title. Every row in the chapter editor is a chapter.
 
 ## Chapter Editor
-Achew's main editing interface for chapter lists, shown at the end of every [workflow](#workflow). Each row displays a chapter's timestamp, transcript, and title alongside per-chapter controls for adding, transcribing, playing, and deleting. The [Action Bar](#action-bar) sits at the bottom of the screen. See [Chapter Editor Overview](../editor/overview.md).
+Achew's main editing interface for chapter lists, shown at the end of every [workflow](#workflow). Each row displays a chapter's timestamp, transcript, and title alongside per-chapter controls for adding, transcribing, playing, and deleting. The [Action Bar](#action-bar) sits at the bottom of the screen by default and can be docked to either side. See [Chapter Editor Overview](../editor/overview.md).
 
 ## Chapter Reference
 See [Chapter References](../getting-started/chapter-references.md).

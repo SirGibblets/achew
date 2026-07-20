@@ -383,7 +383,7 @@ p {
 .table td {
   padding: 0.75rem;
   vertical-align: top;
-  border-top: 1px solid var(--border-color);
+  border-top: 0.5px solid var(--border-color);
 }
 
 .table thead th {
@@ -625,6 +625,22 @@ input[type='checkbox'] {
   border-bottom: 6px solid var(--border-color);
 }
 
+.app-tooltip__arrow[data-placement='left'] {
+  left: 100%;
+  border-top: 6px solid transparent;
+  border-bottom: 6px solid transparent;
+  border-left: 6px solid var(--border-color);
+  border-right: 0;
+}
+
+.app-tooltip__arrow[data-placement='right'] {
+  right: 100%;
+  border-top: 6px solid transparent;
+  border-bottom: 6px solid transparent;
+  border-right: 6px solid var(--border-color);
+  border-left: 0;
+}
+
 /* Responsive design */
 @media (max-width: 768px) {
   .table {
@@ -669,4 +685,28 @@ input:-webkit-autofill::first-line {
 input:-webkit-autofill::selection {
   background-color: var(--primary) !important;
   color: white !important;
+}
+
+/* Chapter editor action bar docking: shift the app while the bar is docked
+   to a side. The classes are toggled on <body> by ChapterEditor. */
+body.action-bar-dock-left,
+body.action-bar-dock-right {
+  --action-bar-dock-size: 16.5rem;
+}
+
+body.action-bar-collapsed {
+  --action-bar-dock-size: 3.5rem;
+}
+
+body.action-bar-dock-left {
+  padding-left: var(--action-bar-dock-size);
+}
+
+body.action-bar-dock-right {
+  padding-right: var(--action-bar-dock-size);
+}
+
+/* Fixed elements do not shift with body padding */
+body.action-bar-dock-right .version-container {
+  right: calc(var(--action-bar-dock-size) + 1rem);
 }
