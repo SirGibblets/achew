@@ -19,13 +19,13 @@
   } from '../stores/session';
   import { api, handleApiError } from '../utils/api';
   import { resolveTidyOptions, tidyTitle, type TidyOptions } from '../utils/titleTools';
+  import ActionBar, { type DockPosition } from './ActionBar.svelte';
   import AddChapterDialog from './AddChapterDialog.svelte';
   import AICleanupDialog from './AICleanupDialog.svelte';
   import ApplyTitlesDialog from './apply_titles/ApplyTitlesDialog.svelte';
   import EditTitlesDialog from './EditTitlesDialog.svelte';
   import ShiftTimestampsDialog from './ShiftTimestampsDialog.svelte';
   import ShiftTitlesDialog from './ShiftTitlesDialog.svelte';
-  import Icon from './Icon.svelte';
 
   // Icons
   import ArrowRight from '@lucide/svelte/icons/arrow-right';
@@ -36,20 +36,9 @@
   import Pause from '@lucide/svelte/icons/pause';
   import Play from '@lucide/svelte/icons/play';
   import Plus from '@lucide/svelte/icons/plus';
-  import Redo from '@lucide/svelte/icons/redo';
-  import SettingsIcon from '@lucide/svelte/icons/settings';
-  import MoreVertical from '@lucide/svelte/icons/more-vertical';
-  import Wrench from '@lucide/svelte/icons/wrench';
-  import Clock from '@lucide/svelte/icons/clock';
-  import ArrowDownUp from '@lucide/svelte/icons/arrow-down-up';
-  import BrushCleaning from '@lucide/svelte/icons/brush-cleaning';
-  import CircleQuestionMark from '@lucide/svelte/icons/circle-question-mark';
-  import PencilLine from '@lucide/svelte/icons/pencil-line';
   import Trash2 from '@lucide/svelte/icons/trash-2';
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
-  import Undo from '@lucide/svelte/icons/undo';
   import X from '@lucide/svelte/icons/x';
-  import Zap from '@lucide/svelte/icons/zap';
   import CircleHelp from '@lucide/svelte/icons/circle-help';
   import Mic from '@lucide/svelte/icons/mic';
 
@@ -76,12 +65,67 @@
   let addChapterDialogChapterId = $state<string | null>(null);
   let addChapterDialogDefaultTab = $state<string | null>(null);
 
-  let showSettings = $state(false);
   let editorSettings = $state<EditorSettings>({
     tab_navigation: false,
     hide_transcriptions: false,
     show_formatted_time: true,
     show_fractional_seconds: true,
+  });
+
+  // Action bar docking (persisted per browser)
+  const DOCK_STORAGE_KEY = 'achew_action_bar_dock';
+  const EXPANDED_STORAGE_KEY = 'achew_action_bar_expanded';
+  const DOCK_BREAKPOINT = 768;
+
+  function loadDockPref(): DockPosition {
+    try {
+      const value = localStorage.getItem(DOCK_STORAGE_KEY);
+      return value === 'left' || value === 'right' || value === 'bottom' ? value : 'bottom';
+    } catch {
+      return 'bottom';
+    }
+  }
+
+  function loadExpandedPref(): boolean {
+    try {
+      return localStorage.getItem(EXPANDED_STORAGE_KEY) !== '0';
+    } catch {
+      return true;
+    }
+  }
+
+  let dockPref = $state<DockPosition>(loadDockPref());
+  let barExpanded = $state(loadExpandedPref());
+  let innerWidth = $state(window.innerWidth);
+  let canDock = $derived(innerWidth > DOCK_BREAKPOINT);
+  let effectiveDock = $derived<DockPosition>(canDock ? dockPref : 'bottom');
+  let barVisible = $derived($chapters.length > 0 || $canUndo);
+
+  $effect(() => {
+    try {
+      localStorage.setItem(DOCK_STORAGE_KEY, dockPref);
+    } catch {
+      /* ignore */
+    }
+  });
+
+  $effect(() => {
+    try {
+      localStorage.setItem(EXPANDED_STORAGE_KEY, barExpanded ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  });
+
+  // Shift the app content while the bar is docked to a side
+  $effect(() => {
+    const cls = document.body.classList;
+    cls.toggle('action-bar-dock-left', barVisible && effectiveDock === 'left');
+    cls.toggle('action-bar-dock-right', barVisible && effectiveDock === 'right');
+    cls.toggle('action-bar-collapsed', barVisible && effectiveDock !== 'bottom' && !barExpanded);
+    return () => {
+      cls.remove('action-bar-dock-left', 'action-bar-dock-right', 'action-bar-collapsed');
+    };
   });
 
   // Timestamp editing state
@@ -123,7 +167,6 @@
 
     window.addEventListener('scroll', handleScroll, { passive: true });
     window.addEventListener('keydown', handleKeydown);
-    document.addEventListener('click', handleOutsideClick);
   });
 
   // Transcription progress/cancel bar; show after 1000ms
@@ -179,7 +222,6 @@
     audio.stop();
     window.removeEventListener('scroll', handleScroll);
     window.removeEventListener('keydown', handleKeydown);
-    document.removeEventListener('click', handleOutsideClick);
     if (transcriptionBarTimer) {
       clearTimeout(transcriptionBarTimer);
     }
@@ -230,39 +272,6 @@
     } catch (err) {
       error = handleApiError(err);
     }
-  }
-
-  function toggleSettingsPanel() {
-    showSettings = !showSettings;
-  }
-
-  function handleOutsideClick(event: MouseEvent) {
-    if (showSettings) {
-      const stickyBar = document.querySelector('.sticky-action-bar');
-      if (stickyBar && !stickyBar.contains(event.target as Node)) {
-        showSettings = false;
-      }
-    }
-  }
-
-  async function handleTabNavigationChange(event: Event) {
-    const enabled = (event.target as HTMLInputElement).checked;
-    await saveEditorSettings({ tab_navigation: enabled });
-  }
-
-  async function handleHideTranscriptionsChange(event: Event) {
-    const enabled = (event.target as HTMLInputElement).checked;
-    await saveEditorSettings({ hide_transcriptions: enabled });
-  }
-
-  async function handleTimeFormatChange(event: Event) {
-    const enabled = (event.target as HTMLInputElement).checked;
-    await saveEditorSettings({ show_formatted_time: enabled });
-  }
-
-  async function handleFractionalSecondsChange(event: Event) {
-    const enabled = (event.target as HTMLInputElement).checked;
-    await saveEditorSettings({ show_fractional_seconds: enabled });
   }
 
   function handleScroll() {
@@ -326,7 +335,9 @@
   function scrollToFocusedInput(input: HTMLElement) {
     requestAnimationFrame(() => {
       const inputRect = input.getBoundingClientRect();
-      const stickyBar = document.querySelector('.sticky-action-bar');
+      // When docked to a side, the bar spans the viewport height and never
+      // covers content vertically, so only measure it in the bottom dock.
+      const stickyBar = effectiveDock === 'bottom' ? document.querySelector('.sticky-action-bar') : null;
       const stickyBarRect = stickyBar ? stickyBar.getBoundingClientRect() : null;
 
       const bottomBarHeight = stickyBarRect ? stickyBarRect.height : 0;
@@ -451,7 +462,6 @@
     try {
       await api.chapters.deleteBySelection(target);
       audio.clearSegmentCache();
-      showSettings = false;
     } catch (err) {
       error = handleApiError(err);
     }
@@ -467,7 +477,6 @@
   }
 
   async function transcribeSelected() {
-    showSettings = false;
     try {
       await api.chapters.transcribeSelected();
     } catch (err) {
@@ -476,7 +485,6 @@
   }
 
   async function quickTidy() {
-    showSettings = false;
     const options = resolveTidyOptions(editorSettings.tidy_options);
     const mappings: ApplyTitleMapping[] = [];
     for (const chapter of $chapters) {
@@ -900,6 +908,8 @@
   }
 </script>
 
+<svelte:window bind:innerWidth />
+
 <div class="chapter-editor">
   {#if error}
     <div class="alert alert-danger">
@@ -983,7 +993,8 @@
             {/if}
             <th>Title</th>
             <th style="width: 1px">Actions</th>
-            <th style="width: 1px; min-width: 1px; padding: 0;"></th>
+            <!-- Zero-width column header for the floating add-chapter buttons -->
+            <th style="width: 0; min-width: 0; padding: 0;"></th>
           </tr>
         </thead>
         <tbody>
@@ -1245,7 +1256,11 @@
   {/if}
 
   {#if showTranscriptionBar}
-    <div class="transcription-cancel-bar" transition:slide={{ duration: 150, axis: 'y' }}>
+    <div
+      class="transcription-cancel-bar"
+      class:side-docked={effectiveDock !== 'bottom'}
+      transition:slide={{ duration: 150, axis: 'y' }}
+    >
       <div class="transcription-cancel-content">
         <div class="transcription-cancel-info">
           <div class="transcribing-spinner"></div>
@@ -1263,237 +1278,36 @@
   {/if}
 
   <!-- Sticky Action Bar -->
-  {#if $chapters.length > 0 || $canUndo}
-    <div class="sticky-action-bar">
-      <!-- Tools & Settings Popover -->
-      {#if showSettings && $chapters.length > 0}
-        <div class="tools-popover" transition:slide={{ duration: 100, axis: 'y' }}>
-          <div class="popover-section settings-section">
-            <h5 class="popover-header">
-              <SettingsIcon size="12" />
-              Settings
-            </h5>
-            <div class="settings-grid">
-              <label class="setting-item">
-                <input type="checkbox" checked={editorSettings.tab_navigation} onchange={handleTabNavigationChange} />
-                <span>Tab to Next</span>
-                <div
-                  class="help-icon"
-                  use:tooltip={{
-                    text: 'Press Tab while editing a chapter title to move focus to the next selected chapter',
-                    delay: 0,
-                  }}
-                >
-                  <CircleQuestionMark size="14" />
-                </div>
-              </label>
-
-              {#if hasTranscriptions}
-                <label class="setting-item">
-                  <input
-                    type="checkbox"
-                    checked={editorSettings.hide_transcriptions}
-                    onchange={handleHideTranscriptionsChange}
-                  />
-                  <span>Hide Transcripts</span>
-                  <div
-                    class="help-icon"
-                    use:tooltip={{ text: 'Hide the original transcripts to focus on editing titles', delay: 0 }}
-                  >
-                    <CircleQuestionMark size="14" />
-                  </div>
-                </label>
-              {/if}
-
-              <label class="setting-item">
-                <input type="checkbox" checked={editorSettings.show_formatted_time} onchange={handleTimeFormatChange} />
-                <span>Format Timestamps</span>
-                <div
-                  class="help-icon"
-                  use:tooltip={{ text: 'Show timestamps as hh:mm:ss instead of seconds', delay: 0 }}
-                >
-                  <CircleQuestionMark size="14" />
-                </div>
-              </label>
-
-              {#if editorSettings.show_formatted_time}
-                <label class="setting-item setting-item-sub">
-                  <input
-                    type="checkbox"
-                    checked={editorSettings.show_fractional_seconds}
-                    onchange={handleFractionalSecondsChange}
-                  />
-                  <span>Fractional Seconds</span>
-                  <div class="help-icon" use:tooltip={{ text: 'Show hundredths of a second (e.g. 1:23.45)', delay: 0 }}>
-                    <CircleQuestionMark size="14" />
-                  </div>
-                </label>
-              {/if}
-            </div>
-          </div>
-
-          <div class="popover-divider"></div>
-
-          <div class="popover-section tools-section">
-            <h5 class="popover-header">
-              <Wrench size="12" />
-              Tools
-            </h5>
-            <div class="tools-column">
-              <button
-                class="btn btn-cancel btn-sm tool-btn full-width"
-                use:tooltip={'Bulk-edit titles: find & replace, change case, number sequences, and more'}
-                onclick={() => openEditTitlesDialog('find-replace')}
-              >
-                <PencilLine size="16" color="var(--primary-color)" />
-                Edit Titles
-              </button>
-              <button
-                class="btn btn-cancel btn-sm tool-btn full-width"
-                use:tooltip={'Move titles forward or backward across chapters, e.g. when every title is off by one'}
-                onclick={() => (showShiftTitlesDialog = true)}
-              >
-                <ArrowDownUp size="16" color="var(--primary-color)" />
-                Shift Titles
-              </button>
-              {#if ($session.chapterRefs || []).length > 0}
-                <button
-                  class="btn btn-cancel btn-sm tool-btn full-width"
-                  use:tooltip={'Apply titles from a Chapter Reference'}
-                  onclick={() => (showApplyTitlesDialog = true)}
-                >
-                  <BookMarked size="16" color="var(--primary-color)" />
-                  Apply titles from...
-                </button>
-              {/if}
-              <button
-                class="btn btn-cancel btn-sm tool-btn full-width"
-                use:tooltip={'Shift the timestamps of multiple chapters by a fixed amount of time'}
-                onclick={() => (showShiftTimestampsDialog = true)}
-              >
-                <Clock size="16" color="var(--primary-color)" />
-                Shift Timestamps
-              </button>
-            </div>
-          </div>
-
-          <div class="popover-divider"></div>
-
-          <div class="popover-section tools-section">
-            <h5 class="popover-header">
-              <Zap size="12" />
-              Actions
-            </h5>
-            <div class="tools-column">
-              <div class="segmented-button full-width">
-                <button
-                  class="btn btn-cancel btn-sm tool-btn segmented-left"
-                  use:tooltip={'Applies your saved Tidy settings to each selected title. Use the gear icon to view or change settings.'}
-                  onclick={quickTidy}
-                  disabled={$selectionStats.selected === 0}
-                >
-                  <BrushCleaning size="16" color="var(--primary-color)" />
-                  Quick Tidy
-                </button>
-                <button
-                  class="btn btn-cancel btn-sm tool-btn segmented-right"
-                  aria-label="Configure Quick Tidy"
-                  use:tooltip={'View or change the Quick Tidy settings'}
-                  onclick={() => openEditTitlesDialog('tidy')}
-                >
-                  <SettingsIcon size="14" color="var(--text-secondary)" />
-                </button>
-              </div>
-              <button
-                class="btn btn-cancel btn-sm tool-btn full-width"
-                use:tooltip={'Transcribe the audio of each selected chapter using the current transcription settings'}
-                onclick={transcribeSelected}
-                disabled={$selectionStats.selected === 0 || Object.keys($transcriptionStatuses).length > 0}
-              >
-                <Mic size="16" color="var(--primary-color)" />
-                Transcribe
-              </button>
-              <button
-                class="btn btn-cancel btn-sm tool-btn full-width"
-                use:tooltip={'Delete every selected chapter'}
-                onclick={() => deleteBySelection('selected')}
-                disabled={$selectionStats.selected === 0}
-              >
-                <Trash2 size="16" color="var(--danger)" />
-                Delete
-              </button>
-              <button
-                class="btn btn-cancel btn-sm tool-btn full-width"
-                use:tooltip={'Delete every chapter that is not selected'}
-                onclick={() => deleteBySelection('unselected')}
-                disabled={$selectionStats.unselected === 0}
-              >
-                <Trash2 size="16" color="var(--danger)" />
-                Delete Unselected
-              </button>
-            </div>
-          </div>
-        </div>
-      {/if}
-
-      <div class="action-bar-content">
-        <div class="selection-info">
-          <span class="badge badge-primary">
-            {$selectionStats.selected} of {$selectionStats.total} selected
-          </span>
-        </div>
-
-        <div class="button-group">
-          <button
-            class="btn btn-outline btn-sm undo-redo-btn"
-            onclick={undo}
-            disabled={!$canUndo}
-            use:tooltip={'Undo last action'}
-          >
-            <Undo size="16" />
-            Undo
-          </button>
-          <button
-            class="btn btn-outline btn-sm undo-redo-btn"
-            onclick={redo}
-            disabled={!$canRedo}
-            use:tooltip={'Redo next action'}
-          >
-            Redo
-            <Redo size="16" />
-          </button>
-        </div>
-
-        <div class="button-group">
-          <button
-            class="btn btn-cancel btn-sm tools-toggle"
-            class:active={showSettings}
-            onclick={toggleSettingsPanel}
-            aria-label="Additional tools and settings"
-            use:tooltip={'Additional tools and settings'}
-          >
-            <MoreVertical size="16" />
-          </button>
-          <button
-            class="btn btn-ai btn-sm"
-            onclick={processSelectedWithAI}
-            disabled={$selectionStats.selected === 0 || loading}
-            use:tooltip={'Enhance selected chapter titles with AI'}
-          >
-            <Icon name="ai" size="16" color="white" />
-            Clean Up Selected
-          </button>
-          <button
-            class="btn btn-verify btn-sm action-bar-verify"
-            onclick={goToReview}
-            disabled={$selectionStats.selected === 0}
-          >
-            Review Selected
-            <ArrowRight size="16" />
-          </button>
-        </div>
-      </div>
-    </div>
+  {#if barVisible}
+    <ActionBar
+      selectionStats={$selectionStats}
+      canUndo={$canUndo}
+      canRedo={$canRedo}
+      hasChapters={$chapters.length > 0}
+      hasChapterRefs={($session.chapterRefs || []).length > 0}
+      {hasTranscriptions}
+      transcribing={Object.keys($transcriptionStatuses).length > 0}
+      aiLoading={loading}
+      {editorSettings}
+      dock={effectiveDock}
+      expanded={barExpanded}
+      {canDock}
+      onDockChange={(dock) => (dockPref = dock)}
+      onToggleExpanded={() => (barExpanded = !barExpanded)}
+      onUndo={undo}
+      onRedo={redo}
+      onCleanUp={processSelectedWithAI}
+      onReview={goToReview}
+      onEditTitles={() => openEditTitlesDialog('find-replace')}
+      onShiftTitles={() => (showShiftTitlesDialog = true)}
+      onApplyTitles={() => (showApplyTitlesDialog = true)}
+      onShiftTimestamps={() => (showShiftTimestampsDialog = true)}
+      onQuickTidy={quickTidy}
+      onQuickTidySettings={() => openEditTitlesDialog('tidy')}
+      onTranscribe={transcribeSelected}
+      onDelete={deleteBySelection}
+      onSettingsChange={saveEditorSettings}
+    />
   {/if}
 </div>
 
@@ -1565,6 +1379,11 @@
     z-index: 1000;
   }
 
+  /* The 6rem offset only exists to clear the bottom-docked action bar */
+  .transcription-cancel-bar.side-docked {
+    bottom: 1rem;
+  }
+
   .transcription-cancel-content {
     display: flex;
     align-items: center;
@@ -1628,43 +1447,6 @@
     cursor: not-allowed;
   }
 
-  .sticky-action-bar {
-    position: sticky;
-    bottom: 1rem;
-    background: var(--edit-bar-bg);
-    border: 1px solid var(--border-color);
-    border-radius: 0.5rem;
-    box-shadow:
-      0 0.25rem 0.5rem rgba(0, 0, 0, 0.1),
-      0 0.5rem 1rem rgba(0, 0, 0, 0.15),
-      0 1rem 2rem rgba(0, 0, 0, 0.1);
-    padding: 1rem;
-    max-width: 800px;
-    margin: 2rem auto;
-    z-index: 1000;
-    transition: all 0.1s ease;
-  }
-
-  .action-bar-content {
-    max-width: 1000px;
-    margin: 0 auto;
-    padding: 0 0;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 1rem;
-  }
-
-  .selection-info .badge {
-    font-size: 0.875rem;
-  }
-
-  .button-group {
-    display: flex;
-    gap: 0.5rem;
-  }
-
   .table-container {
     background: var(--bg-card);
     border-radius: 0.5rem;
@@ -1719,6 +1501,22 @@
 
   .table thead th {
     text-align: left;
+    /* The container's border already outlines the top edge; the cells' own
+       border-top would cut straight across the rounded corners */
+    border-top: none;
+  }
+
+  /* .table-container needs overflow: visible for the floating add-chapter
+     buttons, so its rounded corners can't clip the header background —
+     round the corner cells themselves instead (inset for the 1px border).
+     The last column is the zero-width add-chapter spacer, so the Actions
+     cell is the visual corner. */
+  .table thead th:first-child {
+    border-top-left-radius: calc(0.5rem - 1px);
+  }
+
+  .table thead th:nth-last-child(2) {
+    border-top-right-radius: calc(0.5rem - 1px);
   }
 
   .chapter-row {
@@ -2202,37 +2000,12 @@
     margin-bottom: 1rem;
   }
 
-  .badge {
-    display: inline-block;
-    font-size: 0.75rem;
-    font-weight: 600;
-    text-align: center;
-    white-space: nowrap;
-    vertical-align: baseline;
-    border-radius: 0.375rem;
-  }
-
   .float-right {
     float: right;
   }
 
   /* Responsive design */
   @media (max-width: 768px) {
-    .sticky-action-bar {
-      padding: 0.75rem;
-      margin: 1rem 0;
-    }
-
-    .action-bar-content {
-      flex-direction: column;
-      align-items: stretch;
-      text-align: center;
-    }
-
-    .button-group {
-      justify-content: center;
-    }
-
     .table-container {
       overflow-x: auto;
     }
@@ -2251,182 +2024,6 @@
     }
   }
 
-  .btn-ai {
-    background: linear-gradient(135deg, var(--ai-gradient-start) 0%, var(--ai-gradient-end) 100%);
-    color: white;
-    border: none;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0 1rem 0 0.75rem;
-    font-weight: 600;
-    gap: 0.5rem;
-  }
-
-  .btn-ai:hover:not(:disabled) {
-    background: linear-gradient(135deg, var(--ai-gradient-start-hover) 0%, var(--ai-gradient-end-hover) 100%);
-  }
-
-  .action-bar-content .btn {
-    font-size: 0.875rem !important;
-    min-height: 2.25rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .action-bar-content .undo-redo-btn {
-    gap: 0.25rem;
-  }
-
-  .action-bar-content .btn-outline {
-    background-color: rgba(128, 128, 128, 0.1);
-    border: transparent;
-  }
-
-  .action-bar-content .btn-outline:hover:not(:disabled) {
-    background-color: var(--hover-bg);
-  }
-
-  .action-bar-verify {
-    padding: 0 0.6rem 0 1rem;
-    gap: 0.2rem;
-  }
-
-  .tools-popover {
-    position: absolute;
-    bottom: 100%;
-    left: 0;
-    right: 0;
-    margin-bottom: 0.75rem;
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: 0.5rem;
-    box-shadow:
-      0 4px 12px rgba(0, 0, 0, 0.1),
-      0 1px 3px rgba(0, 0, 0, 0.05);
-    padding: 1rem;
-    z-index: 1001;
-    display: flex;
-    gap: 1rem;
-  }
-
-  .popover-section.settings-section {
-    flex: 1;
-  }
-
-  .popover-section.tools-section {
-    flex: 1;
-  }
-
-  .popover-header {
-    margin: 0 0 0.75rem 0.22rem;
-    font-size: 0.7rem;
-    font-weight: 600;
-    color: #888;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-
-  .popover-divider {
-    width: 1px;
-    background: var(--border-color);
-  }
-
-  .settings-grid {
-    display: flex;
-    flex-direction: column;
-    padding-top: 0.45rem;
-    gap: 0.75rem;
-  }
-
-  .setting-item {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    cursor: pointer;
-    font-size: 0.875rem;
-    color: var(--text-primary);
-    font-weight: 500;
-  }
-
-  .setting-item input[type='checkbox'] {
-    accent-color: var(--primary);
-  }
-
-  .setting-item-sub {
-    margin-left: 1.5rem;
-    margin-top: -0.4rem;
-    font-size: 0.8rem;
-    font-weight: 400;
-    color: var(--text-secondary);
-  }
-
-  .tools-column {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-
-  .tool-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: flex-start;
-    gap: 0.5rem;
-    font-size: 0.875rem !important;
-    height: 2.25rem;
-    padding: 0 0.75rem;
-    border-radius: 0.25rem;
-    transition: all 0.2s;
-    cursor: pointer;
-  }
-
-  .full-width {
-    width: 100%;
-  }
-
-  .segmented-button {
-    display: flex;
-  }
-
-  .segmented-button .segmented-left {
-    flex: 1;
-    min-width: 0;
-    border-top-right-radius: 0;
-    border-bottom-right-radius: 0;
-    border-right: 0.05rem solid var(--border-color);
-  }
-
-  .segmented-button .segmented-right {
-    border-top-left-radius: 0;
-    border-bottom-left-radius: 0;
-    padding: 0 0.5rem;
-    border-left: 0;
-    transition: none;
-  }
-
-  .segmented-button .segmented-right:hover {
-    border-left: 0.05rem solid var(--text-primary);
-    transition: none;
-  }
-
-  @media (max-width: 600px) {
-    .tools-popover {
-      flex-direction: column;
-      gap: 1rem;
-    }
-
-    .popover-divider {
-      width: 100%;
-      height: 1px;
-      margin: 0;
-    }
-  }
-
   .help-icon {
     display: inline-flex;
     align-items: center;
@@ -2441,33 +2038,6 @@
   .help-icon:hover {
     color: var(--primary-color);
     background: var(--bg-tertiary);
-  }
-
-  .tools-toggle {
-    padding: 0 !important;
-    width: 2.25rem;
-    min-height: 2.25rem;
-    display: flex !important;
-    align-items: center;
-    justify-content: center;
-    border: none !important;
-  }
-
-  .tools-toggle:hover:not(:disabled) {
-    background-color: rgba(128, 128, 128, 0.12);
-  }
-
-  .tools-toggle.active {
-    background-color: rgba(128, 128, 128, 0.18);
-  }
-
-  .tools-toggle.active:hover:not(:disabled) {
-    background-color: rgba(128, 128, 128, 0.26);
-  }
-
-  .selection-info {
-    display: flex;
-    align-items: center;
   }
 
   .offset-cell {

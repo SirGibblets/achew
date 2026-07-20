@@ -6,7 +6,7 @@ export interface TooltipOptions {
   /** The tooltip text. When empty/null, the tooltip is disabled. */
   text?: string | null;
   /** Preferred side. Flips automatically when there isn't room. Default 'top'. */
-  placement?: 'top' | 'bottom';
+  placement?: 'top' | 'bottom' | 'left' | 'right';
   /** Delay in ms before showing on hover/focus. Default 800 (matches native `title`). */
   delay?: number;
   /** Max bubble width in px. Default 360. */
@@ -68,6 +68,38 @@ export const tooltip: Action<HTMLElement, TooltipParam> = (node, param) => {
     const vh = document.documentElement.clientHeight;
 
     let placement = opts.placement;
+
+    if (placement === 'left' || placement === 'right') {
+      let left: number;
+      if (placement === 'left') {
+        left = nodeRect.left - bubbleRect.width - GAP;
+        if (left < MARGIN) {
+          placement = 'right';
+          left = nodeRect.right + GAP;
+        }
+      } else {
+        left = nodeRect.right + GAP;
+        if (left + bubbleRect.width > vw - MARGIN) {
+          placement = 'left';
+          left = nodeRect.left - bubbleRect.width - GAP;
+        }
+      }
+
+      const centerY = nodeRect.top + nodeRect.height / 2;
+      const top = Math.max(MARGIN, Math.min(centerY - bubbleRect.height / 2, vh - bubbleRect.height - MARGIN));
+
+      bubble.style.top = `${Math.round(top)}px`;
+      bubble.style.left = `${Math.round(left)}px`;
+
+      if (arrow) {
+        arrow.dataset.placement = placement;
+        const arrowCenter = Math.max(ARROW * 2, Math.min(centerY - top, bubbleRect.height - ARROW * 2));
+        arrow.style.top = `${Math.round(arrowCenter - ARROW)}px`;
+        arrow.style.left = '';
+      }
+      return;
+    }
+
     let top: number;
     if (placement === 'top') {
       top = nodeRect.top - bubbleRect.height - GAP;
@@ -93,6 +125,7 @@ export const tooltip: Action<HTMLElement, TooltipParam> = (node, param) => {
       arrow.dataset.placement = placement;
       const arrowCenter = Math.max(ARROW * 2, Math.min(centerX - left, bubbleRect.width - ARROW * 2));
       arrow.style.left = `${Math.round(arrowCenter - ARROW)}px`;
+      arrow.style.top = '';
     }
   }
 
