@@ -140,3 +140,4 @@ HTTP basic auth (shown above) is the easiest, but for stronger or more flexible 
 
 ## Troubleshooting
 - **Achew is always "Disconnected" or is stuck "Connecting…":** WebSocket upgrade isn't forwarding. Check proxy config.
+- **Uploading an EPUB or MOBI fails** with the error message *"The file was rejected as too large before it reached Achew"*: Achew uploads reference files in 512 KB chunks, so a rejection means the proxy's request-body limit is set below that. It is recommended to raise it to at least `1M`. For nginx and Nginx Proxy Manager that setting is `client_max_body_size`.

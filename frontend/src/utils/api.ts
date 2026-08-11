@@ -41,6 +41,26 @@ import type { DetectionMode } from '../types/enums';
 
 const API_BASE = window.location.origin;
 
+/** Size of each reference-upload chunk.
+ *
+ * Reference uploads are the only large request bodies Achew sends, and ebooks
+ * run to megabytes. nginx and Nginx Proxy Manager cap request bodies at 1MB by
+ * default and reject anything larger with a 413, so chunks are kept to half
+ * that, leaving room for multipart and header overhead.
+ */
+const UPLOAD_CHUNK_BYTES = 512 * 1024;
+
+/** Generate an id for a chunked upload.
+ *
+ * `crypto.randomUUID` is unavailable outside secure contexts, and Achew is
+ * routinely reached over plain http on a LAN address, so this only needs to be
+ * unique among a single user's concurrent uploads. The backend restricts ids to
+ * these characters.
+ */
+function newUploadId(): string {
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+}
+
 interface RequestOptions extends Omit<RequestInit, 'body'> {
   body?: BodyInit | Record<string, unknown> | null;
 }
@@ -55,6 +75,43 @@ export class APIError extends Error {
     this.status = status;
     this.details = details;
   }
+}
+
+/** Turn a non-OK response into an APIError, reading the body only once.
+ *
+ * The body is consumed as text and parsed by hand: calling `response.json()`
+ * first and falling back to `response.text()` throws "body stream already
+ * read", which masks the real failure. Bodies that aren't Achew's JSON (an
+ * HTML error page from a reverse proxy, or nothing at all) fall back to the
+ * status line so the actual status code still reaches the user.
+ */
+async function toApiError(response: Response): Promise<APIError> {
+  const statusLine = `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ''}`;
+
+  let raw = '';
+  try {
+    raw = (await response.text()).trim();
+  } catch {
+    // Body unavailable (already consumed, aborted mid-read); status line is all we have.
+  }
+
+  if (!raw) {
+    return new APIError(statusLine, response.status);
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    // Not JSON — a bare string body is worth showing, but an HTML error page is not.
+    const isHtml = raw.startsWith('<');
+    return new APIError(isHtml || raw.length > 500 ? statusLine : raw, response.status);
+  }
+
+  const data = parsed as { detail?: unknown; message?: unknown };
+  const detail = typeof data?.detail === 'string' ? data.detail : undefined;
+  const message = typeof data?.message === 'string' ? data.message : undefined;
+  return new APIError(detail ?? message ?? statusLine, response.status, parsed);
 }
 
 async function apiRequest<T = unknown>(endpoint: string, options: RequestOptions = {}): Promise<T> {
@@ -84,18 +141,7 @@ async function apiRequest<T = unknown>(endpoint: string, options: RequestOptions
     const response = await fetch(url, config);
 
     if (!response.ok) {
-      let errorMessage = `HTTP ${response.status}`;
-      let errorDetails: unknown = null;
-
-      try {
-        const errorData = (await response.json()) as { detail?: string; message?: string };
-        errorMessage = errorData.detail ?? errorData.message ?? errorMessage;
-        errorDetails = errorData;
-      } catch {
-        errorMessage = (await response.text()) || errorMessage;
-      }
-
-      throw new APIError(errorMessage, response.status, errorDetails);
+      throw await toApiError(response);
     }
 
     const contentType = response.headers.get('content-type');
@@ -406,6 +452,11 @@ export function handleApiError(error: unknown): string {
   console.error('API Error:', error);
 
   if (error instanceof APIError) {
+    // Achew itself never returns 413 — it comes from a reverse proxy in front of
+    // it, whose body-size limit is usually far smaller than an EPUB or MOBI.
+    if (error.status === 413) {
+      return 'The file was rejected as too large before it reached Achew. If Achew is behind a reverse proxy, raise its maximum request body size.';
+    }
     if (error.message) {
       return error.message;
     }
@@ -536,11 +587,37 @@ export const references = {
     return apiRequest<ReferencesResponse>('/pipeline/references');
   },
 
-  upload(formData: FormData) {
-    return apiRequest<ChapterReference | TitleReference>('/pipeline/references/upload', {
-      method: 'POST',
-      body: formData,
-    });
+  /** Upload a reference file, in chunks small enough to clear a stock proxy.
+   *
+   * `onProgress` is called with the fraction uploaded so far, and only when the
+   * file spans more than one chunk — a single-chunk upload completes in one
+   * request, so there is nothing to report partway through.
+   */
+  async upload(file: File, onProgress?: (fraction: number) => void) {
+    const uploadId = newUploadId();
+    const total = Math.max(1, Math.ceil(file.size / UPLOAD_CHUNK_BYTES));
+
+    let result: ChapterReference | TitleReference | undefined;
+    for (let index = 0; index < total; index++) {
+      const start = index * UPLOAD_CHUNK_BYTES;
+      const formData = new FormData();
+      // A sliced File is a Blob, so the name has to be supplied separately.
+      formData.append('file', file.slice(start, start + UPLOAD_CHUNK_BYTES), file.name);
+      formData.append('upload_id', uploadId);
+      formData.append('index', String(index));
+      formData.append('total', String(total));
+
+      result = await apiRequest<ChapterReference | TitleReference>('/pipeline/references/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (total > 1) {
+        onProgress?.((index + 1) / total);
+      }
+    }
+
+    return result as ChapterReference | TitleReference;
   },
 
   addAudnexus(asin: string, provider: string) {

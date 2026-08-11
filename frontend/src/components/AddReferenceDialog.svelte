@@ -51,6 +51,7 @@
   /* ── Upload tab state ── */
   let isDragging = $state(false);
   let uploading = $state(false);
+  let uploadProgress = $state<number | null>(null); // non-null once a chunked upload reports progress
   let uploadError = $state<string | null>(null);
   let uploadInfo = $state<string | null>(null); // non-null string = title-only success message
 
@@ -117,6 +118,7 @@
   function resetUploadState() {
     uploadError = null;
     uploadInfo = null;
+    uploadProgress = null;
   }
 
   function resetSearchState() {
@@ -166,11 +168,10 @@
     resetUploadState();
     uploading = true;
 
-    const formData = new FormData();
-    formData.append('file', file);
-
     try {
-      const newRef = await api.references.upload(formData);
+      const newRef = await api.references.upload(file, (fraction) => {
+        uploadProgress = fraction;
+      });
       const isTitleRef = 'titles' in newRef;
 
       if (expectChapterRef && isTitleRef) {
@@ -350,7 +351,14 @@
             {#if uploading}
               <div class="upload-status">
                 <div class="spinner"></div>
-                <p>Processing file…</p>
+                {#if uploadProgress !== null && uploadProgress < 1}
+                  <p>Uploading… {Math.round(uploadProgress * 100)}%</p>
+                  <div class="progress-track">
+                    <div class="progress-fill" style="width: {uploadProgress * 100}%"></div>
+                  </div>
+                {:else}
+                  <p>Processing file…</p>
+                {/if}
               </div>
             {:else}
               <Upload size="36" color="var(--text-secondary)" />
@@ -755,6 +763,21 @@
 
   .upload-status p {
     margin: 0;
+  }
+
+  .progress-track {
+    width: 12rem;
+    max-width: 60vw;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--bg-tertiary);
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: var(--primary-color);
+    transition: width 0.2s ease-out;
   }
 
   /* Search form */
