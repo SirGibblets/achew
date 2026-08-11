@@ -10,7 +10,9 @@ repos:
     hooks:
       - id: pyright
         name: pyright (backend)
-        entry: bash -c 'cd backend && uv run pyright'
+        # --extra dev: pyright lives in the dev extra, which `uv run` would
+        # otherwise prune from the environment before failing to spawn it.
+        entry: bash -c 'cd backend && uv run --extra dev pyright'
         language: system
         types: [python]
         files: ^backend/.*\.py$

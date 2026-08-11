@@ -1,10 +1,12 @@
 import logging
 import os
+import re
 import tempfile
+import time
 import uuid
 from typing import List
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from ...app import get_app_state
@@ -35,6 +37,89 @@ _AUTO_CHAPTER_REF_TYPES = {ChapterRefType.ABS, ChapterRefType.EMBEDDED, ChapterR
 
 # CUSTOM title reference is a singleton and should never be deleted
 _PROTECTED_TITLE_TYPES = {TitleRefType.CUSTOM}
+
+_SUPPORTED_EXTS = {".json", ".csv", ".cue", ".txt", ".epub", ".mobi", ".azw", ".azw3"}
+
+# Where in-flight chunked uploads are assembled.
+_UPLOAD_DIR = os.path.join(tempfile.gettempdir(), "achew", "uploads")
+
+# Upload ids come from the client and end up in a filename, so they are
+# restricted to characters that cannot escape _UPLOAD_DIR.
+_UPLOAD_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+# Ceiling on an assembled upload. Ebooks with cover art run large, so this only
+# needs to be low enough to stop a client from filling the disk.
+_MAX_UPLOAD_BYTES = 256 * 1024 * 1024
+
+# Interrupted uploads leave a .part file behind; drop them once they're this old.
+_STALE_PART_AGE_SEC = 30 * 60
+
+# upload_id -> index of the chunk expected next, for uploads still in flight.
+_expected_chunk: dict[str, int] = {}
+
+
+def _part_path(upload_id: str) -> str:
+    return os.path.join(_UPLOAD_DIR, f"{upload_id}.part")
+
+
+def _discard_upload(upload_id: str) -> None:
+    """Forget an upload and delete whatever has been assembled so far."""
+    _expected_chunk.pop(upload_id, None)
+    try:
+        os.remove(_part_path(upload_id))
+    except OSError:
+        pass
+
+
+def _sweep_stale_parts() -> None:
+    """Delete part files from uploads that were abandoned partway through."""
+    cutoff = time.time() - _STALE_PART_AGE_SEC
+    try:
+        names = os.listdir(_UPLOAD_DIR)
+    except OSError:
+        return
+    for name in names:
+        path = os.path.join(_UPLOAD_DIR, name)
+        try:
+            if os.path.getmtime(path) < cutoff:
+                os.remove(path)
+                _expected_chunk.pop(name.removesuffix(".part"), None)
+        except OSError:
+            pass
+
+
+def _parse_upload(pipeline, path: str, filename: str, ext: str):
+    """Parse a fully assembled upload and attach it to the pipeline."""
+    duration = pipeline.book.duration if pipeline.book else 0.0
+
+    if ext == ".json":
+        new_ref = json_parser.parse(path, ref_name=filename, duration=duration)
+        pipeline.chapter_refs.append(new_ref)
+
+    elif ext == ".csv":
+        new_ref = csv_parser.parse(path, ref_name=filename, duration=duration)
+        pipeline.chapter_refs.append(new_ref)
+
+    elif ext == ".cue":
+        new_ref = cue_parser.parse(path, ref_name=filename, duration=duration)
+        pipeline.chapter_refs.append(new_ref)
+
+    elif ext == ".txt":
+        new_ref = text_parser.parse(path, ref_name=filename)
+        pipeline.title_refs.append(new_ref)
+
+    elif ext == ".epub":
+        new_ref = epub_parser.parse(path, ref_name=filename)
+        pipeline.title_refs.append(new_ref)
+
+    elif ext in (".mobi", ".azw", ".azw3"):
+        new_ref = mobi_parser.parse(path, ref_name=filename)
+        pipeline.title_refs.append(new_ref)
+
+    else:
+        raise ValueError(f"Unsupported file type '{ext}'")
+
+    return new_ref
 
 
 class AddAudnexusRequest(BaseModel):
@@ -69,58 +154,76 @@ async def get_references():
 
 
 @router.post("/pipeline/references/upload")
-async def upload_reference(file: UploadFile = File(...)):
-    """Upload a file and parse it as a chapter or title reference."""
+async def upload_reference(
+    file: UploadFile = File(...),
+    upload_id: str = Form(""),
+    index: int = Form(0),
+    total: int = Form(1),
+):
+    """Upload a file — optionally in ordered chunks — and parse it as a Reference.
+
+    Ebook References run to megabytes while reverse proxies commonly cap request
+    bodies at 1MB, so the client sends the file as a sequence of small chunks that
+    are appended to one part file here. A plain single-request upload is just the
+    degenerate case of one chunk, which is what omitting the chunk fields gives.
+
+    Only the final chunk is parsed; earlier ones return how much has been received.
+    """
     pipeline = _get_pipeline()
     app_state = get_app_state()
 
     filename = file.filename or "upload"
     ext = os.path.splitext(filename)[1].lower()
 
-    supported_exts = {".json", ".csv", ".cue", ".txt", ".epub", ".mobi", ".azw", ".azw3"}
-    if ext not in supported_exts:
+    # Checked on every chunk, so an unsupported file is rejected on the first one
+    # rather than after the whole thing has been uploaded.
+    if ext not in _SUPPORTED_EXTS:
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported file type '{ext}'. Supported: {', '.join(sorted(supported_exts))}",
+            detail=f"Unsupported file type '{ext}'. Supported: {', '.join(sorted(_SUPPORTED_EXTS))}",
         )
+    if total < 1 or index < 0 or index >= total:
+        raise HTTPException(status_code=400, detail=f"Invalid chunk {index} of {total}")
+    if upload_id and not _UPLOAD_ID_RE.match(upload_id):
+        raise HTTPException(status_code=400, detail="Invalid upload id")
 
-    # Save to a temp file
-    tmp_path = os.path.join(tempfile.gettempdir(), "achew", f"upload_{uuid.uuid4()}{ext}")
-    os.makedirs(os.path.dirname(tmp_path), exist_ok=True)
+    uid = upload_id or uuid.uuid4().hex
+    os.makedirs(_UPLOAD_DIR, exist_ok=True)
+
+    if index == 0:
+        _sweep_stale_parts()
+    elif _expected_chunk.get(uid) != index:
+        # Chunks have to arrive in order to concatenate correctly; a gap means
+        # this upload can't be trusted, so drop it and make the client restart.
+        _discard_upload(uid)
+        raise HTTPException(status_code=409, detail="Upload chunks arrived out of order")
+
+    path = _part_path(uid)
     try:
         content = await file.read()
-        with open(tmp_path, "wb") as f:
+        with open(path, "wb" if index == 0 else "ab") as f:
             f.write(content)
+        assembled_bytes = os.path.getsize(path)
+    except OSError as e:
+        _discard_upload(uid)
+        logger.error(f"Failed to store upload {filename}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to store uploaded file")
 
-        duration = pipeline.book.duration if pipeline.book else 0.0
+    if assembled_bytes > _MAX_UPLOAD_BYTES:
+        _discard_upload(uid)
+        # Deliberately not a 413 — the frontend reads that status as "something
+        # in front of Achew rejected this", which would be misleading here.
+        raise HTTPException(
+            status_code=400,
+            detail=f"File is too large (limit {_MAX_UPLOAD_BYTES // (1024 * 1024)} MB)",
+        )
 
-        if ext == ".json":
-            new_ref = json_parser.parse(tmp_path, ref_name=filename, duration=duration)
-            pipeline.chapter_refs.append(new_ref)
+    if index + 1 < total:
+        _expected_chunk[uid] = index + 1
+        return {"upload_id": uid, "received": index + 1, "total": total}
 
-        elif ext == ".csv":
-            new_ref = csv_parser.parse(tmp_path, ref_name=filename, duration=duration)
-            pipeline.chapter_refs.append(new_ref)
-
-        elif ext == ".cue":
-            new_ref = cue_parser.parse(tmp_path, ref_name=filename, duration=duration)
-            pipeline.chapter_refs.append(new_ref)
-
-        elif ext == ".txt":
-            new_ref = text_parser.parse(tmp_path, ref_name=filename)
-            pipeline.title_refs.append(new_ref)
-
-        elif ext == ".epub":
-            new_ref = epub_parser.parse(tmp_path, ref_name=filename)
-            pipeline.title_refs.append(new_ref)
-
-        elif ext in (".mobi", ".azw", ".azw3"):
-            new_ref = mobi_parser.parse(tmp_path, ref_name=filename)
-            pipeline.title_refs.append(new_ref)
-
-        else:
-            new_ref = None
-
+    try:
+        new_ref = _parse_upload(pipeline, path, filename, ext)
     except ValueError as e:
         logger.warning(f"Failed to parse uploaded file {filename}: {e}")
         raise HTTPException(status_code=400, detail=str(e))
@@ -128,14 +231,7 @@ async def upload_reference(file: UploadFile = File(...)):
         logger.error(f"Unexpected error processing uploaded file {filename}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to process file")
     finally:
-        try:
-            if os.path.exists(tmp_path):
-                os.remove(tmp_path)
-        except Exception:
-            pass
-
-    if new_ref is None:
-        raise HTTPException(status_code=400, detail="File could not be parsed into a Reference")
+        _discard_upload(uid)
 
     await app_state.broadcast_references_update()
     return new_ref

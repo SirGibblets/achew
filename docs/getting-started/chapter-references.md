@@ -188,3 +188,5 @@ Each result displays relevant information that can help you decide on a good mat
 
 [^2]:
     "Library Files" refers to files stored alongside the audiobook, in the same directory. You can see them in the **Library Files** section of the book's detail page in Audiobookshelf.
+
+    Achew only sees files that Audiobookshelf knows about. If you've recently added a file to an existing book's folder and it isn't listed in the book's Library Files yet, trigger a library scan in Audiobookshelf, then load the book in Achew again.

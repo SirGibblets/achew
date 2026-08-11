@@ -25,6 +25,12 @@ These books are not currently supported in Achew. See [Supported Formats](../ref
 
 Achew is downloading and installing Python dependencies and building the project. This process may take several minutes, but subsequent launches will be much faster.
 
+## Uploading an e-book Reference fails
+
+Reference uploads are split into 512 KB chunks, which is usually small enough to fit within the default body size limit of most reverse proxies. If an upload still fails while small `.txt`, `.json`, `.cue`, and `.csv` files work, your proxy is likely capping request bodies below that and rejecting the chunks with the error message *"The file was rejected as too large before it reached Achew".*
+
+To confirm, connect to Achew directly over your local network (`http://IP:PORT`) and retry the same upload. If it succeeds there, raise the body-size limit on your proxy — see [Reverse Proxy → Troubleshooting](../installation/reverse-proxy.md#troubleshooting).
+
 ## Related
 
 - [Performance Tuning](performance-tuning.md)
