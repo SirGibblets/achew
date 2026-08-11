@@ -21,6 +21,7 @@ import type {
   EditorSettings,
   EditorSettingsUpdateResponse,
   ChapterReference,
+  LibrarySearchResponse,
   LLMModelsResponse,
   LLMProviderResponse,
   LLMProvidersResponse,
@@ -505,8 +506,10 @@ export const audiobookshelf = {
     return apiRequest<ABSLibrary[]>('/audiobookshelf/libraries');
   },
 
-  searchLibrary(libraryId: string, query: string, limit = 36) {
-    return apiRequest<Book[]>(
+  // The limit is a fetch cap, not a page size: results are revealed a page at a
+  // time client-side, so paging never re-runs the search.
+  searchLibrary(libraryId: string, query: string, limit = 250) {
+    return apiRequest<LibrarySearchResponse>(
       `/audiobookshelf/libraries/${libraryId}/search?q=${encodeURIComponent(query)}&limit=${limit}`,
     );
   },

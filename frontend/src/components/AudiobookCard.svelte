@@ -2,6 +2,8 @@
   import type { Snippet } from 'svelte';
   import BookHeadphones from '@lucide/svelte/icons/book-headphones';
   import { formatDuration } from '../utils/format';
+  import { buildContributorLine } from '../utils/highlight';
+  import HighlightedText from './HighlightedText.svelte';
   import SeriesPill from './SeriesPill.svelte';
 
   interface Props {
@@ -14,6 +16,10 @@
     showFileCount?: boolean;
     seriesName?: string | null;
     seriesSequence?: string | null;
+    authors?: string[] | null;
+    narrators?: string[] | null;
+    /** Substring to mark wherever it appears on this card. */
+    highlightQuery?: string;
     size?: 'normal' | 'compact';
     metadata?: Snippet;
     actions?: Snippet;
@@ -29,10 +35,22 @@
     showFileCount = true,
     seriesName = null,
     seriesSequence = null,
+    authors = null,
+    narrators = null,
+    highlightQuery = '',
     size = 'normal',
     metadata,
     actions,
   }: Props = $props();
+
+  let contributorClauses = $derived(buildContributorLine(authors ?? [], narrators ?? [], highlightQuery));
+
+  // The windows hide names, so the full credits stay reachable on hover.
+  let contributorTitle = $derived(
+    [authors?.length ? `By ${authors.join(', ')}` : '', narrators?.length ? `Narrated by ${narrators.join(', ')}` : '']
+      .filter(Boolean)
+      .join('\n'),
+  );
 </script>
 
 <div class="audiobook-card" class:compact={size === 'compact'}>
@@ -44,9 +62,19 @@
     {/if}
   </div>
   <div class="audiobook-details">
-    <h3 class="audiobook-title">{title || 'Audiobook'}</h3>
+    <h3 class="audiobook-title"><HighlightedText text={title || 'Audiobook'} query={highlightQuery} /></h3>
     {#if subtitle}
-      <p class="audiobook-subtitle" title={subtitle}>{subtitle}</p>
+      <p class="audiobook-subtitle" title={subtitle}>
+        <HighlightedText text={subtitle} query={highlightQuery} />
+      </p>
+    {/if}
+    {#if contributorClauses.length > 0}
+      <p class="audiobook-contributors" title={contributorTitle}>
+        {#each contributorClauses as clause}
+          <!-- prettier-ignore -->
+          <span class="contributor-clause" class:priority={clause.priority}>{#each clause.segments as segment}{#if segment.hit}<mark>{segment.text}</mark>{:else if segment.more}<span class="contributor-more">{segment.text}</span>{:else}{segment.text}{/if}{/each}</span>
+        {/each}
+      </p>
     {/if}
     <div class="audiobook-metadata">
       {#if showDuration && duration > 0}
@@ -56,7 +84,7 @@
         <div class="audiobook-file-count">{fileCount} files</div>
       {/if}
       {#if seriesName}
-        <SeriesPill name={seriesName} sequence={seriesSequence} />
+        <SeriesPill name={seriesName} sequence={seriesSequence} {highlightQuery} />
       {/if}
       {@render metadata?.()}
     </div>
@@ -115,7 +143,7 @@
   }
 
   .audiobook-title {
-    margin: 0 0 0.5rem 0;
+    margin: 0;
     color: var(--text-primary);
     font-size: 1.4rem;
     font-weight: 600;
@@ -125,22 +153,50 @@
 
   .audiobook-card.compact .audiobook-title {
     font-size: 1rem;
-    margin-bottom: 0.25rem;
   }
 
   .audiobook-subtitle {
-    margin: -0.25rem 0 0.5rem 0;
-    color: var(--text-secondary);
-    font-size: 0.95rem;
+    margin: 0 0 0.25rem 0;
+    color: var(--text-primary);
+    font-size: 0.65rem;
+    font-style: italic;
+    font-weight: 300;
     line-height: 1.3;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .audiobook-card.compact .audiobook-subtitle {
-    margin-top: 0;
+  .audiobook-contributors {
+    margin: 0 0 0.5rem 0;
+    color: var(--text-secondary);
     font-size: 0.85rem;
+    line-height: 1.3;
+    display: flex;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  /* Clauses truncate individually rather than as one run, so the clause holding
+     the search match can be exempted from giving up space. */
+  .contributor-clause {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+
+  .contributor-clause.priority {
+    flex-shrink: 0;
+  }
+
+  .audiobook-card.compact .audiobook-contributors {
+    font-size: 0.8rem;
+    margin-bottom: 0.4rem;
+  }
+
+  .contributor-more {
+    font-style: italic;
   }
 
   .audiobook-metadata {

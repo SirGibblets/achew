@@ -48,6 +48,11 @@
   --ai-gradient-start-hover: rgba(1, 161, 224, 0.9);
   --ai-gradient-end-hover: rgba(0, 178, 142, 0.85);
 
+  /* Search match highlight. Deliberately opaque rather than a translucent tint
+    in order to pass pass WCAG AA (10.3:1) in all locations. */
+  --mark-bg: #bcd4fb;
+  --mark-fg: #212529;
+
   /* Component Colors */
   --slider-stop-outline: color-mix(in srgb, var(--text-primary) 25%, transparent);
   --pill-border: color-mix(in srgb, var(--text-primary) 30%, transparent);
@@ -80,6 +85,10 @@
   --primary-hover: #178882;
   --primary-color: #0aa8ab;
   --primary-contrast: #21cac2;
+
+  /* Search match highlight for dark theme (8.4:1 against --mark-fg) */
+  --mark-bg: #125561;
+  --mark-fg: #ffffff;
 
   /* Accent colors for dark theme */
   --accent-1: #0dcaf0;
@@ -577,6 +586,17 @@ input[type='checkbox'] {
   accent-color: var(--primary-contrast);
 }
 
+/* Search match highlighting. Global so the marks emitted by HighlightedText and
+   those rendered inline by result cards stay identical. The colour is set
+   explicitly rather than inherited to avoid low contrast.*/
+mark {
+  background: var(--mark-bg);
+  color: var(--mark-fg);
+  border-radius: 3px;
+  padding: 0 0.1em;
+  font-weight: 600;
+}
+
 /* Tooltip */
 .app-tooltip {
   position: fixed;
@@ -591,6 +611,8 @@ input[type='checkbox'] {
   border-radius: 6px;
   font-size: 0.8125rem;
   line-height: 1.4;
+  /* Lets plain-text tooltips break lines with "\n". Snippet content opts out
+     below, since there the newlines are just source indentation. */
   white-space: pre-line;
   overflow-wrap: anywhere;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
@@ -605,6 +627,12 @@ input[type='checkbox'] {
 .app-tooltip--visible {
   opacity: 1;
   transform: translateY(0);
+}
+
+/* Tooltips built from a snippet. Their line breaks come from how the markup is
+   indented in the component, not from the author, so text must reflow normally. */
+.app-tooltip--rich {
+  white-space: normal;
 }
 
 .app-tooltip__arrow {

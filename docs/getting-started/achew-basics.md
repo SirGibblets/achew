@@ -4,10 +4,10 @@ Achew runs a multi-stage pipeline for each audiobook. While much of the process 
 
 ## 1. Audiobook selection and download
 
-You can [find audiobooks](finding-a-book.md) to process via the main page. You can search by title, specify an Audiobookshelf item ID, or get more advanced with rule-based [Chapter Search](finding-a-book.md#chapter-search).
+You can [find audiobooks](finding-a-book.md) to process via the main page. You can search by title, series, author, or narrator, paste an Audiobookshelf item ID, or get more advanced with rule-based [Chapter Search](finding-a-book.md#chapter-search).
 
-![Book search screen](../img/title-search-light.webp#only-light)
-![Book search screen](../img/title-search-dark.webp#only-dark)
+![Book search screen](../img/book-search-light.webp#only-light)
+![Book search screen](../img/book-search-dark.webp#only-dark)
 
 After you pick a book and click Start, Achew pulls associated metadata to understand what it is working with: file count, duration, existing chapters, the book's language, ASIN, etc. It then downloads the audio file(s) from Audiobookshelf and prepares them for analysis.
 

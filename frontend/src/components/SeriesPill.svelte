@@ -1,16 +1,20 @@
 <script lang="ts">
+  import HighlightedText from './HighlightedText.svelte';
+
   interface Props {
     name: string;
     sequence?: string | null;
     themed?: boolean;
+    /** Substring to mark within the series name. */
+    highlightQuery?: string;
   }
 
-  let { name, sequence, themed = true }: Props = $props();
+  let { name, sequence, themed = true, highlightQuery = '' }: Props = $props();
 </script>
 
 <span class="series-pill" class:themed title={sequence ? `${name} #${sequence}` : name}>
   <span class="series-label">Series:</span>
-  <span class="series-name">{name}</span>
+  <span class="series-name"><HighlightedText text={name} query={highlightQuery} /></span>
   {#if sequence}<span class="series-seq">#{sequence}</span>{/if}
 </span>
 

@@ -73,6 +73,22 @@ export interface Book {
   duration: number;
 }
 
+/** Which field of a book matched a library search query. */
+export type MatchType = 'title' | 'subtitle' | 'series' | 'author' | 'narrator';
+
+export interface LibrarySearchHit {
+  book: Book;
+  match_type: MatchType;
+  /** The specific field value that matched, e.g. the matched author name. */
+  match_text: string;
+}
+
+export interface LibrarySearchResponse {
+  hits: LibrarySearchHit[];
+  /** Match count before truncation to the request's limit. */
+  total: number;
+}
+
 export interface BookSearchSeriesEntry {
   series: string;
   sequence?: string | null;

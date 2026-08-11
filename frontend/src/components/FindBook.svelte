@@ -3,7 +3,7 @@
   import { tooltip } from '../actions/tooltip';
   import { session } from '../stores/session';
   import { api } from '../utils/api';
-  import type { Book } from '../types/book';
+  import type { LibrarySearchHit } from '../types/book';
   import AudiobookCard from './AudiobookCard.svelte';
   import DocLink from './DocLink.svelte';
   import ChapterSearch from './chapter_search/ChapterSearch.svelte';
@@ -20,127 +20,140 @@
 
   interface BookInfo {
     title: string;
+    subtitle: string | null;
     duration: number;
     coverUrl: string;
     fileCount: number;
+    authors: string[];
+    narrators: string[];
+    seriesName: string | null;
+    seriesSequence: string | null;
   }
+
+  // Audiobookshelf item IDs are UUIDs; installs predating that migration use an
+  // `li_` prefix instead. Anything else is treated as free text.
+  const ITEM_ID_PATTERN = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|li_[0-9a-z]+)$/i;
+
+  const MIN_QUERY_LENGTH = 2;
+  const SEARCH_DEBOUNCE_MS = 500;
+
+  // How many results to render at once. Searching a prolific author or narrator
+  // can match well over a hundred books, so the rest are revealed on demand.
+  const PAGE_SIZE = 36;
 
   let inputMode = $state('search');
   let isChapterSearch = $derived(inputMode === 'chapterSearch');
-  let itemId = $state('');
-  let validationError = $state('');
-  let isValidating = $state(false);
-  let isDebouncing = $state(false);
-  let bookInfo = $state<BookInfo | null>(null);
-  let isValidItem = $state(false);
 
-  let itemIdInput: HTMLInputElement | undefined = $state();
   let searchInput: HTMLInputElement | undefined = $state();
 
   let libraries = $state<LibraryInfo[]>([]);
   let selectedLibrary = $state<LibraryInfo | null>(null);
   let searchQuery = $state('');
-  let searchResults = $state<Book[]>([]);
+  let searchResults = $state<LibrarySearchHit[]>([]);
+  let searchTotal = $state(0);
+  let visibleCount = $state(PAGE_SIZE);
+  let visibleResults = $derived(searchResults.slice(0, visibleCount));
+  // Held back locally and revealable without another request.
+  let revealable = $derived(searchResults.length - visibleCount);
+  // Matched but never fetched, so only a narrower query can reach them.
+  let unreachable = $derived(searchTotal - searchResults.length);
   let isLoadingLibraries = $state(false);
   let isSearching = $state(false);
+  let isDebouncing = $state(false);
+  let isStarting = $state(false);
   let searchError = $state('');
 
-  let validationTimeout: ReturnType<typeof setTimeout> | undefined;
-  $effect(() => {
-    validationError = '';
-    bookInfo = null;
-    isValidItem = false;
+  // Populated only when the query resolved to a real item ID.
+  let itemPreview = $state<BookInfo | null>(null);
+  let itemPreviewId = $state('');
 
-    if (itemId.length > 0) {
-      if (itemId.length < 10) {
-        validationError = 'Item ID seems too short';
-        isDebouncing = false;
-      } else if (!/^[a-f0-9-]+$/i.test(itemId)) {
-        validationError = 'Item ID should contain only letters, numbers, and hyphens';
-        isDebouncing = false;
-      } else {
-        clearTimeout(validationTimeout);
-        isDebouncing = true;
-        validationTimeout = setTimeout(() => {
-          isDebouncing = false;
-          void validateItemId(itemId.trim());
-        }, 800);
-      }
-    } else {
-      isDebouncing = false;
-    }
-  });
+  // The query the current results were produced from, so highlighting cannot
+  // drift ahead of the results while a new search is in flight.
+  let resultQuery = $state('');
 
-  async function validateItemId(id: string) {
-    if (!id || validationError) return;
+  function looksLikeItemId(query: string): boolean {
+    return ITEM_ID_PATTERN.test(query);
+  }
 
-    isValidating = true;
+  /**
+   * Look an item ID up directly. Returns false when the ID is well-formed but
+   * unknown to the server, so the caller can fall back to a text search rather
+   * than dead-ending on a query that merely looks like an ID.
+   */
+  async function tryItemId(id: string): Promise<boolean> {
+    const response = await api.session.validateItem(id);
+    if (!response.valid) return false;
+
+    itemPreview = {
+      title: response.book_title ?? '',
+      subtitle: response.book_subtitle ?? null,
+      duration: response.book_duration ?? 0,
+      coverUrl: response.cover_url ?? '',
+      fileCount: response.file_count || 1,
+      authors: response.authors ?? [],
+      narrators: response.narrators ?? [],
+      seriesName: response.series_name ?? null,
+      seriesSequence: response.series_sequence ?? null,
+    };
+    itemPreviewId = id;
+    return true;
+  }
+
+  async function runQuery(query: string) {
+    isSearching = true;
+    searchError = '';
+    itemPreview = null;
+    itemPreviewId = '';
+    visibleCount = PAGE_SIZE;
 
     try {
-      const response = await api.session.validateItem(id);
+      if (looksLikeItemId(query) && (await tryItemId(query))) {
+        searchResults = [];
+        searchTotal = 0;
+        resultQuery = query;
+        return;
+      }
 
-      if (response.valid) {
-        bookInfo = {
-          title: response.book_title ?? '',
-          duration: response.book_duration ?? 0,
-          coverUrl: response.cover_url ?? '',
-          fileCount: response.file_count || 1,
-        };
-        isValidItem = true;
-        validationError = '';
-      } else {
-        bookInfo = null;
-        isValidItem = false;
-        validationError = response.error_message || 'Invalid item ID';
+      if (!selectedLibrary) {
+        searchError = 'Select a library to search.';
+        return;
+      }
+
+      const response = await api.audiobookshelf.searchLibrary(selectedLibrary.id, query);
+      searchResults = response.hits;
+      searchTotal = response.total;
+      resultQuery = query;
+
+      if (response.hits.length === 0) {
+        searchError = 'No audiobooks found matching your search.';
       }
     } catch (error) {
-      console.error('Failed to validate item:', error);
-      bookInfo = null;
-      isValidItem = false;
-      validationError = 'Failed to validate item. Please check your connection and try again.';
+      console.error('Search failed:', error);
+      searchError = 'Search failed. Please try again.';
+      searchResults = [];
+      searchTotal = 0;
     } finally {
-      isValidating = false;
-      // Restore focus to input after validation
-      if (itemIdInput) {
-        setTimeout(() => itemIdInput?.focus(), 0);
+      isSearching = false;
+      // Restore focus to search input after search
+      if (searchInput) {
+        setTimeout(() => searchInput?.focus(), 0);
       }
     }
   }
 
-  async function handleSubmit() {
-    if (!itemId.trim()) {
-      validationError = 'Please enter an item ID';
-      return;
-    }
-
-    if (validationError || !isValidItem) {
-      return;
-    }
-
-    isValidating = true;
+  // Handle starting a session from either an item-ID lookup or a search result
+  async function startSession(bookId: string) {
+    isStarting = true;
 
     try {
-      await session.createSession(itemId.trim());
+      await session.createSession(bookId);
     } catch (error) {
       console.error('Failed to create session:', error);
       const message = error instanceof Error ? error.message : String(error);
-      validationError = message || 'Failed to create session';
+      searchError = message || 'Failed to create session';
     } finally {
-      isValidating = false;
+      isStarting = false;
     }
-  }
-
-  function handleKeyDown(event: KeyboardEvent) {
-    if (event.key === 'Enter') {
-      handleSubmit();
-    }
-  }
-
-  // Handle paste - clean up common formatting issues
-  function handlePaste(_event: ClipboardEvent) {
-    setTimeout(() => {
-      itemId = itemId.trim().replace(/\s+/g, '');
-    }, 0);
   }
 
   // Search functionality
@@ -171,74 +184,37 @@
   }
 
   $effect(() => {
-    if (inputMode === 'search' && selectedLibrary && searchQuery.length >= 2) {
-      clearTimeout(searchTimeout);
-      searchTimeout = setTimeout(() => {
-        void performSearch();
-      }, 500);
-    } else if (inputMode === 'search' && searchQuery.length < 2) {
-      searchResults = [];
-      searchError = '';
-    }
-  });
+    const query = searchQuery.trim();
 
-  async function performSearch() {
-    if (!selectedLibrary || !searchQuery.trim()) {
+    if (inputMode !== 'search') return;
+
+    if (query.length < MIN_QUERY_LENGTH) {
+      clearTimeout(searchTimeout);
+      isDebouncing = false;
       searchResults = [];
+      searchTotal = 0;
+      visibleCount = PAGE_SIZE;
+      itemPreview = null;
+      searchError = '';
       return;
     }
 
-    isSearching = true;
-    searchError = '';
+    // Reference the library so switching it re-runs the query.
+    void selectedLibrary;
 
-    try {
-      const results = await api.audiobookshelf.searchLibrary(selectedLibrary.id, searchQuery.trim());
-      searchResults = results;
+    clearTimeout(searchTimeout);
+    isDebouncing = true;
+    searchTimeout = setTimeout(() => {
+      isDebouncing = false;
+      void runQuery(query);
+    }, SEARCH_DEBOUNCE_MS);
+  });
 
-      if (results.length === 0) {
-        searchError = 'No audiobooks found matching your search.';
-      }
-    } catch (error) {
-      console.error('Search failed:', error);
-      searchError = 'Search failed. Please try again.';
-      searchResults = [];
-    } finally {
-      isSearching = false;
-      // Restore focus to search input after search
-      if (searchInput) {
-        setTimeout(() => searchInput?.focus(), 0);
-      }
-    }
-  }
-
-  // Handle library change - save preference and trigger new search if query exists
-  async function handleLibraryChange() {
+  // Handle library change - save preference; the search effect re-runs the query
+  function handleLibraryChange() {
     if (selectedLibrary) {
       localStorage.setItem('achew-last-library-id', selectedLibrary.id);
     }
-    if (searchQuery.length >= 2) {
-      await performSearch();
-    }
-  }
-
-  // Handle starting session from search result
-  async function startSessionFromBook(book: { id: string }) {
-    isValidating = true;
-
-    try {
-      await session.createSession(book.id);
-    } catch (error) {
-      console.error('Failed to create session from search result:', error);
-      const message = error instanceof Error ? error.message : String(error);
-      searchError = message || 'Failed to create session';
-    } finally {
-      isValidating = false;
-    }
-  }
-
-  // Mode switching
-  function switchToItemIdMode() {
-    inputMode = 'itemId';
   }
 
   function switchToSearchMode() {
@@ -284,10 +260,7 @@
     <!-- Mode Selector -->
     <div class="mode-selector">
       <button class="mode-btn {inputMode === 'search' ? 'active' : ''}" onclick={switchToSearchMode} type="button">
-        Title Search
-      </button>
-      <button class="mode-btn {inputMode === 'itemId' ? 'active' : ''}" onclick={switchToItemIdMode} type="button">
-        Item ID
+        Book Search
       </button>
       <button
         class="mode-btn {inputMode === 'chapterSearch' ? 'active' : ''}"
@@ -298,95 +271,7 @@
       </button>
     </div>
 
-    {#if inputMode === 'itemId'}
-      <!-- Item ID Input Form -->
-      <form
-        onsubmit={(e) => {
-          e.preventDefault();
-          void handleSubmit();
-        }}
-        class="item-form"
-      >
-        <div class="form-group">
-          <div class="input-container">
-            <input
-              id="itemId"
-              type="text"
-              class="form-control {validationError ? 'is-invalid' : ''} {isDebouncing
-                ? 'is-debouncing'
-                : ''} {isValidating ? 'is-validating' : ''}"
-              bind:value={itemId}
-              bind:this={itemIdInput}
-              onkeydown={handleKeyDown}
-              onpaste={handlePaste}
-              placeholder="Enter an Audiobookshelf item ID"
-              disabled={$session.loading}
-              autocomplete="off"
-              spellcheck="false"
-            />
-            {#snippet helpContent()}
-              <div class="help-tooltip-content">
-                <p>
-                  When viewing a book in Audiobookshelf, the Item ID can be found in the URL after <em>"/item/"</em>
-                </p>
-                <code
-                  >https://your-abs-server.com/library/item/<span class="url-id-highlight"
-                    >6f0aa6e5-684a-4823-aaeb-1a15c7084902</span
-                  ></code
-                >
-              </div>
-            {/snippet}
-            <button
-              type="button"
-              class="help-icon"
-              aria-label="Where to find the Item ID"
-              use:tooltip={{ content: helpContent, maxWidth: 650, delay: 0 }}
-            >
-              <CircleQuestionMark size="16" color="var(--text-muted)" />
-            </button>
-          </div>
-          {#if validationError}
-            <div class="invalid-feedback">
-              {validationError}
-            </div>
-          {/if}
-        </div>
-      </form>
-
-      <!-- Item ID Result -->
-      {#if bookInfo && isValidItem}
-        <div class="item-result">
-          <div class="results-list">
-            <AudiobookCard
-              title={bookInfo.title}
-              duration={bookInfo.duration}
-              coverImageUrl={bookInfo.coverUrl}
-              fileCount={bookInfo.fileCount || 1}
-              size="compact"
-            >
-              {#snippet actions()}
-                <div class="search-result-actions">
-                  <button
-                    type="submit"
-                    class="btn btn-verify start-btn"
-                    disabled={$session.loading}
-                    onclick={handleSubmit}
-                  >
-                    {#if isValidating || $session.loading}
-                      <span class="btn-spinner"></span>
-                      Processing…
-                    {:else}
-                      Start
-                      <ArrowRight size="14" />
-                    {/if}
-                  </button>
-                </div>
-              {/snippet}
-            </AudiobookCard>
-          </div>
-        </div>
-      {/if}
-    {:else if inputMode === 'search'}
+    {#if inputMode === 'search'}
       <!-- Search Interface -->
       <div class="search-form">
         <div class="search-input-container">
@@ -409,16 +294,46 @@
           </select>
 
           <!-- Search Input -->
-          <input
-            type="text"
-            class="search-input {searchError ? 'is-invalid' : ''} {isSearching ? 'is-searching' : ''}"
-            bind:value={searchQuery}
-            bind:this={searchInput}
-            placeholder="Search for audiobooks…"
-            disabled={!selectedLibrary || $session.loading}
-            autocomplete="off"
-            spellcheck="false"
-          />
+          <div class="search-input-wrap">
+            <input
+              type="text"
+              class="search-input {searchError ? 'is-invalid' : ''} {isSearching ? 'is-searching' : ''} {isDebouncing
+                ? 'is-debouncing'
+                : ''}"
+              bind:value={searchQuery}
+              bind:this={searchInput}
+              placeholder="Search by title, author, series, narrator, or item ID…"
+              disabled={!selectedLibrary || $session.loading}
+              autocomplete="off"
+              spellcheck="false"
+            />
+
+            {#snippet helpContent()}
+              <div class="help-tooltip-content">
+                <p>
+                  Search the selected library by book title, subtitle, series, author, or narrator. Matching authors,
+                  series and narrators are expanded into their books, and results are ordered by how closely they match.
+                </p>
+                <p>
+                  You can also paste an Audiobookshelf item ID to go straight to one book. The item ID appears in the
+                  URL for a book, after <em>"/item/"</em>:
+                </p>
+                <code
+                  >https://your-abs-server.com/library/item/<span class="url-id-highlight"
+                    >6f0aa6e5-684a-4823-aaeb-1a15c7084902</span
+                  ></code
+                >
+              </div>
+            {/snippet}
+            <button
+              type="button"
+              class="search-help-icon"
+              aria-label="What you can search for"
+              use:tooltip={{ content: helpContent, maxWidth: 650, delay: 0 }}
+            >
+              <CircleQuestionMark size="16" color="var(--text-muted)" />
+            </button>
+          </div>
         </div>
 
         {#if searchError}
@@ -428,11 +343,50 @@
         {/if}
       </div>
 
+      <!-- Item ID Result -->
+      {#if itemPreview}
+        <div class="item-result">
+          <div class="results-list">
+            <AudiobookCard
+              title={itemPreview.title}
+              subtitle={itemPreview.subtitle}
+              duration={itemPreview.duration}
+              coverImageUrl={itemPreview.coverUrl}
+              fileCount={itemPreview.fileCount || 1}
+              seriesName={itemPreview.seriesName}
+              seriesSequence={itemPreview.seriesSequence}
+              authors={itemPreview.authors}
+              narrators={itemPreview.narrators}
+              size="compact"
+            >
+              {#snippet actions()}
+                <div class="search-result-actions">
+                  <button
+                    class="btn btn-verify start-btn"
+                    disabled={$session.loading}
+                    onclick={() => startSession(itemPreviewId)}
+                  >
+                    {#if isStarting || $session.loading}
+                      <span class="btn-spinner"></span>
+                      Processing…
+                    {:else}
+                      Start
+                      <ArrowRight size="14" />
+                    {/if}
+                  </button>
+                </div>
+              {/snippet}
+            </AudiobookCard>
+          </div>
+        </div>
+      {/if}
+
       <!-- Search Results -->
       {#if searchResults.length > 0}
         <div class="search-results">
           <div class="results-list">
-            {#each searchResults as book}
+            {#each visibleResults as hit (hit.book.id)}
+              {@const book = hit.book}
               {@const meta = book.media.metadata}
               {@const firstSeries = meta.series?.[0]}
               <AudiobookCard
@@ -443,6 +397,9 @@
                 fileCount={book.media.numAudioFiles ?? book.media.audioFiles?.length ?? 1}
                 seriesName={firstSeries?.name ?? meta.seriesName}
                 seriesSequence={firstSeries?.sequence}
+                authors={meta.authors?.map((a) => a.name)}
+                narrators={meta.narrators}
+                highlightQuery={resultQuery}
                 size="compact"
               >
                 {#snippet actions()}
@@ -450,9 +407,9 @@
                     <button
                       class="btn btn-verify start-btn"
                       disabled={$session.loading}
-                      onclick={() => startSessionFromBook(book)}
+                      onclick={() => startSession(book.id)}
                     >
-                      {#if isValidating || $session.loading}
+                      {#if isStarting || $session.loading}
                         <span class="btn-spinner"></span>
                         Processing…
                       {:else}
@@ -465,6 +422,24 @@
               </AudiobookCard>
             {/each}
           </div>
+          {#if revealable > 0 || unreachable > 0}
+            <div class="results-footer">
+              <p class="results-count">
+                Showing {visibleResults.length} of {searchTotal} matches
+              </p>
+              {#if revealable > 0}
+                <button
+                  type="button"
+                  class="btn btn-secondary show-more-btn"
+                  onclick={() => (visibleCount += PAGE_SIZE)}
+                >
+                  Show {Math.min(PAGE_SIZE, revealable)} more
+                </button>
+              {:else}
+                <p class="results-count">Narrow your search to see the remaining {unreachable}.</p>
+              {/if}
+            </div>
+          {/if}
         </div>
       {/if}
     {:else if inputMode === 'chapterSearch'}
@@ -515,23 +490,6 @@
     text-align: center;
   }
 
-  .item-form {
-    width: 100%;
-    max-width: 600px;
-    text-align: center;
-  }
-
-  .input-container {
-    position: relative;
-    display: inline-block;
-    width: 100%;
-    margin: 0 auto;
-  }
-
-  .form-control.is-invalid {
-    border-color: var(--danger);
-  }
-
   .header-image {
     width: 100%;
     max-width: 440px;
@@ -549,24 +507,19 @@
     display: none;
   }
 
-  .help-icon {
-    position: absolute;
-    right: 12px;
-    top: 50%;
-    transform: translateY(-50%);
+  .search-help-icon {
+    flex-shrink: 0;
     background: none;
     border: none;
     cursor: pointer;
-    padding: 4px;
-    border-radius: 4px;
+    padding: 0 0.75rem;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: background-color 0.2s ease;
-    z-index: 2;
   }
 
-  .help-icon:hover {
+  .search-help-icon:hover {
     background-color: var(--bg-secondary);
   }
 
@@ -602,23 +555,6 @@
     min-width: 100px;
   }
 
-  /* Loading states for input field */
-  .form-control.is-debouncing {
-    border-color: var(--text-muted);
-    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg width='16' height='16' viewBox='0 0 16 16' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='8' cy='8' r='6' stroke='%23999999' stroke-width='2' opacity='0.3'/%3E%3Cpath d='M8 2A6 6 0 0 1 14 8' stroke='%23666666' stroke-width='2' stroke-linecap='round'%3E%3CanimateTransform attributeName='transform' type='rotate' dur='2s' values='0 8 8;360 8 8' repeatCount='indefinite'/%3E%3C/path%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 40px center;
-    background-size: 16px 16px;
-  }
-
-  .form-control.is-validating {
-    border-color: var(--primary);
-    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg width='16' height='16' viewBox='0 0 16 16' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='8' cy='8' r='6' stroke='%234a90e2' stroke-width='2' opacity='0.3'/%3E%3Cpath d='M8 2A6 6 0 0 1 14 8' stroke='%234a90e2' stroke-width='2' stroke-linecap='round'%3E%3CanimateTransform attributeName='transform' type='rotate' dur='1s' values='0 8 8;360 8 8' repeatCount='indefinite'/%3E%3C/path%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 40px center;
-    background-size: 16px 16px;
-  }
-
   .url-id-highlight {
     font-weight: 600;
     color: var(--text-primary);
@@ -629,7 +565,7 @@
     border: 1px solid var(--border-color);
     border-radius: 8px;
     margin-bottom: 2rem;
-    min-width: 480px;
+    min-width: 360px;
     margin-left: auto;
     margin-right: auto;
     overflow: hidden;
@@ -710,6 +646,14 @@
     outline: none;
   }
 
+  /* Keeps the help icon beside the input, including in the stacked mobile layout */
+  .search-input-wrap {
+    flex: 1;
+    display: flex;
+    min-width: 0;
+    background: var(--bg-primary);
+  }
+
   .search-input {
     flex: 1;
     border: none;
@@ -727,6 +671,34 @@
     background-position: right 12px center;
     background-size: 16px 16px;
     padding-right: 2.5rem;
+  }
+
+  .search-input.is-debouncing {
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg width='16' height='16' viewBox='0 0 16 16' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='8' cy='8' r='6' stroke='%23999999' stroke-width='2' opacity='0.3'/%3E%3Cpath d='M8 2A6 6 0 0 1 14 8' stroke='%23666666' stroke-width='2' stroke-linecap='round'%3E%3CanimateTransform attributeName='transform' type='rotate' dur='2s' values='0 8 8;360 8 8' repeatCount='indefinite'/%3E%3C/path%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 16px 16px;
+    padding-right: 2.5rem;
+  }
+
+  .results-footer {
+    margin-top: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .results-count {
+    margin: 0;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+  }
+
+  .show-more-btn {
+    padding: 0.5rem 1.25rem;
+    font-size: 0.85rem;
   }
 
   /* Search Results Styles */
@@ -760,15 +732,6 @@
 
     .header-section {
       padding: 0;
-    }
-
-    .form-control {
-      width: 100%;
-      font-size: 0.9rem;
-    }
-
-    .input-container {
-      max-width: 100%;
     }
 
     .help-tooltip-content code {
