@@ -209,9 +209,14 @@ export interface BookSearchPayload {
 export interface ValidateItemResponse {
   valid: boolean;
   book_title?: string | null;
+  book_subtitle?: string | null;
   book_duration?: number | null;
   cover_url?: string | null;
   file_count?: number | null;
+  authors: string[];
+  narrators: string[];
+  series_name?: string | null;
+  series_sequence?: string | null;
   error_message?: string | null;
 }
 

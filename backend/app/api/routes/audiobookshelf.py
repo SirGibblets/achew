@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from ...core.config import is_abs_configured
-from ...models.abs import Book, BookSearchResult
+from ...models.abs import Book, BookSearchResult, LibrarySearchResponse
 from ...services.abs_service import ABSService
 from ...services.audible_providers import provider_dropdown, region_for_provider
 
@@ -71,13 +71,13 @@ async def get_libraries():
         )
 
 
-@router.get("/libraries/{library_id}/search", response_model=List[Book])
+@router.get("/libraries/{library_id}/search", response_model=LibrarySearchResponse)
 async def search_library(
     library_id: str,
     q: str = Query(..., description="Search query"),
-    limit: int = Query(12, ge=1, le=100, description="Maximum number of results to return"),
+    limit: int = Query(36, ge=1, le=250, description="Maximum number of results to return"),
 ):
-    """Search for books within a specific library"""
+    """Search for books within a specific library by title, subtitle, series, author or narrator"""
     # Check if API is configured
     if not is_abs_configured():
         raise HTTPException(
@@ -104,10 +104,22 @@ async def search_library(
             # Search within the specified library
             search_results = await abs_service.search_library(library_id, q.strip(), limit)
 
-            # Add proper cover URLs to the results
-            for book in search_results:
-                if book.media and book.media.coverPath:
-                    book.media.coverPath = f"/api/audiobookshelf/covers/{book.id}"
+            for hit in search_results.hits:
+                media = hit.book.media
+
+                # Add proper cover URLs to the results
+                if media and media.coverPath:
+                    media.coverPath = f"/api/audiobookshelf/covers/{hit.book.id}"
+
+                # Trim the payload to what a result card actually renders.
+                # Pin the derived values first: duration otherwise falls back to
+                # summing audioFiles, and the file count to their length.
+                media.duration = hit.book.duration
+                if media.numAudioFiles is None:
+                    media.numAudioFiles = len(media.audioFiles) or 1
+                media.audioFiles = []
+                media.chapters = []
+                media.metadata.description = None
 
             return search_results
 

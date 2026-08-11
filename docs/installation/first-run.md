@@ -32,10 +32,10 @@ At least one provider must be configured in order to use AI Cleanup. For each pr
 
 ## After setup
 
-Once the initial setup is complete, Achew drops you onto the main screen. Type the first few letters of an audiobook title into the search bar, pick a book, and click **Start**. 
+Once the initial setup is complete, Achew drops you onto the main screen. Type the first few letters of an audiobook title into the search bar, pick a book, and click **Start**. You can also search by series, author, or narrator. See [Finding a Book](../getting-started/finding-a-book.md) for more info.
 
-![Book search screen](../img/title-search-light.webp#only-light)
-![Book search screen](../img/title-search-dark.webp#only-dark)
+![Book search screen](../img/book-search-light.webp#only-light)
+![Book search screen](../img/book-search-dark.webp#only-dark)
 
 The audiobook's files will be downloaded and prepared for processing, after which you may continue by choosing a [workflow](../getting-started/workflows-overview.md).
 

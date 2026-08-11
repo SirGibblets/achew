@@ -1,14 +1,23 @@
 import asyncio
+import base64
 import logging
+import math
 import os
+import re
 import time
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import aiohttp
 
 from ..core.config import get_app_config
-from ..models.abs import AudnexusChapterList, Book
+from ..models.abs import (
+    AudnexusChapterList,
+    Book,
+    LibrarySearchHit,
+    LibrarySearchResponse,
+    MatchType,
+)
 from .audible_providers import (
     all_regions,
     region_for_language,
@@ -17,8 +26,80 @@ from .audible_providers import (
 
 logger = logging.getLogger(__name__)
 
+# How many author / series / narrator matches a single search expands into books.
+# Each costs one extra request.
+MAX_GROUPS_PER_TYPE = 3
+
+# How many books to pull per expanded collection. Sized to swallow whole
+# catalogues in one request so the UI can page through them without re-running
+# this fan-out: a busy author/narrator can credit over a hundred books. Anything
+# past this is still counted in the reported total, just not returned.
+GROUP_EXPANSION_LIMIT = 250
+
 _library_cache: Dict[str, Dict] = {}
 _library_provider_cache: Dict[str, Optional[str]] = {}
+
+
+def _parse_books(items: List[Any]) -> List[Book]:
+    """Parse raw ABS library items into books, keeping only those with audio.
+
+    Expanded items report their audio as an `audioFiles` list while minified ones
+    (library listings and `filter=` queries) only carry a `numAudioFiles` count, so
+    both have to be consulted. One unparseable item never fails the whole batch.
+    """
+    books: List[Book] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        media = item.get("media") or {}
+        if not (media.get("numAudioFiles") or media.get("audioFiles")):
+            continue
+        try:
+            books.append(Book(**item))
+        except Exception as e:
+            logger.warning(f"Failed to parse book data: {e}")
+    return books
+
+
+def _series_sequence(book: Book) -> float:
+    """Numeric reading position of a book within its series.
+
+    Sequences are free text in ABS: "3", "8.5" and "1-2" (an omnibus) all occur,
+    so the leading number is what orders them. Unnumbered entries are usually
+    companion volumes and sort after the numbered ones.
+    """
+    series = book.media.metadata.series
+    raw = series[0].sequence if series else None
+    if not raw:
+        return math.inf
+    match = re.match(r"\s*(\d+(?:\.\d+)?)", raw)
+    return float(match.group(1)) if match else math.inf
+
+
+def _apply_series_order(entries: List[Tuple[Book, MatchType, str]]) -> List[Tuple[Book, MatchType, str]]:
+    """Put each series into reading order without disturbing anything else.
+
+    Whatever ranked these already — Audiobookshelf's own relevance for direct
+    title hits, title order for an expanded author — decides where a series
+    first appears, and the whole series then follows from that position in
+    sequence order. Sorting the list outright by series would instead throw away
+    that ranking, and leaving it alone returns a series scattered out of order.
+    """
+    # A book with no series is its own group, which pins it where it already is.
+    first_seen: Dict[str, int] = {}
+    for index, (book, _, _) in enumerate(entries):
+        series = book.media.metadata.series
+        key = series[0].name if series else f"\0{index}"
+        first_seen.setdefault(key, index)
+
+    def sort_key(item: Tuple[int, Tuple[Book, MatchType, str]]) -> Tuple[int, float]:
+        index, (book, _, _) = item
+        series = book.media.metadata.series
+        key = series[0].name if series else f"\0{index}"
+        return first_seen[key], _series_sequence(book)
+
+    # Python's sort is stable, so equal sequences keep their incoming order.
+    return [entry for _, entry in sorted(enumerate(entries), key=sort_key)]
 
 
 class ABSService:
@@ -344,40 +425,127 @@ class ABSService:
             logger.error(f"Error fetching libraries: {e}")
             return []
 
-    async def search_library(self, library_id: str, query: str, limit: int = 12) -> List[Book]:
-        """Search within a specific library, filter for books with audio files"""
+    async def _get_filtered_library_items(
+        self,
+        library_id: str,
+        filter_key: str,
+        filter_value: str,
+        limit: int,
+    ) -> Tuple[List[Book], int]:
+        """Fetch library items matching one of ABS's `filter=<key>.<base64 value>` queries.
+
+        Authors and series filter on an id; narrators, tags and genres filter on a name,
+        since ABS models those as bare strings.
+
+        Returns the parsed books alongside the collection's full size as ABS reports
+        it, which is independent of `limit`. A prolific author/narrator can outrun any cap
+        worth fetching, and the caller needs the real size to say how much is hidden.
+        """
+        try:
+            encoded = base64.b64encode(filter_value.encode()).decode()
+            url = f"{self.config.url}/api/libraries/{library_id}/items"
+            params = {"filter": f"{filter_key}.{encoded}", "limit": limit}
+            async with self.session.get(url, headers=self._get_headers(), params=params) as resp:
+                if resp.status != 200:
+                    logger.error(f"Failed to fetch {filter_key} items for library {library_id}: {resp.status}")
+                    return [], 0
+                data = await resp.json()
+                results = data.get("results", [])
+                return _parse_books(results), data.get("total", len(results))
+        except Exception as e:
+            logger.error(f"Error fetching {filter_key} items for library {library_id}: {e}")
+            return [], 0
+
+    async def search_library(self, library_id: str, query: str, limit: int = 12) -> LibrarySearchResponse:
+        """Search a library by title, subtitle, series, author or narrator.
+
+        ABS's search endpoint returns matches grouped by what they matched, but only
+        the `book` group carries library items; author, series and narrator matches
+        name a collection that has to be expanded into its books separately. Results
+        are de-duplicated across the groups and ordered by `MatchType`.
+        """
         try:
             url = f"{self.config.url}/api/libraries/{library_id}/search"
             params = {"q": query, "limit": limit}
             async with self.session.get(url, headers=self._get_headers(), params=params) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    books = []
-
-                    # Process search results
-                    if "book" in data and isinstance(data["book"], list):
-                        for item in data["book"]:
-                            if "libraryItem" in item:
-                                library_item = item["libraryItem"]
-                                # Check if book has audio files
-                                if (
-                                    library_item.get("media", {}).get("audioFiles")
-                                    and len(library_item["media"]["audioFiles"]) > 0
-                                ):
-                                    try:
-                                        book = Book(**library_item)
-                                        books.append(book)
-                                    except Exception as e:
-                                        logger.warning(f"Failed to parse book data: {e}")
-                                        continue
-
-                    return books
-                else:
+                if resp.status != 200:
                     logger.error(f"Failed to search library {library_id}: {resp.status}")
-                    return []
+                    return LibrarySearchResponse(hits=[], total=0)
+                data = await resp.json()
         except Exception as e:
             logger.error(f"Error searching library {library_id}: {e}")
-            return []
+            return LibrarySearchResponse(hits=[], total=0)
+
+        # Direct book matches. ABS ranks these itself and does not say which field it
+        # matched, so attribute each to its title or subtitle by inspecting the query.
+        direct: List[Tuple[Book, MatchType, str]] = []
+        for item in data.get("book") or []:
+            library_item = item.get("libraryItem")
+            if not isinstance(library_item, dict):
+                continue
+            for book in _parse_books([library_item]):
+                metadata = book.media.metadata
+                if metadata.subtitle and query.lower() in metadata.subtitle.lower():
+                    if query.lower() not in metadata.title.lower():
+                        direct.append((book, MatchType.SUBTITLE, metadata.subtitle))
+                        continue
+                direct.append((book, MatchType.TITLE, metadata.title))
+
+        # Expand the collection matches concurrently — each is an independent request,
+        # and a query can plausibly hit an author, a series and a narrator at once.
+        groups = [
+            (MatchType.SERIES, "series", entry.get("series", {}).get("id"), entry.get("series", {}).get("name"))
+            for entry in (data.get("series") or [])[:MAX_GROUPS_PER_TYPE]
+        ]
+        groups += [
+            (MatchType.AUTHOR, "authors", entry.get("id"), entry.get("name"))
+            for entry in (data.get("authors") or [])[:MAX_GROUPS_PER_TYPE]
+        ]
+        # Narrator name is both the filter value and the label.
+        groups += [
+            (MatchType.NARRATOR, "narrators", entry.get("name"), entry.get("name"))
+            for entry in (data.get("narrators") or [])[:MAX_GROUPS_PER_TYPE]
+        ]
+        groups = [g for g in groups if g[2] and g[3]]
+
+        expanded: List[Tuple[List[Book], int]] = await asyncio.gather(
+            *(
+                self._get_filtered_library_items(library_id, key, value, GROUP_EXPANSION_LIMIT)
+                for _, key, value, _ in groups
+            )
+        )
+
+        buckets: Dict[MatchType, List[Tuple[Book, MatchType, str]]] = {
+            MatchType.TITLE: [c for c in direct if c[1] == MatchType.TITLE],
+            MatchType.SUBTITLE: [c for c in direct if c[1] == MatchType.SUBTITLE],
+            MatchType.SERIES: [],
+            MatchType.AUTHOR: [],
+            MatchType.NARRATOR: [],
+        }
+        # Books a collection holds beyond GROUP_EXPANSION_LIMIT and so was never
+        # fetched. Counting them keeps the reported total honest; they cannot be
+        # de-duplicated against the other buckets, but being the tail of one
+        # oversized collection they rarely overlap.
+        unfetched = 0
+        for (match_type, _, _, label), (books, group_total) in zip(groups, expanded):
+            unfetched += max(0, group_total - len(books))
+            if match_type != MatchType.SERIES:
+                # ABS returns series-filtered items in sequence order already, which is
+                # the useful order.
+                books = sorted(books, key=lambda b: b.media.metadata.title.lower())
+            buckets[match_type].extend((book, match_type, label) for book in books)
+
+        # First bucket to claim a book wins, so each appears once under its strongest match.
+        seen: set[str] = set()
+        hits: List[LibrarySearchHit] = []
+        for match_type in MatchType:
+            for book, _, label in _apply_series_order(buckets[match_type]):
+                if book.id in seen:
+                    continue
+                seen.add(book.id)
+                hits.append(LibrarySearchHit(book=book, match_type=match_type, match_text=label))
+
+        return LibrarySearchResponse(hits=hits[:limit], total=len(hits) + unfetched)
 
     async def get_library_items(self, library_id: str, use_cache: bool = True) -> List[Book]:
         """Fetch all items from the specified library"""
@@ -395,19 +563,10 @@ class ABSService:
             async with self.session.get(url, headers=self._get_headers(), params=params) as resp:
                 if resp.status == 200:
                     data = await resp.json()
-                    books = []
-
-                    if "results" in data and isinstance(data["results"], list):
-                        for item in data["results"]:
-                            if item.get("media", {}).get("numAudioFiles", 0) > 0:
-                                try:
-                                    book = Book(**item)
-                                    if book.media and book.media.coverPath:
-                                        book.media.coverPath = f"/api/audiobookshelf/covers/{book.id}"
-                                    books.append(book)
-                                except Exception as e:
-                                    logger.warning(f"Failed to parse book data: {e}")
-                                    continue
+                    books = _parse_books(data.get("results", []))
+                    for book in books:
+                        if book.media and book.media.coverPath:
+                            book.media.coverPath = f"/api/audiobookshelf/covers/{book.id}"
 
                     _library_cache[library_id] = {"books": books, "timestamp": datetime.now()}
 

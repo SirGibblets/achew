@@ -1,7 +1,7 @@
 import importlib.metadata
 import logging
 import os
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -42,9 +42,14 @@ class ValidateItemRequest(BaseModel):
 class ValidateItemResponse(BaseModel):
     valid: bool
     book_title: Optional[str] = None
+    book_subtitle: Optional[str] = None
     book_duration: Optional[float] = None
     cover_url: Optional[str] = None
     file_count: Optional[int] = None
+    authors: List[str] = []
+    narrators: List[str] = []
+    series_name: Optional[str] = None
+    series_sequence: Optional[str] = None
     error_message: Optional[str] = None
 
 
@@ -79,12 +84,32 @@ async def validate_item(request: ValidateItemRequest):
             if book.media and book.media.coverPath:
                 cover_url = f"/api/audiobookshelf/covers/{request.item_id}"
 
+            metadata = book.media.metadata if book.media else None
+            if metadata is None:
+                return ValidateItemResponse(
+                    valid=True,
+                    book_title="Unknown Title",
+                    book_duration=book.duration,
+                    cover_url=cover_url,
+                    file_count=len(book.media.audioFiles) if book.media else 1,
+                )
+
+            # A book reached by ID gets the same card as a search result, so it
+            # needs the same fields. `series` is normalised to a list by the model
+            # even when ABS only supplies the flat "Name #2" display string.
+            series = metadata.series[0] if metadata.series else None
+
             return ValidateItemResponse(
                 valid=True,
-                book_title=book.media.metadata.title if (book.media and book.media.metadata) else "Unknown Title",
+                book_title=metadata.title,
+                book_subtitle=metadata.subtitle,
                 book_duration=book.duration,
                 cover_url=cover_url,
                 file_count=len(book.media.audioFiles),
+                authors=[a.name for a in (metadata.authors or []) if a.name],
+                narrators=[n for n in (metadata.narrators or []) if n],
+                series_name=series.name if series else metadata.seriesName,
+                series_sequence=series.sequence if series else None,
             )
 
     except Exception as e:

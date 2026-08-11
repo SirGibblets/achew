@@ -137,6 +137,9 @@ export const tooltip: Action<HTMLElement, TooltipParam> = (node, param) => {
     bubble.style.maxWidth = `${opts.maxWidth}px`;
 
     if (opts.content) {
+      // Snippet content is real markup, so it must not inherit the newline
+      // preservation the plain-text branch relies on.
+      bubble.classList.add('app-tooltip--rich');
       instance = mount(TooltipContent, { target: bubble, props: { content: opts.content } });
     } else {
       bubble.textContent = opts.text;

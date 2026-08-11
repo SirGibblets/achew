@@ -1,21 +1,24 @@
 # Finding a Book
 
-Before starting a workflow, you select the audiobook you want to work on from Achew's main book search screen. There are three ways to find a book: searching by title, specifying an item ID directly, or using Chapter Search to filter your entire library using a set of rules.
+Before starting a workflow, you select the audiobook you want to work on from Achew's main book search screen. There are two ways to find a book: **Book Search**, which looks your book up directly, or **Chapter Search**, which filters your entire library using a set of chapter-matching rules.
 
-<br> <hr> <br>
+<hr>
 
-## Search by title
+## Book Search
 
-Type part of the title into the search bar and pick the book from the results. Simple enough.
+Choose a library, type into the search bar, and pick the book from the results. Achew searches several fields at once: **title**, **subtitle**, **series**, **author**, and **narrator**.
 
-![Book search screen](../img/title-search-light.webp#only-light)
-![Book search screen](../img/title-search-dark.webp#only-dark)
+Matching fields are highlighted in the results list.
 
-<br> <hr> <br>
+![Book search screen](../img/book-search-light.webp#only-light)
+![Book search screen](../img/book-search-dark.webp#only-dark)
 
-## Specify an item ID
 
-If you know the book's Audiobookshelf item ID, you can enter it to directly look up the item.
+
+
+### Searching by item ID
+
+If you know the book's Audiobookshelf item ID, paste it into the same search bar to look the item up directly, regardless of which library you have selected.
 
 ![Enter Item ID](../img/paste-item-id-light.webp#only-light)
 ![Enter Item ID](../img/paste-item-id-dark.webp#only-dark)
@@ -24,11 +27,11 @@ The item ID appears in the Audiobookshelf URL for the book, after `/item/`:
 
 ![ABS Item URL](../img/abs-select-item-id.webp)
 
-<br> <hr> <br>
+<hr> <br>
 
 ## Chapter Search
 
-Chapter Search scans your Audiobookshelf libraries to find books whose chapters match rules you define. This makes it easy to discover books that need better chapters, e.g. books with no chapters, books without an intro chapter, books where all titles are just numbers, and so on.
+Where Book Search finds a book you already have in mind, Chapter Search scans your Audiobookshelf libraries to find books whose chapters match rules you define. This makes it easy to discover books that need better chapters, e.g. books with no chapters, books without an intro chapter, books where all titles are just numbers, and so on.
 
 For a step-by-step walkthrough, see [Audit your library with Chapter Search](../examples/audit-library-with-chapter-search.md).
 
