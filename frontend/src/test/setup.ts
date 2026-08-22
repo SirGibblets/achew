@@ -76,6 +76,16 @@ window.scrollBy = () => {};
 Element.prototype.scrollTo = () => {};
 Element.prototype.scrollIntoView = () => {};
 
+// jsdom has no ResizeObserver; @dnd-kit-svelte instantiates one as a module-level
+// side effect, so any component tree that imports it needs this before that import runs.
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver;
+}
+
 if (!window.matchMedia) {
   window.matchMedia = (query: string) =>
     ({
