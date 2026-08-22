@@ -10,6 +10,8 @@ export type Subject =
 
 export type CountOp = 'is' | 'is_not' | 'less_than' | 'not_less_than' | 'greater_than' | 'not_greater_than';
 
+export type DurationOp = 'shorter_than' | 'longer_than';
+
 export type TextOp =
   | 'is'
   | 'is_not'
@@ -36,7 +38,14 @@ export interface TextPredicate {
   ignore_case: boolean;
 }
 
-export type Predicate = CountPredicate | TextPredicate;
+export interface DurationPredicate {
+  kind: 'duration';
+  op: DurationOp;
+  /** Threshold in seconds. */
+  value: number;
+}
+
+export type Predicate = CountPredicate | TextPredicate | DurationPredicate;
 
 export interface Rule {
   id: string;

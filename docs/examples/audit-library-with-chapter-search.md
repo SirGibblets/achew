@@ -38,6 +38,9 @@ Click **Add Rule** in the rule editor.
 
 This matches books where the title of most chapters resembles "Chapter 1", "chapter 004", etc.
 
+!!! tip "Duration rules"
+    Rules can also match how long a chapter is, which helps catch chapters that are structurally wrong rather than just badly named. For example, to find books that are missing introductory chapters (foreword, dedication, prologue, epigraph, etc.), try creating a rule like "`First chapter` `is longer than` `60` seconds". Opening credits are typically brief, so a suspiciously long first chapter could be hiding other content.
+
 You can add more rules or rulesets to cover other patterns. Enable or disable individual rules with the checkbox next to each one. Only enabled rules affect the search.
 
 ## Run the search

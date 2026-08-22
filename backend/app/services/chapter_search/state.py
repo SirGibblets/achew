@@ -349,8 +349,7 @@ class ChapterSearchState:
         ruleset = load_ruleset()
         for i, book in enumerate(self.results):
             if book["id"] == book_id:
-                chapter_titles = [ch["title"] for ch in chapters]
-                matched, matched_ids = evaluate_ruleset(ruleset, book["name"], chapter_titles)
+                matched, matched_ids = evaluate_ruleset(ruleset, book["name"], chapters)
                 if matched:
                     book["chapters"] = chapters
                     book["matched_rule_ids"] = matched_ids

@@ -1,4 +1,15 @@
-import type { CountOp, Predicate, Rule, RuleOrSet, RuleSet, Subject, TextOp, TextPredicate } from '../../types/rules';
+import type {
+  CountOp,
+  DurationOp,
+  DurationPredicate,
+  Predicate,
+  Rule,
+  RuleOrSet,
+  RuleSet,
+  Subject,
+  TextOp,
+  TextPredicate,
+} from '../../types/rules';
 
 export const SUBJECT_LABELS: Record<Subject, string> = {
   chapter_count: 'Chapter count',
@@ -29,6 +40,11 @@ export const COUNT_OP_LABELS: Record<CountOp, string> = {
   not_less_than: 'is not less than',
   greater_than: 'is greater than',
   not_greater_than: 'is not greater than',
+};
+
+export const DURATION_OP_LABELS: Record<DurationOp, string> = {
+  shorter_than: 'is shorter than',
+  longer_than: 'is longer than',
 };
 
 export const TEXT_OP_LABELS: Record<TextOp, [string, string]> = {
@@ -74,25 +90,28 @@ export function getPart2Label(pred: TextPredicate): string {
   }
 }
 
+export function getDurationLabel(pred: DurationPredicate): string {
+  const op = DURATION_OP_LABELS[pred.op] ?? pred.op;
+  const unit = pred.value === 1 ? 'second' : 'seconds';
+  return `${op} ${pred.value} ${unit}`;
+}
+
+function predicateLabel(pred: Predicate): string {
+  switch (pred.kind) {
+    case 'count':
+      return `${COUNT_OP_LABELS[pred.op] ?? pred.op} ${pred.value}`;
+    case 'duration':
+      return getDurationLabel(pred);
+    default:
+      return `${getTextOpLabel(pred.op)} ${getPart2Label(pred)}`;
+  }
+}
+
 export function autoRuleName(rule: Rule): string {
   if (rule.name) return rule.name;
   const subject = SUBJECT_LABELS[rule.subject] ?? rule.subject;
   if (!rule.predicates || rule.predicates.length === 0) return subject;
-
-  const first = rule.predicates[0];
-  if (first && first.kind === 'count') {
-    const parts = rule.predicates
-      .filter((p): p is Predicate & { kind: 'count' } => p.kind === 'count')
-      .map((p) => `${COUNT_OP_LABELS[p.op] ?? p.op} ${p.value}`);
-    return `${subject} ${parts.join(' and ')}`;
-  }
-
-  const parts = rule.predicates
-    .filter((p): p is TextPredicate => p.kind === 'text')
-    .map((p) => `${getTextOpLabel(p.op)} ${getPart2Label(p)}`);
-
-  if (parts.length === 1) return `${subject} ${parts[0]}`;
-  return `${subject} ${parts.join(' and ')}`;
+  return `${subject} ${rule.predicates.map(predicateLabel).join(' and ')}`;
 }
 
 export function autoRuleSetName(rs: RuleSet): string {
@@ -113,7 +132,18 @@ export function createBlankPredicate(subject: Subject): Predicate {
   if (subject === 'chapter_count') {
     return { kind: 'count', op: 'is', value: 0 };
   }
-  return { kind: 'text', op: 'is', part2: 'text', value: '', ignore_case: true };
+  return createBlankTextPredicate('is');
+}
+
+export function createBlankTextPredicate(op: TextOp): TextPredicate {
+  return { kind: 'text', op, part2: 'text', value: '', ignore_case: true };
+}
+
+/* Threshold a duration condition starts at, in seconds. */
+const DEFAULT_DURATION_SECONDS = 60;
+
+export function createBlankDurationPredicate(op: DurationOp): DurationPredicate {
+  return { kind: 'duration', op, value: DEFAULT_DURATION_SECONDS };
 }
 
 export function createBlankRuleSet(): RuleSet {

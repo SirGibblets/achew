@@ -28,7 +28,7 @@ async def run_search(
     Returns a list of matched books sorted alphabetically by name, each with:
       - id, name, author, series, series_sequence, subtitle, has_cover, is_ignored
       - duration, num_audio_files
-      - chapters: list of {title, start_time}
+      - chapters: list of {title, start_time, end_time}
       - matched_rule_ids: list of rule IDs that caused the match
     """
     books = await get_books_for_library(library_id)
@@ -39,8 +39,7 @@ async def run_search(
         if cancel_event.is_set():
             break
 
-        chapter_titles = [ch["title"] for ch in book.get("chapters", [])]
-        matched, matched_ids = evaluate_ruleset(ruleset, book["name"], chapter_titles)
+        matched, matched_ids = evaluate_ruleset(ruleset, book["name"], book.get("chapters", []))
 
         if matched:
             results.append(

@@ -1939,8 +1939,16 @@ class ProcessingPipeline:
                         from .chapter_search.database import upsert_chapters_for_book
                         from .chapter_search.state import get_chapter_search_state
 
+                        # Mirrors the start/end times upload_chapters() just sent to ABS
                         cached_chapters = [
-                            {"title": title, "start_time": timestamp} for timestamp, title in chapter_data
+                            {
+                                "title": title,
+                                "start_time": 0 if i == 0 else timestamp,
+                                "end_time": (
+                                    self.book_duration if i == len(chapter_data) - 1 else chapter_data[i + 1][0]
+                                ),
+                            }
+                            for i, (timestamp, title) in enumerate(chapter_data)
                         ]
                         await upsert_chapters_for_book(self.book_id, cached_chapters)
                         await get_chapter_search_state().update_book_chapters(self.book_id, cached_chapters)
