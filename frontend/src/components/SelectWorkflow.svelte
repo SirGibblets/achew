@@ -10,6 +10,7 @@
   // Icons
   import CircleQuestionMark from '@lucide/svelte/icons/circle-question-mark';
   import ExternalLink from '@lucide/svelte/icons/external-link';
+  import Info from '@lucide/svelte/icons/info';
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 
   import { DetectionMode } from '../types/enums';
@@ -229,6 +230,12 @@
           <p class="description">
             {getOptionInfo(ref.id).description}
           </p>
+          {#if ref.merged_names.length > 0}
+            <p class="merged-note">
+              <Info size="12" />
+              Identical Reference{ref.merged_names.length > 1 ? 's' : ''} not shown: {ref.merged_names.join(', ')}
+            </p>
+          {/if}
         </div>
       </div>
     </label>
@@ -611,6 +618,20 @@
     color: var(--text-secondary);
     margin-bottom: 0;
     line-height: 1.5;
+  }
+
+  .merged-note {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    margin: 0.35rem 0 0;
+    line-height: 1.4;
+  }
+
+  .merged-note :global(svg) {
+    flex-shrink: 0;
   }
 
   .chapter-count {

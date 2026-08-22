@@ -48,6 +48,36 @@ def _silent_progress(step: Step, percent: float, message: str = "", details: Opt
 # Message shown during auto-probe for dramatized
 DRAMATIZED_PROBE_MESSAGE = "Detecting dramatized audio…"
 
+# Two Chapter References assembled for the same book are treated as identical
+# when every chapter's timestamp is within this many seconds of its counterpart.
+_CHAPTER_REF_MERGE_TOLERANCE_SEC = 0.1
+
+
+def _chapters_match(a: List[BasicChapter], b: List[BasicChapter]) -> bool:
+    """True if two chapter lists have the same count, titles, and timestamps (within tolerance)."""
+    if len(a) != len(b):
+        return False
+    return all(
+        ca.title == cb.title and abs(ca.timestamp - cb.timestamp) <= _CHAPTER_REF_MERGE_TOLERANCE_SEC
+        for ca, cb in zip(a, b)
+    )
+
+
+def _dedupe_chapter_refs(refs: List[ChapterReference]) -> List[ChapterReference]:
+    """Collapse References with identical chapter data, keeping the first of each group.
+
+    The dropped References' names are recorded on the retained one's `merged_names`
+    so the UI can note what was hidden (e.g. Embedded Chapters duplicating ABS Chapters).
+    """
+    kept: List[ChapterReference] = []
+    for ref in refs:
+        canonical = next((k for k in kept if _chapters_match(k.chapters, ref.chapters)), None)
+        if canonical is not None:
+            canonical.merged_names.append(ref.name)
+        else:
+            kept.append(ref)
+    return kept
+
 
 class ProcessingError(Exception):
     """Exception raised for processing pipeline errors"""
@@ -801,6 +831,10 @@ class ProcessingPipeline:
 
                 # Scan library files for additional references
                 await self._scan_library_files(abs_service)
+
+                # Collapse References that ended up with identical chapter data
+                # (e.g. Embedded Chapters duplicating Audiobookshelf Chapters).
+                self.chapter_refs = _dedupe_chapter_refs(self.chapter_refs)
 
                 self._notify_progress(Step.VALIDATING, 0, "Validation complete")
 
