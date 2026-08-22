@@ -11,6 +11,7 @@
   // Icons
   import ArrowRight from '@lucide/svelte/icons/arrow-right';
   import CircleQuestionMark from '@lucide/svelte/icons/circle-question-mark';
+  import X from '@lucide/svelte/icons/x';
 
   interface LibraryInfo {
     id: string;
@@ -41,14 +42,17 @@
   // can match well over a hundred books, so the rest are revealed on demand.
   const PAGE_SIZE = 36;
 
-  let inputMode = $state('search');
+  const INPUT_MODE_STORAGE_KEY = 'achew-last-input-mode';
+  const SEARCH_QUERY_STORAGE_KEY = 'achew-last-search-query';
+
+  let inputMode = $state(localStorage.getItem(INPUT_MODE_STORAGE_KEY) === 'chapterSearch' ? 'chapterSearch' : 'search');
   let isChapterSearch = $derived(inputMode === 'chapterSearch');
 
   let searchInput: HTMLInputElement | undefined = $state();
 
   let libraries = $state<LibraryInfo[]>([]);
   let selectedLibrary = $state<LibraryInfo | null>(null);
-  let searchQuery = $state('');
+  let searchQuery = $state(localStorage.getItem(SEARCH_QUERY_STORAGE_KEY) ?? '');
   let searchResults = $state<LibrarySearchHit[]>([]);
   let searchTotal = $state(0);
   let visibleCount = $state(PAGE_SIZE);
@@ -210,6 +214,15 @@
     }, SEARCH_DEBOUNCE_MS);
   });
 
+  $effect(() => {
+    localStorage.setItem(SEARCH_QUERY_STORAGE_KEY, searchQuery);
+  });
+
+  function clearSearchQuery() {
+    searchQuery = '';
+    searchInput?.focus();
+  }
+
   // Handle library change - save preference; the search effect re-runs the query
   function handleLibraryChange() {
     if (selectedLibrary) {
@@ -219,6 +232,7 @@
 
   function switchToSearchMode() {
     inputMode = 'search';
+    localStorage.setItem(INPUT_MODE_STORAGE_KEY, 'search');
     loadLibraries();
     restoreSavedLibrary();
   }
@@ -234,6 +248,7 @@
 
   function switchToChapterSearchMode() {
     inputMode = 'chapterSearch';
+    localStorage.setItem(INPUT_MODE_STORAGE_KEY, 'chapterSearch');
   }
 
   // Load libraries on component mount if starting in search mode
@@ -307,6 +322,18 @@
               autocomplete="off"
               spellcheck="false"
             />
+
+            {#if searchQuery}
+              <button
+                type="button"
+                class="search-clear-icon"
+                aria-label="Clear search"
+                disabled={$session.loading}
+                onclick={clearSearchQuery}
+              >
+                <X size="16" color="var(--text-muted)" />
+              </button>
+            {/if}
 
             {#snippet helpContent()}
               <div class="help-tooltip-content">
@@ -521,6 +548,27 @@
 
   .search-help-icon:hover {
     background-color: var(--bg-secondary);
+  }
+
+  .search-clear-icon {
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s ease;
+  }
+
+  .search-clear-icon:hover:not(:disabled) {
+    background-color: var(--bg-secondary);
+  }
+
+  .search-clear-icon:disabled {
+    cursor: default;
+    opacity: 0.5;
   }
 
   .help-tooltip-content p {
