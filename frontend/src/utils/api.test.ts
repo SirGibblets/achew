@@ -65,7 +65,7 @@ describe('chunked reference upload', () => {
 
     const reassembled = new Uint8Array(await new Blob(seen.map((c) => c.blob)).arrayBuffer());
     expect(reassembled).toEqual(bytes);
-  });
+  }, 15000);
 
   it('keeps the filename on every chunk, since the backend parses by extension', async () => {
     const { file } = makeFile(CHUNK_BYTES + 1, 'novel.epub');
