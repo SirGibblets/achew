@@ -37,6 +37,8 @@ class ChapterReference(ReferenceBase):
     type: ChapterRefType
     chapters: List[BasicChapter]
     duration: float
+    # Names of References with identical chapter data that were collapsed into this one
+    merged_names: List[str] = Field(default_factory=list)
 
 
 class TitleReference(ReferenceBase):

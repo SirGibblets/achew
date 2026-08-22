@@ -15,6 +15,7 @@ export interface ChapterReference extends ReferenceBase {
   type: ChapterRefType;
   chapters: BasicChapter[];
   duration: number;
+  merged_names: string[];
 }
 
 export interface TitleReference extends ReferenceBase {
