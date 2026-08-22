@@ -119,12 +119,21 @@ Each rule requires a **Target** that defines which chapters to inspect:
 
 #### Text conditions
 
-For chapter-title targets, each condition specifies:
+For chapter targets, conditions listed under **Title** in the operation dropdown test the chapter's title. Each one specifies:
 
 - **Operation:**  `matches`, `does not match`, `contains`, `does not contain`, `starts with`, `does not start with`, `ends with`, or `does not end with`
 - **Comparison type:**  `the text` (exact, case-optional), `text similar to` (fuzzy), `a number`, `the book title` (exact or similar), or `the regex`
 - **Value:**  The text or regex pattern to test against (not required for "a number" or book-title comparisons).
 - **Ignore case** checkbox: available for exact text and regex comparisons.
+
+#### Duration conditions
+
+For chapter targets, conditions listed under **Duration** in the operation dropdown test how long the chapter. Each one specifies:
+
+- **Operation:**  `is shorter than` or `is longer than`
+- **Value:**  A length in seconds.
+
+For example, "`First chapter` `is longer than` `60` seconds" matches books whose opening chapter runs over a minute.
 
 #### Count conditions
 
@@ -133,6 +142,8 @@ For the **Chapter count** target, each condition is a numeric comparison: `is`, 
 #### Multiple conditions on one rule
 
 All targets support multiple conditions joined by AND. Click **Add condition** in the rule dialog to add more. For example: "`Any chapter` `starts with` `the text` `"track"` AND `contains` `a number`."
+
+Title and duration conditions can be mixed in the same rule, and every condition has to hold for the same chapter. For example, "`Any chapter` `contains` `the text` `"credits"` AND `is shorter than` `45` seconds" matches only if one single chapter satisfies both.
 
 #### Fuzzy matching
 

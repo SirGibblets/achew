@@ -2,8 +2,15 @@
   import X from '@lucide/svelte/icons/x';
   import Plus from '@lucide/svelte/icons/plus';
   import Trash2 from '@lucide/svelte/icons/trash-2';
-  import { SUBJECT_LABELS, MULTI_PREDICATE_SUBJECTS, autoRuleName, createBlankPredicate } from './ruleUtils';
-  import type { Predicate, Rule, Subject, Part2, CountOp, TextOp } from '../../types/rules';
+  import {
+    SUBJECT_LABELS,
+    MULTI_PREDICATE_SUBJECTS,
+    autoRuleName,
+    createBlankPredicate,
+    createBlankTextPredicate,
+    createBlankDurationPredicate,
+  } from './ruleUtils';
+  import type { Predicate, Rule, Subject, Part2, CountOp, DurationOp, TextOp } from '../../types/rules';
 
   interface Props {
     open?: boolean;
@@ -37,6 +44,8 @@
     regex:
       'Uses Python regular expression syntax. You can test your regex patterns <a href="https://regex101.com" target="_blank" rel="noopener noreferrer">here</a> (set flavor to Python).',
   };
+
+  const DURATION_HELP = "Compares the chapter's length in seconds.";
 
   let subjectHelp = $derived(SUBJECT_HELP[subject] || null);
 
@@ -97,7 +106,7 @@
       id: rule?.id || crypto.randomUUID(),
       name: name.trim(),
       subject,
-      predicates: predicates.map((p) => ({ ...p })) as Predicate[],
+      predicates: predicates.map(normalizePredicate),
       enabled: rule?.enabled !== false,
     });
     close();
@@ -118,7 +127,7 @@
       id: rule?.id || crypto.randomUUID(),
       name: name.trim(),
       subject,
-      predicates: predicates.map((p) => ({ ...p })) as Predicate[],
+      predicates: predicates.map(normalizePredicate),
       enabled: rule?.enabled !== false,
     });
     close();
@@ -146,11 +155,39 @@
     return op === 'is' || op === 'is_not';
   }
 
-  function handleOpChange(pred: Predicate) {
-    if (pred.kind === 'text' && !isMatchesOp(pred.op) && pred.part2 === 'regex') {
-      pred.part2 = 'text';
-      predicates = predicates;
+  // The operation dropdown spans two predicate kinds, so its values are '<kind>:<op>' tokens.
+  function opToken(pred: Predicate): string {
+    return pred.kind === 'duration' ? `duration:${pred.op}` : `text:${pred.op}`;
+  }
+
+  function setPredicateOp(i: number, token: string) {
+    const [kind, op] = token.split(':');
+    const current = predicates[i];
+
+    if (kind === 'duration') {
+      predicates[i] =
+        current.kind === 'duration'
+          ? { ...current, op: op as DurationOp }
+          : createBlankDurationPredicate(op as DurationOp);
+      return;
     }
+
+    const textOp = op as TextOp;
+    if (current.kind !== 'text') {
+      predicates[i] = createBlankTextPredicate(textOp);
+      return;
+    }
+    // Regex is only offered for 'matches' / 'does not match'
+    const part2 = current.part2 === 'regex' && !isMatchesOp(textOp) ? 'text' : current.part2;
+    predicates[i] = { ...current, op: textOp, part2 };
+  }
+
+  // An emptied number input yields undefined, which the backend rejects
+  function normalizePredicate(pred: Predicate): Predicate {
+    if (pred.kind === 'count' || pred.kind === 'duration') {
+      return { ...pred, value: Number.isFinite(pred.value) ? pred.value : 0 };
+    }
+    return { ...pred };
   }
 </script>
 
@@ -209,41 +246,52 @@
                 <option value="not_greater_than">is not greater than</option>
               </select>
               <input type="number" class="pred-value" bind:value={pred.value} min="0" max="9999" placeholder="0" />
-            {:else if pred.kind === 'text'}
-              <!-- Text predicate -->
-              <select bind:value={pred.op} class="pred-op" onchange={() => handleOpChange(pred)}>
-                <option value="is">matches</option>
-                <option value="is_not">does not match</option>
-                <option value="contains">contains</option>
-                <option value="does_not_contain">does not contain</option>
-                <option value="starts_with">starts with</option>
-                <option value="does_not_start_with">does not start with</option>
-                <option value="ends_with">ends with</option>
-                <option value="does_not_end_with">does not end with</option>
+            {:else}
+              <!-- Chapter predicate: title text or duration -->
+              <select value={opToken(pred)} class="pred-op" onchange={(e) => setPredicateOp(i, e.currentTarget.value)}>
+                <optgroup label="Title">
+                  <option value="text:is">matches</option>
+                  <option value="text:is_not">does not match</option>
+                  <option value="text:contains">contains</option>
+                  <option value="text:does_not_contain">does not contain</option>
+                  <option value="text:starts_with">starts with</option>
+                  <option value="text:does_not_start_with">does not start with</option>
+                  <option value="text:ends_with">ends with</option>
+                  <option value="text:does_not_end_with">does not end with</option>
+                </optgroup>
+                <optgroup label="Duration">
+                  <option value="duration:shorter_than">is shorter than</option>
+                  <option value="duration:longer_than">is longer than</option>
+                </optgroup>
               </select>
-              <select bind:value={pred.part2} class="pred-part2">
-                <option value="text">the text</option>
-                <option value="text_similar">text similar to</option>
-                <option value="number">a number</option>
-                <option value="book_title_exact">the book title (exact)</option>
-                <option value="book_title_similar">the book title (similar)</option>
-                {#if isMatchesOp(pred.op)}
-                  <option value="regex">the regex</option>
+              {#if pred.kind === 'text'}
+                <select bind:value={pred.part2} class="pred-part2">
+                  <option value="text">the text</option>
+                  <option value="text_similar">text similar to</option>
+                  <option value="number">a number</option>
+                  <option value="book_title_exact">the book title (exact)</option>
+                  <option value="book_title_similar">the book title (similar)</option>
+                  {#if isMatchesOp(pred.op)}
+                    <option value="regex">the regex</option>
+                  {/if}
+                </select>
+                {#if needsTextValue(pred.part2)}
+                  <input
+                    type="text"
+                    class="pred-value"
+                    bind:value={pred.value}
+                    placeholder={pred.part2 === 'regex' ? 'regex pattern' : 'text value'}
+                  />
                 {/if}
-              </select>
-              {#if needsTextValue(pred.part2)}
-                <input
-                  type="text"
-                  class="pred-value"
-                  bind:value={pred.value}
-                  placeholder={pred.part2 === 'regex' ? 'regex pattern' : 'text value'}
-                />
-              {/if}
-              {#if showIgnoreCase(pred)}
-                <label class="ignore-case">
-                  <input type="checkbox" bind:checked={pred.ignore_case} />
-                  Ignore case
-                </label>
+                {#if showIgnoreCase(pred)}
+                  <label class="ignore-case">
+                    <input type="checkbox" bind:checked={pred.ignore_case} />
+                    Ignore case
+                  </label>
+                {/if}
+              {:else if pred.kind === 'duration'}
+                <input type="number" class="pred-value" bind:value={pred.value} min="0" max="99999" placeholder="60" />
+                <span class="pred-unit">seconds</span>
               {/if}
             {/if}
 
@@ -261,6 +309,8 @@
           {#if pred.kind === 'text' && PART2_HELP[pred.part2]}
             <!-- eslint-disable-next-line svelte/no-at-html-tags -->
             <div class="context-help">{@html PART2_HELP[pred.part2]}</div>
+          {:else if pred.kind === 'duration'}
+            <div class="context-help">{DURATION_HELP}</div>
           {/if}
         {/each}
 
@@ -441,6 +491,12 @@
     color: var(--text-primary);
     font-size: 0.875rem;
     width: auto !important;
+  }
+
+  .pred-unit {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
   }
 
   .ignore-case {

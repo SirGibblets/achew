@@ -4,13 +4,18 @@ from __future__ import annotations
 
 import math
 import re
+from dataclasses import dataclass
+from typing import Optional, Sequence
 
 from rapidfuzz.distance import JaroWinkler
 
 from .models import (
     CountOp,
     CountPredicate,
+    DurationOp,
+    DurationPredicate,
     Part2,
+    Predicate,
     Rule,
     RuleSet,
     Subject,
@@ -21,19 +26,44 @@ from .models import (
 JARO_WINKLER_THRESHOLD = 0.9
 
 
+@dataclass(frozen=True)
+class _Chapter:
+    """A cached chapter reduced to the fields rules can inspect."""
+
+    title: str
+    duration: Optional[float]
+
+
+def _to_chapters(records: list[dict]) -> list[_Chapter]:
+    return [_Chapter(title=r.get("title") or "", duration=_chapter_duration(r)) for r in records]
+
+
+def _chapter_duration(record: dict) -> Optional[float]:
+    """Chapter length in seconds, or None when the cache holds no usable end time."""
+    start = record.get("start_time")
+    end = record.get("end_time")
+    if start is None or end is None:
+        return None
+    duration = end - start
+    return duration if duration > 0 else None
+
+
 def evaluate_ruleset(
     ruleset: RuleSet,
     book_name: str,
-    chapter_titles: list[str],
+    chapters: list[dict],
 ) -> tuple[bool, list[str]]:
     """
     Evaluate a RuleSet against a book's chapters.
+
+    Args:
+        chapters: cached chapter records, each with "title", "start_time" and "end_time"
 
     Returns:
         (matched, list_of_matched_rule_ids)
     """
     matched_ids: list[str] = []
-    match, ids = _eval_ruleset(ruleset, book_name, chapter_titles)
+    match, ids = _eval_ruleset(ruleset, book_name, _to_chapters(chapters))
     matched_ids.extend(ids)
     return match, matched_ids
 
@@ -41,7 +71,7 @@ def evaluate_ruleset(
 def _eval_ruleset(
     ruleset: RuleSet,
     book_name: str,
-    chapter_titles: list[str],
+    chapters: list[_Chapter],
 ) -> tuple[bool, list[str]]:
     if not ruleset.enabled:
         return False, []
@@ -51,9 +81,9 @@ def _eval_ruleset(
 
     for item in ruleset.items:
         if isinstance(item, RuleSet):
-            item_matched, item_ids = _eval_ruleset(item, book_name, chapter_titles)
+            item_matched, item_ids = _eval_ruleset(item, book_name, chapters)
         else:
-            item_matched, item_ids = _eval_rule(item, book_name, chapter_titles)
+            item_matched, item_ids = _eval_rule(item, book_name, chapters)
 
         results.append(item_matched)
         matched_ids.extend(item_ids)
@@ -72,77 +102,94 @@ def _eval_ruleset(
 def _eval_rule(
     rule: Rule,
     book_name: str,
-    chapter_titles: list[str],
+    chapters: list[_Chapter],
 ) -> tuple[bool, list[str]]:
     if not rule.enabled or not rule.predicates:
         return False, []
 
-    matched = _eval_rule_logic(rule, book_name, chapter_titles)
+    matched = _eval_rule_logic(rule, book_name, chapters)
     return matched, [rule.id] if matched else []
 
 
-def _eval_rule_logic(rule: Rule, book_name: str, chapter_titles: list[str]) -> bool:
+def _eval_rule_logic(rule: Rule, book_name: str, chapters: list[_Chapter]) -> bool:
     subject = rule.subject
     predicates = rule.predicates
 
     if subject == Subject.CHAPTER_COUNT:
-        count = len(chapter_titles)
+        count = len(chapters)
         return all(_eval_count(p, count) for p in predicates if isinstance(p, CountPredicate))
 
-    subjects_titles = _resolve_subjects(subject, chapter_titles)
-    if not subjects_titles and subject != Subject.CHAPTER_COUNT:
+    subject_chapters = _resolve_subjects(subject, chapters)
+    if not subject_chapters and subject != Subject.CHAPTER_COUNT:
         # e.g. no middle chapters in a 2-chapter book
         return False
 
-    text_preds = [p for p in predicates if isinstance(p, TextPredicate)]
+    chapter_preds = [p for p in predicates if not isinstance(p, CountPredicate)]
 
     if subject == Subject.EVERY_CHAPTER:
-        return all(_chapter_matches_all_preds(t, text_preds, book_name) for t in subjects_titles)
+        return all(_chapter_matches_all_preds(c, chapter_preds, book_name) for c in subject_chapters)
 
     if subject == Subject.FIRST_CHAPTER:
-        return _chapter_matches_all_preds(subjects_titles[0], text_preds, book_name)
+        return _chapter_matches_all_preds(subject_chapters[0], chapter_preds, book_name)
 
     if subject == Subject.LAST_CHAPTER:
-        return _chapter_matches_all_preds(subjects_titles[-1], text_preds, book_name)
+        return _chapter_matches_all_preds(subject_chapters[-1], chapter_preds, book_name)
 
     if subject == Subject.EVERY_MIDDLE_CHAPTER:
-        return all(_chapter_matches_all_preds(t, text_preds, book_name) for t in subjects_titles)
+        return all(_chapter_matches_all_preds(c, chapter_preds, book_name) for c in subject_chapters)
 
     if subject == Subject.ANY_CHAPTER:
-        return any(_chapter_matches_all_preds(t, text_preds, book_name) for t in subjects_titles)
+        return any(_chapter_matches_all_preds(c, chapter_preds, book_name) for c in subject_chapters)
 
     if subject == Subject.ANY_MIDDLE_CHAPTER:
-        return any(_chapter_matches_all_preds(t, text_preds, book_name) for t in subjects_titles)
+        return any(_chapter_matches_all_preds(c, chapter_preds, book_name) for c in subject_chapters)
 
     if subject == Subject.MOST_EVERY_CHAPTER:
-        required = math.ceil(0.66 * len(subjects_titles))
-        count = sum(1 for t in subjects_titles if _chapter_matches_all_preds(t, text_preds, book_name))
+        required = math.ceil(0.66 * len(subject_chapters))
+        count = sum(1 for c in subject_chapters if _chapter_matches_all_preds(c, chapter_preds, book_name))
         return count >= required
 
     return False
 
 
-def _resolve_subjects(subject: Subject, titles: list[str]) -> list[str]:
-    """Return the list of chapter titles that are the 'subject' for this rule."""
-    if not titles:
+def _resolve_subjects(subject: Subject, chapters: list[_Chapter]) -> list[_Chapter]:
+    """Return the list of chapters that are the 'subject' for this rule."""
+    if not chapters:
         return []
     if subject in {Subject.ANY_CHAPTER, Subject.EVERY_CHAPTER, Subject.MOST_EVERY_CHAPTER}:
-        return titles
+        return chapters
     if subject == Subject.FIRST_CHAPTER:
-        return [titles[0]]
+        return [chapters[0]]
     if subject == Subject.LAST_CHAPTER:
-        return [titles[-1]]
+        return [chapters[-1]]
     if subject in {Subject.EVERY_MIDDLE_CHAPTER, Subject.ANY_MIDDLE_CHAPTER}:
-        return titles[1:-1]  # excludes first and last
+        return chapters[1:-1]  # excludes first and last
     return []
 
 
 def _chapter_matches_all_preds(
-    title: str,
-    predicates: list[TextPredicate],
+    chapter: _Chapter,
+    predicates: Sequence[Predicate],
     book_name: str,
 ) -> bool:
-    return all(_eval_text_pred(pred, title, book_name) for pred in predicates)
+    return all(_eval_chapter_pred(pred, chapter, book_name) for pred in predicates)
+
+
+def _eval_chapter_pred(pred: Predicate, chapter: _Chapter, book_name: str) -> bool:
+    if isinstance(pred, DurationPredicate):
+        return _eval_duration(pred, chapter.duration)
+    if isinstance(pred, TextPredicate):
+        return _eval_text_pred(pred, chapter.title, book_name)
+    return False
+
+
+def _eval_duration(pred: DurationPredicate, duration: Optional[float]) -> bool:
+    """Compare a chapter's length against the threshold. Unknown durations never match."""
+    if duration is None:
+        return False
+    if pred.op == DurationOp.SHORTER_THAN:
+        return duration < pred.value
+    return duration > pred.value
 
 
 def _eval_count(pred: CountPredicate, count: int) -> bool:

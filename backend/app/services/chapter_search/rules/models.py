@@ -45,6 +45,11 @@ class CountOp(str, Enum):
     NOT_GREATER_THAN = "not_greater_than"
 
 
+class DurationOp(str, Enum):
+    SHORTER_THAN = "shorter_than"
+    LONGER_THAN = "longer_than"
+
+
 class TextOp(str, Enum):
     IS = "is"
     IS_NOT = "is_not"
@@ -93,7 +98,15 @@ class TextPredicate(BaseModel):
     ignore_case: bool = True  # only meaningful for TEXT and REGEX part2
 
 
-Predicate = Annotated[Union[CountPredicate, TextPredicate], Field(discriminator="kind")]
+class DurationPredicate(BaseModel):
+    """Predicate comparing a chapter's length, in seconds, against a threshold."""
+
+    kind: Literal["duration"] = "duration"
+    op: DurationOp
+    value: float = Field(ge=0)
+
+
+Predicate = Annotated[Union[CountPredicate, TextPredicate, DurationPredicate], Field(discriminator="kind")]
 
 
 class Rule(BaseModel):
@@ -180,20 +193,34 @@ def _text_pred_label(pred: TextPredicate) -> str:
     return f"{verb} {part2_map.get(pred.part2, '')}"
 
 
+def _duration_pred_label(pred: DurationPredicate) -> str:
+    op_labels = {
+        DurationOp.SHORTER_THAN: "is shorter than",
+        DurationOp.LONGER_THAN: "is longer than",
+    }
+    return f"{op_labels[pred.op]} {_format_seconds(pred.value)}"
+
+
+def _format_seconds(value: float) -> str:
+    """Render a threshold as '60 seconds' / '1 second', dropping a pointless trailing '.0'."""
+    number = int(value) if float(value).is_integer() else value
+    unit = "second" if number == 1 else "seconds"
+    return f"{number} {unit}"
+
+
+def _pred_label(pred: Predicate) -> str:
+    if isinstance(pred, CountPredicate):
+        return _count_pred_label(pred)
+    if isinstance(pred, DurationPredicate):
+        return _duration_pred_label(pred)
+    return _text_pred_label(pred)
+
+
 def _auto_name(rule: Rule) -> str:
     subject = _subject_label(rule.subject)
     if not rule.predicates:
         return subject
-
-    first = rule.predicates[0]
-    if isinstance(first, CountPredicate):
-        parts = [_count_pred_label(p) for p in rule.predicates if isinstance(p, CountPredicate)]
-        return f"{subject} {' and '.join(parts)}"
-
-    parts = [_text_pred_label(p) for p in rule.predicates if isinstance(p, TextPredicate)]
-    if len(parts) == 1:
-        return f"{subject} {parts[0]}"
-    return f"{subject} {' and '.join(parts)}"
+    return f"{subject} {' and '.join(_pred_label(p) for p in rule.predicates)}"
 
 
 # ---------------------------------------------------------------------------

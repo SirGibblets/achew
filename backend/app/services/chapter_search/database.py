@@ -76,6 +76,14 @@ async def init_db() -> None:
         if added_metadata_column:
             await db.execute("DELETE FROM books")
 
+        # Invalidate cached books previously recorded with NULL end_time to avoid
+        # issues with duration-based search rules
+        cursor = await db.execute(
+            "DELETE FROM books WHERE id IN (SELECT DISTINCT book_id FROM chapters WHERE end_time IS NULL)"
+        )
+        if cursor.rowcount > 0:
+            logger.info(f"Invalidated {cursor.rowcount} cached book(s) missing chapter end times; will re-sync")
+
         await db.commit()
     logger.info(f"Chapter search database initialized at {DB_PATH}")
 
