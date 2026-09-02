@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import mimetypes
 import os
 
 # Configure logging before any other imports
@@ -96,6 +97,46 @@ async def lifespan(achew_app: FastAPI):
         logger.error(f"Error cleaning up app state: {e}")
 
     logger.info("Cleanup completed")
+
+
+# Statically map MIME types for served assets; registry values clobber Python's
+# defaults on some Windows installs.
+STATIC_MIME_TYPES = {
+    ".css": "text/css",
+    ".html": "text/html",
+    ".js": "text/javascript",
+    ".json": "application/json",
+    ".mjs": "text/javascript",
+    ".mp3": "audio/mpeg",
+    ".svg": "image/svg+xml",
+    ".wasm": "application/wasm",
+    ".webp": "image/webp",
+}
+
+# Values that mean the OS mapping is broken, not just a valid synonym
+# (application/javascript for .js is fine; text/plain is not).
+BROKEN_MIME_TYPES = {"", "text/plain"}
+
+
+def register_static_mime_types() -> None:
+    """Pin MIME types for served static assets, overriding any bad OS-level mappings."""
+    broken = {}
+
+    for suffix, mime_type in STATIC_MIME_TYPES.items():
+        existing, _ = mimetypes.guess_type(f"file{suffix}")
+        if (existing or "") in BROKEN_MIME_TYPES:
+            broken[suffix] = existing
+        mimetypes.add_type(mime_type, suffix)
+
+    if broken:
+        details = ", ".join(f"{suffix} -> {existing!r}" for suffix, existing in sorted(broken.items()))
+        logger.warning(
+            f"Corrected invalid system MIME type mappings ({details}). "
+            "On Windows these come from HKEY_CLASSES_ROOT and can break asset loading in other tools."
+        )
+
+
+register_static_mime_types()
 
 
 def get_static_directory() -> Path | None:
