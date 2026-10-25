@@ -27,6 +27,7 @@ Achew supports multiple LLM providers:
 | **GitHub Copilot** | Cloud API | Yes, limited [monthly credits](https://docs.github.com/en/copilot/concepts/billing/usage-based-billing-for-individuals){:target="_blank"} |
 | **Ollama** | Local server | Free, unlimited |
 | **LM Studio** | Local server | Free, unlimited |
+| **OpenAI-Compatible** | Self-hosted or cloud endpoint | Varies |
 
 At least one provider must be configured in order to use AI Cleanup. For each provider you want to enable, create and paste the API key (or host URL for local servers) and click **Validate**. See [LLM Providers](../getting-started/setup-llm-providers.md) for full setup details, including [free options](../getting-started/setup-llm-providers.md#free-options) if you don't have any paid accounts.
 

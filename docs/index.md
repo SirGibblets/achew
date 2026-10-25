@@ -66,7 +66,7 @@ Chapter metadata for audiobooks is often missing, wrong, or inconsistent. Achew 
 
 **Transcribe chapter titles.** Use speech recognition to extract text from the start of each chapter. Supports all the multilingual and English-only models of both Whisper and Parakeet, with hardware acceleration on Apple Silicon.
 
-**Clean up with AI.** Normalize capitalization, numbers, punctuation, and wording in one pass, using an LLM service of your choice: OpenAI, Claude, Gemini, OpenRouter, GitHub Copilot, or a local model via Ollama or LM Studio.
+**Clean up with AI.** Normalize capitalization, numbers, punctuation, and wording in one pass, using an LLM service of your choice: OpenAI, Claude, Gemini, OpenRouter, GitHub Copilot, a local model via Ollama or LM Studio, or any OpenAI-compatible endpoint (LiteLLM, vLLM, etc.).
 
 **Save the results.** Save chapters back to Audiobookshelf, or export to a variety of formats.
 
