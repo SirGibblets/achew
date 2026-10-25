@@ -17,9 +17,9 @@ See the relevant provider card below for setup steps.
 
 | Provider | Cost | Field(s) | Notes |
 |---|---|---|---|
-| [OpenAI](#openai) | Paid | API key | Prefer `mini` models for general use, `nano` models for simple tasks, and regular models for complex cleanup. The `pro` models are slow, expensive, and generally overkill. |
-| [Anthropic Claude](#claude-anthropic) | Paid | API key | Prefer `Sonnet` models for general use, `Haiku` models for simple tasks and light cleanup, and `Opus` only for very complex cleanup. |
-| [Google Gemini](#gemini-google) | Free/Paid | API key | Free tier has limited model selection and [rate limits](https://ai.google.dev/gemini-api/docs/rate-limits){:target="_blank"}. <br><br> Prefer `Flash` models for most tasks, `Lite` models for simple cleanup, and `Pro` models for complex cleanup. |
+| [OpenAI](#openai) | Paid | API key | Prefer `Luna` models for most cleanup and `Sol` models for complex cleanup. `Astra` is more expensive and generally overkill. |
+| [Anthropic Claude](#claude-anthropic) | Paid | API key | Prefer `Sonnet` models for general use and `Haiku` models for simple tasks and light cleanup. `Opus` and `Fable` are more expensive and generally overkill. |
+| [Google Gemini](#gemini-google) | Free/Paid | API key | Free tier has limited model selection and [rate limits](https://ai.google.dev/gemini-api/docs/rate-limits){:target="_blank"}. <br><br> Prefer `Flash` models for most tasks, `Flash-Lite` models for simple cleanup, and `Pro` models for complex cleanup. `Argon` is generally overkill. |
 | [OpenRouter](#openrouter) | Free/Paid | API key | Free tier has limited [model selection](https://openrouter.ai/collections/free-models){:target="_blank"}, a limit of [50 requests/day](https://openrouter.ai/pricing){:target="_blank"}, and spotty service. Small models do not work well; try to use 16B+ parameter models. |
 | [GitHub Copilot](#github-copilot) | Free/Paid | Personal access token | Free tier has limited [model selection](https://docs.github.com/en/copilot/reference/ai-models/supported-models#supported-ai-models-per-copilot-plan){:target="_blank"} and a limited monthly allowance of [GitHub AI credits](https://docs.github.com/en/copilot/concepts/billing/usage-based-billing-for-individuals){:target="_blank"}, consumed based on token usage. |
 | [Ollama](#ollama) | Free (self-hosted) | Server URL | Local, private, unlimited. Small models do not work well; try to use 16B+ parameter models. |
@@ -91,7 +91,7 @@ See the relevant provider card below for setup steps.
 
 <a id="ollama"></a>
 ??? example "Ollama"
-    Install [Ollama](https://ollama.com/download){:target="_blank"} on your machine and pull a model (e.g. `ollama pull qwen3.6:27b`). Ollama runs a local server at `http://localhost:11434` by default.
+    Install [Ollama](https://ollama.com/download){:target="_blank"} on your machine and pull a model (e.g. `ollama pull qwen3.8:27b`). Ollama runs a local server at `http://localhost:11434` by default.
 
     In Achew, go to **Settings -> LLM Setup** and enable the Ollama card. Enter the **Server URL** into the input field (with or without `http://`/`https://` — plain host:port defaults to `http://`), then click **Validate**. If Achew is running in Docker and Ollama is on the same host, use `http://host.docker.internal:11434` on macOS/Windows, or your LAN IP on Linux. Once validated, you'll be able to use Ollama as a provider for AI Cleanup in the chapter editor.
 
@@ -131,7 +131,7 @@ In the chapter editor, clicking the **Clean Up Selected** button will open the *
 
 ## Privacy
 
-When you run AI Cleanup, Achew sends a system prompt, the book title/author, your chapter titles, and any additional instructions you've specified to the selected provider. No audio is sent. Local providers (Ollama, LM Studio) keep everything on your machine. See [Privacy and Data](../reference/privacy-and-data.md).
+When you run AI Cleanup, Achew sends a system prompt, the book title/author, your chapter titles, and any additional instructions you've specified to the selected provider. No audio is sent. Locally hosted providers (Ollama, LM Studio, or a self-hosted OpenAI-compatible endpoint) keep everything on your own hardware, unless that endpoint forwards requests to a hosted service. See [Privacy and Data](../reference/privacy-and-data.md).
 
 ## Related
 

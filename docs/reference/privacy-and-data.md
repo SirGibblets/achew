@@ -21,7 +21,7 @@ AI Cleanup sends the following to your selected provider:
 - Any **Additional Instructions** and active **Custom Instructions**.
 - The Achew prompt template.
 
-No audio is sent. If you locally host and use Ollama or LM Studio as your provider, all cleanup data remains local as well.
+No audio is sent. If you use a locally hosted provider (Ollama, LM Studio, or a self-hosted OpenAI-compatible endpoint), all cleanup data remains local as well. If an OpenAI-compatible endpoint is a gateway that forwards requests to a hosted service, the cleanup data is sent wherever that gateway routes it.
 
 
 ## Transcription

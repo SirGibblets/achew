@@ -8,7 +8,7 @@
   <h3><a href="https://achew.readthedocs.io"><strong>Explore the docs »</strong></a></h3>
 
   <p>
-    <a href="https://achew.readthedocs.io/latest/#demo-video">View Demo</a>
+    <a href="https://achew.readthedocs.io/latest/#demo-video">Demo Video</a>
     &middot;
     <a href="https://achew.readthedocs.io/latest/troubleshooting/logs-and-support/#filing-a-bug-report">Report Bug</a>
     &middot;
@@ -36,7 +36,7 @@
 - **Use existing chapters** from Audiobookshelf, Audnexus, embedded chapters, and more.
 - **Realign chapters** when timestamps don't quite line up.
 - **Title Transcription** with on-device models.
-- **AI Cleanup** for consistent title formatting via OpenAI, Claude, Gemini, OpenRouter, Copilot, Ollama, or LM Studio.
+- **AI Cleanup** for consistent title formatting via OpenAI, Claude, Gemini, OpenRouter, Copilot, Ollama, LM Studio, or any OpenAI-compatible endpoint.
 - **Interactive Chapter Editor** with undo/redo, batch operations, and audio previews.
 - **Chapter Search** to audit your library using customizable rules.
 - **Export** to CSV, JSON, or CUE, or save back to Audiobookshelf.
