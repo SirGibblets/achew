@@ -36,6 +36,11 @@ MAX_GROUPS_PER_TYPE = 3
 # past this is still counted in the reported total, just not returned.
 GROUP_EXPANSION_LIMIT = 250
 
+# File downloads can legitimately take longer than aiohttp's default 5-minute
+# total cap (a multi-GB audiobook over a slow or VPN link), so they drop the
+# total limit and only abort when no data arrives for sock_read seconds.
+DOWNLOAD_TIMEOUT = aiohttp.ClientTimeout(total=None, sock_connect=30, sock_read=300)
+
 _library_cache: Dict[str, Dict] = {}
 _library_provider_cache: Dict[str, Optional[str]] = {}
 
@@ -257,7 +262,7 @@ class ABSService:
         try:
             url = f"{self.config.url}/api/items/{book_id}/file/{audio_file_ino}/download"
 
-            async with self.session.get(url, headers=self._get_headers()) as resp:
+            async with self.session.get(url, headers=self._get_headers(), timeout=DOWNLOAD_TIMEOUT) as resp:
                 resp.raise_for_status()
                 total_size = int(resp.headers.get("Content-Length", 0))
                 chunk_size = 1024 * 1024  # 1 MB chunks
@@ -302,21 +307,21 @@ class ABSService:
                 pass
             return False
         except Exception as e:
-            logger.error(f"Error downloading audio file: {e}")
+            logger.error(f"Error downloading audio file: {e!r}")
             return False
 
     async def download_file(self, book_id: str, ino: str, output_path: str) -> bool:
         """Download a library file (non-audio) from ABS"""
         try:
             url = f"{self.config.url}/api/items/{book_id}/file/{ino}/download"
-            async with self.session.get(url, headers=self._get_headers()) as resp:
+            async with self.session.get(url, headers=self._get_headers(), timeout=DOWNLOAD_TIMEOUT) as resp:
                 resp.raise_for_status()
                 with open(output_path, "wb") as f:
                     async for chunk in resp.content.iter_chunked(1024 * 256):
                         f.write(chunk)
                 return True
         except Exception as e:
-            logger.error(f"Error downloading library file (ino={ino}): {e}")
+            logger.error(f"Error downloading library file (ino={ino}): {e!r}")
             return False
 
     async def search_books(
