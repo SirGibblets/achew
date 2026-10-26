@@ -3,14 +3,16 @@
   import { tooltip } from '../actions/tooltip';
   import { session } from '../stores/session';
   import { api } from '../utils/api';
-  import type { LibrarySearchHit } from '../types/book';
+  import type { Book, LibrarySearchHit } from '../types/book';
   import AudiobookCard from './AudiobookCard.svelte';
   import DocLink from './DocLink.svelte';
+  import RecentBookCard from './RecentBookCard.svelte';
   import ChapterSearch from './chapter_search/ChapterSearch.svelte';
 
   // Icons
   import ArrowRight from '@lucide/svelte/icons/arrow-right';
   import CircleQuestionMark from '@lucide/svelte/icons/circle-question-mark';
+  import Clock from '@lucide/svelte/icons/clock';
   import X from '@lucide/svelte/icons/x';
 
   interface LibraryInfo {
@@ -74,6 +76,13 @@
   // The query the current results were produced from, so highlighting cannot
   // drift ahead of the results while a new search is in flight.
   let resultQuery = $state('');
+
+  // Shown in place of results while the query is blank. Kept per library so
+  // clearing the query or switching back to a library doesn't refetch.
+  const recentCache = new Map<string, Book[]>();
+  let recentBooks = $state<Book[]>([]);
+  let startingBookId = $state('');
+  let showRecent = $derived(inputMode === 'search' && searchQuery.trim() === '' && recentBooks.length > 0);
 
   function looksLikeItemId(query: string): boolean {
     return ITEM_ID_PATTERN.test(query);
@@ -145,9 +154,31 @@
     }
   }
 
-  // Handle starting a session from either an item-ID lookup or a search result
+  async function loadRecentlyAdded(libraryId: string) {
+    const cached = recentCache.get(libraryId);
+    if (cached) {
+      recentBooks = cached;
+      return;
+    }
+
+    recentBooks = [];
+    try {
+      const books = await api.audiobookshelf.getRecentlyAdded(libraryId);
+      recentCache.set(libraryId, books);
+      // Drop the response if the library changed while it was in flight.
+      if (selectedLibrary?.id === libraryId) {
+        recentBooks = books;
+      }
+    } catch (error) {
+      // A convenience list, so a failure just leaves it hidden.
+      console.error('Failed to load recently added books:', error);
+    }
+  }
+
+  // Handle starting a session from an item-ID lookup, a search result or a recently added book
   async function startSession(bookId: string) {
     isStarting = true;
+    startingBookId = bookId;
 
     try {
       await session.createSession(bookId);
@@ -157,6 +188,7 @@
       searchError = message || 'Failed to create session';
     } finally {
       isStarting = false;
+      startingBookId = '';
     }
   }
 
@@ -216,6 +248,12 @@
 
   $effect(() => {
     localStorage.setItem(SEARCH_QUERY_STORAGE_KEY, searchQuery);
+  });
+
+  $effect(() => {
+    if (inputMode === 'search' && selectedLibrary) {
+      void loadRecentlyAdded(selectedLibrary.id);
+    }
   });
 
   function clearSearchQuery() {
@@ -479,6 +517,30 @@
         &nbsp;·&nbsp;
         <DocLink path="/getting-started/finding-a-book/" text="Finding a Book" featureName="Finding a Book" />
       </div>
+    {/if}
+
+    <!-- Recently Added, standing in for results while the query is blank -->
+    {#if showRecent}
+      <fieldset class="recent-section" transition:fade={{ duration: 150 }}>
+        <legend class="recent-heading">
+          <Clock size="12" />
+          Recently added
+        </legend>
+        <div class="recent-grid">
+          {#each recentBooks as book (book.id)}
+            <RecentBookCard
+              title={book.media.metadata.title}
+              authors={book.media.metadata.authors?.map((a) => a.name)}
+              duration={book.duration}
+              coverImageUrl={book.media.coverPath}
+              addedAt={book.addedAt}
+              disabled={$session.loading}
+              busy={startingBookId === book.id}
+              onselect={() => startSession(book.id)}
+            />
+          {/each}
+        </div>
+      </fieldset>
     {/if}
   </div>
 </div>
@@ -768,6 +830,43 @@
     flex-shrink: 0;
   }
 
+  /* Recently Added: a tinted panel inside a dashed outline held off its edge, so
+     it reads as a separate shelf rather than a page of search results. A fieldset
+     draws that outline because the browser breaks its border around the legend
+     natively — masking the dashes with a background can't match the dark theme's
+     gradient page background. */
+  .recent-section {
+    box-sizing: border-box;
+    width: calc(100% + 14px);
+    max-width: 622px;
+    min-width: 0;
+    margin: 2.25rem -7px 0;
+    padding: 0 6px 6px;
+    border: 1px dashed color-mix(in srgb, var(--accent-1) 45%, transparent);
+    border-radius: 20px;
+  }
+
+  .recent-heading {
+    margin-left: 0.75rem;
+    padding: 0 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: var(--text-secondary);
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .recent-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+    padding: 0.25rem;
+    border-radius: 14px;
+  }
+
   /* Responsive design */
   @media (max-width: 768px) {
     .session-start {
@@ -804,6 +903,12 @@
 
     .search-input {
       min-width: auto;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .recent-grid {
+      grid-template-columns: minmax(0, 1fr);
     }
   }
 

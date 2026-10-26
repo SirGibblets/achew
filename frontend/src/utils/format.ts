@@ -51,3 +51,20 @@ export function formatNameList(names: string[]): { display: string; full: string
   }
   return { display: `${cleaned[0]} +${cleaned.length - 1} others`, full, count: cleaned.length };
 }
+
+/**
+ * Describe how long ago an epoch-millisecond timestamp was, coarsely: `just now`,
+ * `5m ago`, `3h ago`, `yesterday`, `4d ago`, `2w ago`. Future timestamps (clock
+ * skew between the browser and the server) read as `just now`.
+ */
+export function formatTimeAgo(timestampMs: number, nowMs: number = Date.now()): string {
+  const minutes = Math.floor((nowMs - timestampMs) / 60000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return 'yesterday';
+  if (days < 14) return `${days}d ago`;
+  return `${Math.floor(days / 7)}w ago`;
+}

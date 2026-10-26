@@ -565,6 +565,10 @@ export const audiobookshelf = {
     );
   },
 
+  getRecentlyAdded(libraryId: string) {
+    return apiRequest<Book[]>(`/audiobookshelf/libraries/${libraryId}/recent`);
+  },
+
   getLibraryItems(libraryId: string, refresh = false) {
     const params = new URLSearchParams();
     if (refresh) {
