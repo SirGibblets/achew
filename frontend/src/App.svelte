@@ -35,6 +35,7 @@
   import Pencil from '@lucide/svelte/icons/pencil';
   import Settings from '@lucide/svelte/icons/settings';
   import Sun from '@lucide/svelte/icons/sun';
+  import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
   import Workflow from '@lucide/svelte/icons/workflow';
 
   interface BuildMeta {
@@ -440,10 +441,14 @@
             class="audiobook-info-pill"
             type="button"
             onclick={() => (showBookInfo = true)}
-            use:tooltip={'View book info'}
+            use:tooltip={$session.audioUnsupportedCodec ? 'View book info (unsupported audio codec)' : 'View book info'}
           >
             <span class="audiobook-title">{$session.book.media.metadata.title}</span>
-            <span class="audiobook-info-icon"><Info size="16" /></span>
+            {#if $session.audioUnsupportedCodec}
+              <span class="audiobook-info-icon warning"><TriangleAlert size="16" /></span>
+            {:else}
+              <span class="audiobook-info-icon"><Info size="16" /></span>
+            {/if}
           </button>
           <BookInfoDialog bind:isOpen={showBookInfo} />
         {/if}
@@ -872,6 +877,11 @@
 
   .audiobook-info-pill:hover .audiobook-info-icon {
     color: var(--text-primary);
+  }
+
+  .audiobook-info-icon.warning,
+  .audiobook-info-pill:hover .audiobook-info-icon.warning {
+    color: var(--warning);
   }
 
   .restart-container {
