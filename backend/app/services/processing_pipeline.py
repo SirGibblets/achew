@@ -98,6 +98,9 @@ class ProcessingPipeline:
     def __init__(self, item_id: str, progress_callback: ProgressCallback):
         self.progress_callback: ProgressCallback = progress_callback
         self.item_id = item_id
+        # Unique per pipeline, so per-session client caches (e.g. Add Chapter transcripts) can tell
+        # a fresh pipeline for the same book apart from the one they were built against
+        self.instance_id: str = uuid.uuid4().hex
         self._running_processes = []
         self._process_lock = threading.Lock()
         self._transcription_task = None

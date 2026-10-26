@@ -43,8 +43,18 @@ One tab per [Chapter Reference](../getting-started/chapter-references.md#chapter
 
 Shows all previously-deleted chapters in the time range. Click :lucide-play:{ .icon-token .primary } to preview.
 
+## Transcript Previews
+
+The Detected Cues, Chapter Reference, and Deleted tabs have a **Transcript** column that shows what is spoken at each candidate, so you can tell which one is the real chapter start without previewing each one.
+
+Click :lucide-mic:{ .icon-token } next to an item to transcribe it. Items are transcribed one at a time; clicking a queued item (:lucide-clock:{ .icon-token }) moves it to the front of the queue. Snippets that contain no speech show `<no speech>`, and long transcripts are shortened to fit (hover to see the full text).
+
+Check **Auto** in the column header to automatically transcribe the items currently in view, top to bottom in the current sort order. As you scroll, newly visible items are transcribed and items scrolled out of view are dropped from the queue. Unchecking it stops queueing new items, and achew remembers your choice. If you have never set it, Auto turns itself on once a transcription model is already loaded (for example, after you have transcribed something earlier in the session), so opening the dialog never starts a model download on its own.
+
+Each snippet is as long as your **Transcription Length** [setting](../reference/transcription.md#configuring-transcription) (or shorter, if the next chapter starts sooner). Transcripts are kept for the rest of the session, until you start a new session or change your transcription settings, and items less than half a second apart share a transcript. If you close the dialog while an item is being transcribed, that item still finishes and its transcript is kept; anything still queued is dropped.
+
 ## Add and Transcribe
 
 When a chapter is selected (or a valid timestamp is entered), clicking the **Add chapter at** button will add the new chapter to the editor.
 
-If you instead click the :lucide-mic:{ .icon-token .primary } **transcribe** icon in that button, the new chapter will be added and then immediately transcribed using the current [transcription settings](../reference/transcription.md#configuring-transcription).
+If you instead click the :lucide-mic:{ .icon-token .primary } **transcribe** icon in that button, the new chapter will be added and then immediately transcribed using the current [transcription settings](../reference/transcription.md#configuring-transcription). If the selected item already shows a [transcript preview](#transcript-previews), that transcript is used instead of transcribing again.

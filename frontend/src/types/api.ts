@@ -124,6 +124,7 @@ export interface EditorSettings {
   hide_transcriptions?: boolean;
   tab_navigation?: boolean;
   tidy_options?: Partial<TidyOptions>;
+  add_chapter_auto_asr?: boolean | null;
   [key: string]: unknown;
 }
 
@@ -243,6 +244,13 @@ export interface AddOptionsResponse {
   deleted: BasicChapter[];
   allow_normal_scan: boolean;
   allow_vad_scan: boolean;
+  asr_warm: boolean;
+  transcript_cache_key: string;
+}
+
+export interface TranscribeSnippetResponse {
+  timestamp: number;
+  transcript: string;
 }
 
 export interface SelectedCuesResponse {

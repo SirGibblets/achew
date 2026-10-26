@@ -1,5 +1,6 @@
 import asyncio
 import csv
+import hashlib
 import io
 import json
 import logging
@@ -20,12 +21,14 @@ from app.models.chapter_operation import (
     EditTimestampOperation,
     EditTitleOperation,
     RestoreChapterOperation,
+    TranscribeOperation,
 )
 from app.models.enums import Step
 
 from ...app import get_app_state
-from ...core.config import get_settings
-from ...core.constants import CHAPTER_START_PADDING
+from ...core.config import get_app_config, get_settings
+from ...core.constants import CHAPTER_START_PADDING, MIN_SEGMENT_GAP
+from ...services.asr_service_options import get_asr_config_key
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +129,12 @@ class AddOptionsResponse(BaseModel):
     deleted: List[BasicChapter]
     allow_normal_scan: bool = False
     allow_vad_scan: bool = False
+    # True when an ASR model is already loaded (the user has transcribed something since app start);
+    # the dialog uses it as the Auto ASR default when the user has no saved preference
+    asr_warm: bool = False
+    # Changes whenever cached snippet transcripts stop being valid (new pipeline, or different ASR
+    # model/language/options), so the dialog knows to drop its transcript cache
+    transcript_cache_key: str = ""
 
 
 class NearbyCuesResponse(BaseModel):
@@ -136,10 +145,29 @@ class PartialScanRequest(BaseModel):
     scan_type: Literal["normal", "vad"]
 
 
+class TranscribeSnippetRequest(BaseModel):
+    timestamp: float
+
+
+class TranscribeSnippetResponse(BaseModel):
+    timestamp: float
+    transcript: str
+
+
 class AddChapterRequest(BaseModel):
     timestamp: float
     title: str = ""
     transcribe: bool = False
+    # A transcript the client already has for this timestamp (from /chapters/transcribe-snippet);
+    # applied as if transcribed, instead of queueing ASR again. Takes precedence over `transcribe`.
+    transcript: Optional[str] = None
+
+
+def _transcript_cache_key(pipeline) -> str:
+    """Identify the inputs a snippet transcript depends on besides the timestamp."""
+    asr_options = get_app_config().asr_options.model_dump()
+    raw = json.dumps([pipeline.instance_id, *get_asr_config_key(), asr_options], sort_keys=True)
+    return hashlib.sha1(raw.encode()).hexdigest()[:16]
 
 
 class CustomInstructionRequest(BaseModel):
@@ -950,6 +978,8 @@ async def get_add_options(chapter_id: str):
             deleted=deleted_chapters,
             allow_normal_scan=allow_normal_scan,
             allow_vad_scan=allow_vad_scan,
+            asr_warm=app_state._warm_asr_service is not None,
+            transcript_cache_key=_transcript_cache_key(pipeline),
         )
 
     except HTTPException:
@@ -1065,14 +1095,23 @@ async def add_chapter(request: AddChapterRequest):
             operation = AddChapterOperation(chapter=new_chapter)
             new_chapter_id = new_chapter.id
 
+        if request.transcript is not None:
+            # Same result as the transcription worker, but as one undo step with the add
+            transcribe_op = TranscribeOperation(
+                chapter_id=new_chapter_id,
+                new_transcript=request.transcript,
+                new_title=request.transcript,
+            )
+            operation = BatchChapterOperation(operations=[operation, transcribe_op])
+
         operation.apply(app_state.pipeline)
         app_state.pipeline.add_to_history(operation)
 
         await app_state.broadcast_chapter_update()
         await app_state.broadcast_history_update()
 
-        # Enqueue transcription if requested
-        if request.transcribe:
+        # Enqueue transcription if requested and no transcript was supplied
+        if request.transcribe and request.transcript is None:
             await app_state.enqueue_transcription([new_chapter_id], is_batch=False)
 
         return {"message": "Chapter added successfully"}
@@ -1159,6 +1198,51 @@ async def save_custom_instructions(request: CustomInstructionsListRequest):
         raise
     except Exception as e:
         logger.error(f"Failed to save custom instructions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/chapters/transcribe-snippet", response_model=TranscribeSnippetResponse)
+async def transcribe_snippet(request: TranscribeSnippetRequest):
+    """Transcribe a short snippet at an arbitrary timestamp without creating a chapter.
+
+    Used by the Add Chapter dialog to preview what a candidate cue/reference would be titled.
+    The snippet length follows the user's ASR segment length, clipped to the next chapter.
+    """
+    try:
+        app_state = get_app_state()
+        pipeline = app_state.pipeline
+
+        if not pipeline:
+            raise HTTPException(status_code=404, detail="No active pipeline")
+
+        if pipeline.step != Step.CHAPTER_EDITING:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Can only transcribe snippets during editing. Current step: {pipeline.step.value}",
+            )
+
+        duration_limit = pipeline.book.duration if pipeline.book else request.timestamp + 1e9
+        next_timestamps = [
+            c.timestamp
+            for c in pipeline.chapters
+            if not c.deleted and c.timestamp > request.timestamp + MIN_SEGMENT_GAP
+        ]
+        if next_timestamps:
+            duration_limit = min(duration_limit, min(next_timestamps) - MIN_SEGMENT_GAP)
+        duration = min(get_app_config().asr_options.segment_length, duration_limit - request.timestamp)
+        if duration <= 0:
+            raise HTTPException(status_code=400, detail="No audio available at this timestamp")
+
+        transcript = await app_state.transcribe_snippet(max(0.0, request.timestamp), duration)
+        if transcript is None:
+            raise HTTPException(status_code=500, detail="Failed to extract audio snippet")
+
+        return TranscribeSnippetResponse(timestamp=request.timestamp, transcript=transcript.strip())
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to transcribe snippet: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
