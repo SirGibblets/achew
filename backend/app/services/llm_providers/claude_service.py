@@ -11,14 +11,15 @@ from .base import AIService, ChapterList, IncrementalJSONParser, ModelInfo, Prov
 logger = logging.getLogger(__name__)
 
 
-# Claude models that do not support structured output
-UNSTRUCTURED_OUTPUT_MODELS = {
-    "claude-opus-4",
-    "claude-sonnet-4",
-    "claude-3-7-sonnet",
-    "claude-3-5-haiku",
-    "claude-3-haiku",
-}
+def _is_sonnet(model) -> bool:
+    """Whether a Models API entry belongs to the Sonnet line.
+
+    Prefers the API's `line` field; falls back to the ID for responses that
+    omit it."""
+    line = getattr(model, "line", None)
+    if line is not None:
+        return line == "sonnet"
+    return "sonnet" in model.id.split("-")
 
 
 class ClaudeService(AIService):
@@ -239,14 +240,10 @@ class ClaudeService(AIService):
                     models.append(model_info)
                     logger.debug(f"Claude Added model: {model_info.name} (id: {model_info.id})")
 
-            # Sort by preference (claude-sonnet-4 first, then others)
-            def sort_key(model):
-                if "claude-sonnet-4" in model.id:
-                    return 0
-                else:
-                    return 1
-
-            models.sort(key=sort_key)
+            # Sonnet line first, then others. The API lists newest first, and the
+            # stable sort keeps that order within each group.
+            sonnet_ids = {model.id for model in models_response.data if _is_sonnet(model)}
+            models.sort(key=lambda m: 0 if m.id in sonnet_ids else 1)
 
             return models
 
@@ -303,33 +300,15 @@ class ClaudeService(AIService):
             # Stream the response for progress updates
             content_received = ""
 
-            # Check if model supports structured output
-            # Strip the trailing date (e.g. -20250514) and check against known unstructured base models
-            model_basename = model_id
-            parts = model_id.split("-")
-
-            if len(parts) > 1 and len(parts[-1]) == 8 and parts[-1].isdigit():
-                model_basename = "-".join(parts[:-1])
-
-            supports_structured_output = model_basename not in UNSTRUCTURED_OUTPUT_MODELS
-
-            stream_kwargs = {
-                "system": system_prompt,
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": user_message,
-                    }
-                ],
-                "model": model_id,
-                "max_tokens": 4096,
-            }
-
-            if supports_structured_output:
-                stream_kwargs["betas"] = ["structured-outputs-2025-11-13"]
-                stream_kwargs["output_format"] = ChapterList
-
-            async with processing_client.beta.messages.stream(**stream_kwargs) as stream:
+            # output_format is the SDK helper for output_config.format: it sends
+            # ChapterList's JSON schema, which every served Claude model enforces.
+            async with processing_client.messages.stream(
+                system=system_prompt,
+                messages=[{"role": "user", "content": user_message}],
+                model=model_id,
+                max_tokens=4096,
+                output_format=ChapterList,
+            ) as stream:
                 async for text in stream.text_stream:
                     if text:
                         content_received += text

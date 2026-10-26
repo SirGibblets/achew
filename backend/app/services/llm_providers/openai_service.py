@@ -22,6 +22,9 @@ _EXCLUDED_MODEL_TOKENS = (
     "tts",
     "search",
     "codex",
+    "cyber",
+    "daybreak",
+    "live",
     "instruct",
     "chat-latest",
 )
@@ -62,18 +65,33 @@ def _reasoning_effort_for(model_id: str) -> Optional[str]:
     return "low"
 
 
-_VARIANT_DISPLAY_RANK = {"mini": 0, "": 1, "nano": 2, "pro": 3}
+# Display order within a version family: cheap and good-enough first. A family
+# uses either the size suffixes (gpt-5.4, gpt-5.4-mini, ...) or the named tiers
+# from GPT-5.6 on (luna < terra < sol < astra by price), never both, so the two
+# groups share one rank space.
+_VARIANT_DISPLAY_RANK = {
+    "mini": 0,
+    "": 1,
+    "nano": 2,
+    "pro": 3,
+    "luna": 0,
+    "terra": 1,
+    "sol": 2,
+    "astra": 3,
+}
+
+_VARIANTS = tuple(v for v in _VARIANT_DISPLAY_RANK if v)
 
 
 def _variant_rank(model_id: str) -> int:
-    for variant in ("mini", "nano", "pro"):
+    for variant in _VARIANTS:
         if model_id.endswith("-" + variant):
             return _VARIANT_DISPLAY_RANK[variant]
     return _VARIANT_DISPLAY_RANK[""]
 
 
 def _family_prefix(model_id: str) -> str:
-    for variant in ("mini", "nano", "pro"):
+    for variant in _VARIANTS:
         suffix = "-" + variant
         if model_id.endswith(suffix):
             return model_id[: -len(suffix)]

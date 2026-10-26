@@ -198,20 +198,30 @@ class CopilotService(AIService):
         if not github_token:
             return False, "GitHub token is required"
 
+        not_authorized = "Not authorized for GitHub Copilot. Ensure Copilot is enabled on your account."
         try:
             await self._ensure_runtime()
             client = self._create_client(github_token)
             async with client:
                 try:
                     models = await client.list_models()
-                    if not models:
-                        return False, "Unable to validate. Ensure GitHub Copilot is enabled on your account."
                 except Exception as e:
                     error_str = str(e).lower()
                     if "403" in error_str or "unauthorized" in error_str or "not authenticated" in error_str:
-                        return False, "Not authorized for GitHub Copilot. Ensure Copilot is enabled on your account."
+                        return False, not_authorized
                     raise
-                return True, "Valid"
+
+            # Under PAT auth the runtime lists no models (older runtimes listed
+            # only "auto"), so confirm Copilot access through the models API.
+            if not [m for m in models if m.id != "auto"]:
+                try:
+                    if not await self._fetch_models_from_api(github_token):
+                        return False, "Unable to validate. Ensure GitHub Copilot is enabled on your account."
+                except httpx.HTTPStatusError as e:
+                    if e.response.status_code in (401, 403):
+                        return False, not_authorized
+                    raise
+            return True, "Valid"
         except Exception as e:
             logger.error(f"Copilot validation failed: {type(e).__name__}: {e}", exc_info=True)
             return False, f"Validation failed: {type(e).__name__}: {e}"
@@ -295,8 +305,9 @@ class CopilotService(AIService):
                         )
                     )
 
-                # Under PAT auth the runtime lists nothing but "auto", though
-                # named models still work — fetch the real list from the API.
+                # Under PAT auth the runtime lists no models (older runtimes
+                # listed only "auto"), though named models still work — fetch
+                # the real list from the API.
                 if not model_list:
                     model_list = await self._fetch_models_from_api(github_token)
 
