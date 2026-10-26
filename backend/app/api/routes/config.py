@@ -724,6 +724,7 @@ class EditorSettingsRequest(BaseModel):
     show_formatted_time: Optional[bool] = None
     show_fractional_seconds: Optional[bool] = None
     tidy_options: Optional[Dict[str, Any]] = None
+    add_chapter_auto_asr: Optional[bool] = None
 
 
 @router.get("/config/editor-settings")

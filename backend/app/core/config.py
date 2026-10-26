@@ -73,6 +73,9 @@ class EditorSettings(BaseModel):
     show_formatted_time: bool = True
     show_fractional_seconds: bool = True
     tidy_options: Dict[str, Any] = Field(default_factory=dict)
+    # Auto-transcribe candidates in the Add Chapter dialog; None = no saved preference
+    # (the dialog then enables it only if an ASR model is already loaded)
+    add_chapter_auto_asr: Optional[bool] = None
 
 
 class CustomInstruction(BaseModel):

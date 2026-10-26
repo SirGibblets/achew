@@ -1,7 +1,9 @@
 <script lang="ts">
+  import { SvelteSet } from 'svelte/reactivity';
   import { tooltip } from '../actions/tooltip';
   import { api, handleApiError } from '../utils/api';
   import { audio, currentSegmentId, isPlaying } from '../stores/audio';
+  import { snippetStatus, snippetTranscripts } from '../stores/snippetTranscripts';
   import DocLink from './DocLink.svelte';
 
   import ArrowDown from '@lucide/svelte/icons/arrow-down';
@@ -9,6 +11,9 @@
   import AudioLines from '@lucide/svelte/icons/audio-lines';
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
   import ChevronUp from '@lucide/svelte/icons/chevron-up';
+  import CircleAlert from '@lucide/svelte/icons/circle-alert';
+  import Clock from '@lucide/svelte/icons/clock';
+  import LoaderCircle from '@lucide/svelte/icons/loader-circle';
   import MoveHorizontal from '@lucide/svelte/icons/move-horizontal';
   import Pause from '@lucide/svelte/icons/pause';
   import Play from '@lucide/svelte/icons/play';
@@ -19,6 +24,7 @@
   interface EditorSettings {
     show_formatted_time?: boolean;
     show_fractional_seconds?: boolean;
+    add_chapter_auto_asr?: boolean | null;
   }
 
   interface AddChapterConfirmDetail {
@@ -31,6 +37,7 @@
     chapterId?: string | null;
     defaultTab?: string | null;
     editorSettings?: EditorSettings;
+    onsettingschange?: (updates: Partial<EditorSettings>) => void;
     onconfirm?: (detail: AddChapterConfirmDetail) => void;
     oncancel?: () => void;
   }
@@ -40,6 +47,7 @@
     chapterId = null,
     defaultTab = null,
     editorSettings = { show_formatted_time: true, show_fractional_seconds: true },
+    onsettingschange,
     onconfirm,
     oncancel,
   }: Props = $props();
@@ -58,6 +66,14 @@
   let originalTimestamp = $state<number | null>(null);
   let sortBy = $state('gap');
   let sortOrder = $state('desc');
+
+  // Set when the user toggles Auto ASR so the checkbox responds before the saved setting round-trips
+  let autoAsrOverride = $state<boolean | null>(null);
+  // Without a saved preference, auto-transcribe only if an ASR model is already loaded, so opening
+  // the dialog never triggers a surprise model load/download
+  let autoAsrEnabled = $derived(
+    autoAsrOverride ?? editorSettings.add_chapter_auto_asr ?? addOptions?.asr_warm ?? false,
+  );
 
   function formatTimestamp(seconds: number) {
     if (!editorSettings.show_formatted_time) {
@@ -132,6 +148,95 @@
     });
     return cues;
   }
+
+  // Timestamps of the active tab's rows, top to bottom as displayed
+  function getListedTimestamps(): number[] {
+    if (!addOptions) return [];
+    if (activeTab === 'detected_cue') return getSortedDetectedCues().map((c) => c.timestamp);
+    if (activeTab === 'deleted') return addOptions.deleted.map((c) => c.timestamp);
+    return addOptions.chapter_refs?.[activeTab]?.map((c) => c.timestamp) ?? [];
+  }
+
+  function toggleAutoAsr(enabled: boolean) {
+    autoAsrOverride = enabled;
+    onsettingschange?.({ add_chapter_auto_asr: enabled });
+  }
+
+  // A row counts as in view once at least this much of it is visible inside the scrolling list
+  const IN_VIEW_RATIO = 0.5;
+  // Wait for scrolling to settle before re-queueing, so rows that only flick past aren't transcribed
+  const AUTO_QUEUE_SETTLE_MS = 150;
+
+  // Timestamps of rows currently in view. The observer is rooted at the viewport, which still
+  // accounts for clipping by the dialog's scroll containers.
+  const rowsInView = new SvelteSet<number>();
+  let rowObserver: IntersectionObserver | null = null;
+  const observedRows = new Map<Element, number>();
+
+  function getRowObserver() {
+    rowObserver ??= new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const timestamp = observedRows.get(entry.target);
+          if (timestamp === undefined) continue;
+          if (entry.isIntersecting && entry.intersectionRatio >= IN_VIEW_RATIO) {
+            rowsInView.add(timestamp);
+          } else {
+            rowsInView.delete(timestamp);
+          }
+        }
+      },
+      { threshold: [0, IN_VIEW_RATIO, 1] },
+    );
+    return rowObserver;
+  }
+
+  function trackInView(node: HTMLElement, timestamp: number) {
+    // No observer (e.g. jsdom): treat every row as in view
+    if (typeof IntersectionObserver === 'undefined') {
+      rowsInView.add(timestamp);
+      return {
+        update(next: number) {
+          rowsInView.delete(timestamp);
+          timestamp = next;
+          rowsInView.add(timestamp);
+        },
+        destroy() {
+          rowsInView.delete(timestamp);
+        },
+      };
+    }
+
+    const observer = getRowObserver();
+    observedRows.set(node, timestamp);
+    observer.observe(node);
+    return {
+      // Unkeyed {#each} rows are reused when the sort changes; re-observe for a fresh reading
+      update(next: number) {
+        rowsInView.delete(timestamp);
+        timestamp = next;
+        observedRows.set(node, timestamp);
+        observer.unobserve(node);
+        observer.observe(node);
+      },
+      destroy() {
+        observer.unobserve(node);
+        observedRows.delete(node);
+        rowsInView.delete(timestamp);
+      },
+    };
+  }
+
+  // Keep the auto-queue in step with the rows in view; disabling (or closing) stops queueing
+  $effect(() => {
+    const timestamps = isOpen && autoAsrEnabled ? getListedTimestamps().filter((t) => rowsInView.has(t)) : [];
+    if (timestamps.length === 0) {
+      snippetTranscripts.setAutoQueue([]);
+      return;
+    }
+    const timer = setTimeout(() => snippetTranscripts.setAutoQueue(timestamps), AUTO_QUEUE_SETTLE_MS);
+    return () => clearTimeout(timer);
+  });
 
   function selectTab(tab: string) {
     activeTab = tab;
@@ -230,7 +335,10 @@
     error = null;
 
     try {
-      addOptions = await api.chapters.getAddOptions(chapterId);
+      const options = await api.chapters.getAddOptions(chapterId);
+      // Before assigning addOptions, so the auto-queue effect never sees a stale cache
+      snippetTranscripts.setCacheKey(options.transcript_cache_key);
+      addOptions = options;
 
       if (addOptions) {
         if (editorSettings.show_formatted_time && editorSettings.show_fractional_seconds === false) {
@@ -300,6 +408,8 @@
       activeTab = 'timestamp';
       error = null;
       scanning = false;
+      autoAsrOverride = null;
+      snippetTranscripts.clearQueue();
     }
   });
 
@@ -321,6 +431,9 @@
 
     const timestamp = selectedTimestamp;
     const title = selectedTitle;
+    // Reuse a transcript already shown in the table rather than transcribing the same audio again
+    const status = transcribe ? snippetStatus($snippetTranscripts, timestamp) : null;
+    const transcript = status?.state === 'done' ? status.transcript : undefined;
 
     onconfirm?.({ timestamp, title });
     close();
@@ -330,6 +443,7 @@
         timestamp,
         title,
         transcribe,
+        ...(transcript !== undefined && { transcript }),
       });
     } catch (err) {
       console.error('Failed to add chapter:', err);
@@ -353,6 +467,8 @@
     activeTab = 'timestamp';
     error = null;
     scanning = false;
+    autoAsrOverride = null;
+    snippetTranscripts.clearQueue();
     isOpen = false;
   }
 
@@ -368,6 +484,62 @@
     }
   }
 </script>
+
+{#snippet transcriptHeader()}
+  <th class="transcript-header">
+    <div class="transcript-header-content">
+      Transcript
+      <label
+        class="auto-asr-toggle"
+        use:tooltip={'Automatically transcribe the items in view, top to bottom, using your ASR "Transcription Length"'}
+      >
+        <input type="checkbox" checked={autoAsrEnabled} onchange={(e) => toggleAutoAsr(e.currentTarget.checked)} />
+        <span>Auto<span class="auto-asr-label-long">&nbsp;Transcribe</span></span>
+      </label>
+    </div>
+  </th>
+{/snippet}
+
+{#snippet transcriptCell(timestamp: number)}
+  {@const status = snippetStatus($snippetTranscripts, timestamp)}
+  <td class="transcript-cell">
+    {#if status.state === 'done'}
+      {#if status.transcript}
+        <span class="transcript-text" title={status.transcript}>{status.transcript}</span>
+      {:else}
+        <span class="no-speech">&lt;no speech&gt;</span>
+      {/if}
+    {:else if status.state === 'active'}
+      <span class="transcript-status" aria-label="Transcribing">
+        <LoaderCircle size="16" class="transcribing-icon" />
+      </span>
+    {:else}
+      <button
+        class="transcribe-button"
+        class:queued={status.state === 'queued'}
+        class:failed={status.state === 'error'}
+        onclick={(e) => {
+          e.stopPropagation();
+          snippetTranscripts.enqueue(timestamp);
+        }}
+        aria-label={status.state === 'queued' ? 'Transcribe next' : 'Transcribe'}
+        use:tooltip={status.state === 'queued'
+          ? 'Queued (click to transcribe next)'
+          : status.state === 'error'
+            ? `${status.error} (click to retry)`
+            : 'Transcribe'}
+      >
+        {#if status.state === 'queued'}
+          <Clock size="16" />
+        {:else if status.state === 'error'}
+          <CircleAlert size="16" />
+        {:else}
+          <Mic size="16" />
+        {/if}
+      </button>
+    {/if}
+  </td>
+{/snippet}
 
 {#if isOpen}
   <div
@@ -508,7 +680,7 @@
                                   {/if}
                                 {/if}
                               </th>
-                              <th class="sortable" onclick={() => toggleSort('timestamp')}>
+                              <th style="width: 1px" class="sortable" onclick={() => toggleSort('timestamp')}>
                                 Timestamp
                                 {#if sortBy === 'timestamp'}
                                   {#if sortOrder === 'asc'}
@@ -518,12 +690,14 @@
                                   {/if}
                                 {/if}
                               </th>
+                              {@render transcriptHeader()}
                             </tr>
                           </thead>
                           <tbody>
                             {#each getSortedDetectedCues() as cue}
                               <tr
                                 class="cue-row clickable-row"
+                                use:trackInView={cue.timestamp}
                                 class:selected={selectedTimestamp === cue.timestamp}
                                 onclick={(e) => handleRowClick(e, cue.timestamp)}
                                 onkeydown={(e) => handleRowKeydown(e, cue.timestamp)}
@@ -561,6 +735,7 @@
                                 </td>
                                 <td class="gap-cell">{cue.gap.toFixed(1)}s</td>
                                 <td class="timestamp-cell">{formatTimestamp(cue.timestamp)}</td>
+                                {@render transcriptCell(cue.timestamp)}
                               </tr>
                             {/each}
                           </tbody>
@@ -615,12 +790,14 @@
                         <th style="width: 1px"></th>
                         <th style="width: 1px">Timestamp</th>
                         <th>Title</th>
+                        {@render transcriptHeader()}
                       </tr>
                     </thead>
                     <tbody>
                       {#each addOptions.deleted as deletedChapter}
                         <tr
                           class="cue-row clickable-row"
+                          use:trackInView={deletedChapter.timestamp}
                           class:selected={selectedTimestamp === deletedChapter.timestamp}
                           onclick={(e) => handleRowClick(e, deletedChapter.timestamp, deletedChapter.title)}
                           onkeydown={(e) => handleRowKeydown(e, deletedChapter.timestamp, deletedChapter.title)}
@@ -658,6 +835,7 @@
                           </td>
                           <td class="timestamp-cell">{formatTimestamp(deletedChapter.timestamp)}</td>
                           <td class="title-cell">{deletedChapter.title}</td>
+                          {@render transcriptCell(deletedChapter.timestamp)}
                         </tr>
                       {/each}
                     </tbody>
@@ -672,12 +850,14 @@
                         <th style="width: 1px"></th>
                         <th style="width: 1px">Timestamp</th>
                         <th>Title</th>
+                        {@render transcriptHeader()}
                       </tr>
                     </thead>
                     <tbody>
                       {#each addOptions.chapter_refs[activeTab] as chapter}
                         <tr
                           class="cue-row clickable-row"
+                          use:trackInView={chapter.timestamp}
                           class:selected={selectedTimestamp === chapter.timestamp}
                           onclick={(e) => handleRowClick(e, chapter.timestamp, chapter.title)}
                           onkeydown={(e) => handleRowKeydown(e, chapter.timestamp, chapter.title)}
@@ -713,6 +893,7 @@
                           </td>
                           <td class="timestamp-cell">{formatTimestamp(chapter.timestamp)}</td>
                           <td class="title-cell">{chapter.title}</td>
+                          {@render transcriptCell(chapter.timestamp)}
                         </tr>
                       {/each}
                     </tbody>
@@ -772,7 +953,7 @@
 
   .modal-dialog {
     width: 90%;
-    max-width: 600px;
+    max-width: 720px;
     max-height: 90vh;
     background: var(--bg-card);
     border-radius: 0.5rem;
@@ -1131,6 +1312,94 @@
     white-space: nowrap;
   }
 
+  /* Mirrors .radio-cell's 1.5rem left inset so the table sits symmetrically in the dialog */
+  .transcript-header,
+  .transcript-cell {
+    padding-right: 1.5rem !important;
+  }
+
+  .transcript-header-content {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    white-space: nowrap;
+  }
+
+  .auto-asr-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-weight: 400;
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    user-select: none;
+    accent-color: var(--primary);
+  }
+
+  /* max-width: 0 lets the cell take the leftover width and ellipsize instead of widening the table */
+  .transcript-cell {
+    width: 50%;
+    max-width: 0;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.875rem;
+  }
+
+  .transcript-text {
+    color: var(--text-primary);
+  }
+
+  .no-speech {
+    color: var(--text-secondary);
+    font-style: italic;
+  }
+
+  .transcript-status {
+    display: inline-flex;
+    width: 2rem;
+    height: 2rem;
+    align-items: center;
+    justify-content: center;
+    color: var(--primary);
+    vertical-align: middle;
+  }
+
+  .transcript-status :global(.transcribing-icon) {
+    animation: spin 1s linear infinite;
+  }
+
+  .transcribe-button {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    border: none;
+    background-color: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    vertical-align: middle;
+    transition: all 0.2s ease;
+  }
+
+  .transcribe-button:hover {
+    color: white;
+    background-color: var(--primary-hover);
+  }
+
+  .transcribe-button.queued {
+    opacity: 0.6;
+  }
+
+  .transcribe-button.failed {
+    color: var(--danger);
+  }
+
   .alert {
     padding: 0.75rem;
     border-radius: 0.25rem;
@@ -1199,6 +1468,11 @@
   }
 
   @media (max-width: 768px) {
+    /* Narrow dialogs leave the Transcript column little room; fall back to just "Auto" */
+    .auto-asr-label-long {
+      display: none;
+    }
+
     .modal-dialog {
       width: 95%;
       max-height: 95vh;

@@ -1327,6 +1327,7 @@
   chapterId={addChapterDialogChapterId}
   defaultTab={addChapterDialogDefaultTab}
   {editorSettings}
+  onsettingschange={saveEditorSettings}
   onconfirm={handleAddChapterConfirm}
   oncancel={handleAddChapterCancel}
 />

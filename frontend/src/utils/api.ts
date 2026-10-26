@@ -33,6 +33,7 @@ import type {
   ShiftOperation,
   ReferencesResponse,
   StatusResponse,
+  TranscribeSnippetResponse,
   TitleReference,
   ValidateItemResponse,
 } from '../types';
@@ -350,6 +351,13 @@ export const chapters = {
 
   getAddOptions(chapterId: string) {
     return apiRequest<AddOptionsResponse>(`/chapters/add-options/${chapterId}`);
+  },
+
+  transcribeSnippet(timestamp: number) {
+    return apiRequest<TranscribeSnippetResponse>('/chapters/transcribe-snippet', {
+      method: 'POST',
+      body: { timestamp },
+    });
   },
 
   getNearbyCues(chapterId: string) {

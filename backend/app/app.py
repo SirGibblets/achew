@@ -2,7 +2,7 @@ import asyncio
 import logging
 import random
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Callable, List, Optional
 
 from app.core.constants import MAX_JITTER_CROP, MIN_SEGMENT_GAP
 from app.services.asr_service_options import get_asr_buffer
@@ -39,6 +39,9 @@ class AppState:
             # Warm ASR service cache
             self._warm_asr_service = None
             self._warm_asr_config_key: tuple = ()
+            # Serializes model creation + inference between the chapter transcription worker and
+            # on-demand snippet transcriptions (Add Chapter dialog), which share the warm service
+            self._asr_lock: asyncio.Lock = asyncio.Lock()
 
             # Progress dispatcher
             self.progress_dispatcher = ProgressDispatcher(
@@ -326,14 +329,73 @@ class AppState:
         self._transcription_cancel_event.clear()
         logger.info("Chapter-level transcriptions cancelled")
 
-    async def _transcription_worker(self):
-        """Process transcription requests from the queue"""
+    async def transcribe_snippet(
+        self,
+        start_time: float,
+        duration: float,
+        label: str = "snippet",
+        should_abort: Callable[[], bool] = lambda: False,
+    ) -> Optional[str]:
+        """Extract, optionally trim, and transcribe a short snippet of the book's audio.
+
+        Returns the transcript ("" when the snippet held no speech), or None if extraction
+        failed or `should_abort` fired between steps.
+        """
         import os
+        import shutil
         import tempfile
 
         from .core.config import get_app_config
-        from .models.chapter_operation import BatchChapterOperation, TranscribeOperation
         from .services.audio_service import AudioProcessingService, pick_segment_extension
+
+        if not self.pipeline:
+            return None
+        pipeline = self.pipeline
+
+        config = get_app_config()
+        temp_dir = tempfile.mkdtemp(dir=pipeline.temp_dir)
+        try:
+            ext = pipeline.segment_extension or pick_segment_extension(pipeline.audio_file_path)
+            output_path = os.path.join(temp_dir, f"segment_{label}.{ext}")
+            audio_service = AudioProcessingService(
+                lambda *args, **kwargs: None,
+                running_processes=pipeline._running_processes,
+                asr_buffer=get_asr_buffer(),
+                process_lock=pipeline._process_lock,
+            )
+
+            loop = asyncio.get_event_loop()
+            segment_path = await loop.run_in_executor(
+                None,
+                audio_service.extract_single_segment,
+                pipeline.audio_file_path,
+                start_time,
+                duration,
+                output_path,
+            )
+            if should_abort() or not segment_path:
+                return None
+
+            # Trim the segment; if trim produced nothing or is disabled, use the raw segment
+            if config.asr_options.trim:
+                trimmed_path = os.path.join(temp_dir, f"trimmed_{label}.{ext}")
+                await loop.run_in_executor(None, audio_service._trim_segment_to_path, segment_path, trimmed_path)
+                if os.path.exists(trimmed_path):
+                    segment_path = trimmed_path
+
+            if should_abort():
+                return None
+
+            async with self._asr_lock:
+                asr_service = await self.get_or_create_asr_service(progress_callback=lambda *args, **kwargs: None)
+                return await loop.run_in_executor(None, asr_service.transcribe_file, segment_path)
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    async def _transcription_worker(self):
+        """Process transcription requests from the queue"""
+        from .core.config import get_app_config
+        from .models.chapter_operation import BatchChapterOperation, TranscribeOperation
 
         logger.info("Transcription worker started")
 
@@ -383,65 +445,23 @@ class AppState:
                             logger.warning(f"No audio available for chapter {chapter_id}")
                             continue
 
-                        # Extract audio segment to temp file
-                        temp_dir = tempfile.mkdtemp(dir=self.pipeline.temp_dir)
-                        ext = self.pipeline.segment_extension or pick_segment_extension(self.pipeline.audio_file_path)
-
-                        output_path = os.path.join(temp_dir, f"segment_{chapter_id}.{ext}")
-                        audio_service = AudioProcessingService(
-                            lambda *args, **kwargs: None,
-                            running_processes=self.pipeline._running_processes,
-                            asr_buffer=get_asr_buffer(),
-                            process_lock=self.pipeline._process_lock,
-                        )
-
                         # Introduce time jitter to avoid overly deterministic results when re-transcribing
                         jitter = random.uniform(0.0, MAX_JITTER_CROP)
                         start_time = max(jitter, chapter.timestamp - jitter)
 
-                        loop = asyncio.get_event_loop()
-                        segment_path = await loop.run_in_executor(
-                            None,
-                            audio_service.extract_single_segment,
-                            self.pipeline.audio_file_path,
+                        transcription = await self.transcribe_snippet(
                             start_time,
                             duration,
-                            output_path,
+                            label=chapter_id,
+                            should_abort=self._transcription_cancel_event.is_set,
                         )
 
                         if self._transcription_cancel_event.is_set():
                             break
 
-                        if not segment_path:
+                        if transcription is None:
                             logger.warning(f"Failed to extract audio for chapter {chapter_id}")
                             continue
-
-                        # Trim the segment
-                        trimmed_path = os.path.join(temp_dir, f"trimmed_{chapter_id}.{ext}")
-                        if config.asr_options.trim:
-                            await loop.run_in_executor(
-                                None,
-                                audio_service._trim_segment_to_path,
-                                segment_path,
-                                trimmed_path,
-                            )
-                            if os.path.exists(trimmed_path):
-                                segment_path = trimmed_path
-                        # If trim produced nothing or trim disabled, use the raw segment
-
-                        if self._transcription_cancel_event.is_set():
-                            break
-
-                        # Transcribe
-                        asr_service = await self.get_or_create_asr_service(
-                            progress_callback=lambda *args, **kwargs: None
-                        )
-                        transcription = await asyncio.get_event_loop().run_in_executor(
-                            None, asr_service.transcribe_file, segment_path
-                        )
-
-                        if self._transcription_cancel_event.is_set():
-                            break
 
                         # Create and apply operation
                         op = TranscribeOperation(
@@ -457,14 +477,6 @@ class AppState:
                             self.pipeline.add_to_history(op)
                             await self.broadcast_chapter_update()
                             await self.broadcast_history_update()
-
-                        # Clean up temp files
-                        try:
-                            import shutil
-
-                            shutil.rmtree(temp_dir, ignore_errors=True)
-                        except Exception:
-                            pass
 
                     except Exception as e:
                         logger.error(f"Failed to transcribe chapter {chapter_id}: {e}", exc_info=True)
