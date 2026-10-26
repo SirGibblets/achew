@@ -31,6 +31,23 @@ class ProviderOption(BaseModel):
     label: str
 
 
+def _trim_for_card(book: Book) -> None:
+    """Point the cover at our proxy and trim the payload to what a book card renders."""
+    media = book.media
+
+    if media and media.coverPath:
+        media.coverPath = f"/api/audiobookshelf/covers/{book.id}"
+
+    # Pin the derived values first: duration otherwise falls back to summing
+    # audioFiles, and the file count to their length.
+    media.duration = book.duration
+    if media.numAudioFiles is None:
+        media.numAudioFiles = len(media.audioFiles) or 1
+    media.audioFiles = []
+    media.chapters = []
+    media.metadata.description = None
+
+
 @router.get("/providers", response_model=List[ProviderOption])
 async def get_providers():
     """Return the list of supported Audible providers."""
@@ -105,21 +122,7 @@ async def search_library(
             search_results = await abs_service.search_library(library_id, q.strip(), limit)
 
             for hit in search_results.hits:
-                media = hit.book.media
-
-                # Add proper cover URLs to the results
-                if media and media.coverPath:
-                    media.coverPath = f"/api/audiobookshelf/covers/{hit.book.id}"
-
-                # Trim the payload to what a result card actually renders.
-                # Pin the derived values first: duration otherwise falls back to
-                # summing audioFiles, and the file count to their length.
-                media.duration = hit.book.duration
-                if media.numAudioFiles is None:
-                    media.numAudioFiles = len(media.audioFiles) or 1
-                media.audioFiles = []
-                media.chapters = []
-                media.metadata.description = None
+                _trim_for_card(hit.book)
 
             return search_results
 
@@ -130,6 +133,32 @@ async def search_library(
         raise HTTPException(
             status_code=500,
             detail="Failed to search library",
+        )
+
+
+@router.get("/libraries/{library_id}/recent", response_model=List[Book])
+async def get_recently_added(library_id: str):
+    """Get the audiobooks most recently added to a library, newest first"""
+    if not is_abs_configured():
+        raise HTTPException(
+            status_code=400,
+            detail="API configuration required. Please configure ABS API key first.",
+        )
+
+    try:
+        async with ABSService() as abs_service:
+            books = await abs_service.get_recently_added(library_id)
+            for book in books:
+                _trim_for_card(book)
+            return books
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to fetch recently added items from {library_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to fetch recently added items",
         )
 
 

@@ -36,6 +36,16 @@ MAX_GROUPS_PER_TYPE = 3
 # past this is still counted in the reported total, just not returned.
 GROUP_EXPANSION_LIMIT = 250
 
+# How far back, and how many books, the "Recently Added" list shown on an empty
+# Book Search reaches.
+RECENTLY_ADDED_WINDOW_DAYS = 30
+RECENTLY_ADDED_LIMIT = 10
+
+# How many of the newest items to request per recently-added book wanted. Ebook-only
+# items carry no audio and are dropped after the fetch, so asking for exactly the
+# limit could come back short in a library that mixes the two.
+RECENTLY_ADDED_OVERFETCH = 3
+
 # File downloads can legitimately take longer than aiohttp's default 5-minute
 # total cap (a multi-GB audiobook over a slow or VPN link), so they drop the
 # total limit and only abort when no data arrives for sock_read seconds.
@@ -551,6 +561,34 @@ class ABSService:
                 hits.append(LibrarySearchHit(book=book, match_type=match_type, match_text=label))
 
         return LibrarySearchResponse(hits=hits[:limit], total=len(hits) + unfetched)
+
+    async def get_recently_added(
+        self,
+        library_id: str,
+        window_days: int = RECENTLY_ADDED_WINDOW_DAYS,
+        limit: int = RECENTLY_ADDED_LIMIT,
+    ) -> List[Book]:
+        """Fetch the newest audiobooks added to a library within the past `window_days`.
+
+        Asks ABS for the newest items directly rather than going through the
+        whole-library cache, which would serve a stale list the moment a book lands.
+        """
+        try:
+            url = f"{self.config.url}/api/libraries/{library_id}/items"
+            params = {"sort": "addedAt", "desc": 1, "limit": limit * RECENTLY_ADDED_OVERFETCH}
+            async with self.session.get(url, headers=self._get_headers(), params=params) as resp:
+                if resp.status != 200:
+                    logger.error(f"Failed to fetch recently added items for library {library_id}: {resp.status}")
+                    return []
+                data = await resp.json()
+        except Exception as e:
+            logger.error(f"Error fetching recently added items for library {library_id}: {e}")
+            return []
+
+        # ABS timestamps are epoch milliseconds.
+        cutoff = (time.time() - window_days * 86400) * 1000
+        books = [book for book in _parse_books(data.get("results", [])) if book.addedAt >= cutoff]
+        return books[:limit]
 
     async def get_library_items(self, library_id: str, use_cache: bool = True) -> List[Book]:
         """Fetch all items from the specified library"""
