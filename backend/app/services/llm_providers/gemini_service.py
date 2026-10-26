@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from typing import List, Optional
 
 from google import genai
@@ -11,6 +12,38 @@ from app.models.abs import Book
 from .base import AIService, ChapterList, IncrementalJSONParser, ModelInfo, ProviderInfo
 
 logger = logging.getLogger(__name__)
+
+# Display order by tier: cheap and good-enough first, the expensive flagships
+# last. Matched against the end of the model name, longest suffix first, so
+# "flash-lite" is not mistaken for "flash".
+_TIER_ORDER = (("flash-lite", 1), ("flash", 0), ("pro", 2), ("argon", 3))
+
+_VERSION_RE = re.compile(r"gemini-(\d+(?:\.\d+)?)")
+
+
+def _base_name(model_name: str) -> str:
+    """Model name without a trailing "-preview" or "-latest" suffix."""
+    for suffix in ("-preview", "-latest"):
+        if model_name.endswith(suffix):
+            return model_name[: -len(suffix)]
+    return model_name
+
+
+def _tier_rank(model_name: str) -> Optional[int]:
+    """Display rank of the model's tier, or None for unsupported tiers."""
+    base_name = _base_name(model_name)
+    for suffix, rank in _TIER_ORDER:
+        if base_name.endswith(suffix):
+            return rank
+    return None
+
+
+def _model_sort_key(model_name: str) -> tuple[int, float]:
+    """Tier first, then version descending (newest first) within a tier."""
+    tier = _tier_rank(model_name)
+    match = _VERSION_RE.search(model_name)
+    version = -float(match.group(1)) if match else 0
+    return (len(_TIER_ORDER) if tier is None else tier, version)
 
 
 class GeminiService(AIService):
@@ -230,17 +263,10 @@ class GeminiService(AIService):
                 if not model.name:
                     continue
 
-                # Strip any trailing "-preview" or "-latest" suffix for the base name check
-                base_name = model.name
-                for suffix in ("-preview", "-latest"):
-                    if base_name.endswith(suffix):
-                        base_name = base_name[: -len(suffix)]
-                        break
-
                 if (
                     "gemini" in model.name
                     and "generateContent" in getattr(model, "supported_actions", [])
-                    and base_name.endswith(("pro", "flash", "lite"))
+                    and _tier_rank(model.name) is not None
                 ):
                     display_name = model.display_name or model.name.replace("models/", "").replace("-", " ").title()
                     model_info = ModelInfo(
@@ -252,18 +278,7 @@ class GeminiService(AIService):
                     models.append(model_info)
                     logger.debug(f"Gemini Added model: {model_info.name} (id: {model_info.id})")
 
-            # Sort by version number descending (newest first)
-            import re
-
-            tier_order = {"flash": 0, "lite": 1, "pro": 2}
-
-            def sort_key(model):
-                match = re.search(r"gemini-(\d+(?:\.\d+)?)", model.id)
-                version = -float(match.group(1)) if match else 0
-                tier = next((v for k, v in tier_order.items() if k in model.id), 3)
-                return (version, tier)
-
-            models.sort(key=sort_key)
+            models.sort(key=lambda m: _model_sort_key(m.id))
 
             return models
 

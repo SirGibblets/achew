@@ -20,16 +20,16 @@ dependencies = [
     "httpx>=0.25.2",
     "pydantic>=2.5.0",
     "pydantic-settings>=2.1.0",
-    "openai>=2.32.0",
+    "openai>=3.37.0",
     "numpy>=1.24.4",
     "onnx-asr[cpu,hub]>=0.11.0",
     "mlx-whisper>=0.4.3; sys_platform == 'darwin'",
     "parakeet-mlx>=0.5.1; sys_platform == 'darwin'",
-    "ollama>=0.5.1",
-    "google-genai[aiohttp]>=1.65.0",
-    "anthropic>=0.76.0",
+    "ollama>=0.6.3",
+    "google-genai[aiohttp]>=2.33.0",
+    "anthropic>=2.3.0",
     "pywhispercpp>=1.3.3",
-    "github-copilot-sdk>=1.0.5,<2",
+    "github-copilot-sdk>=1.0.26,<2",
     "python-multipart==0.0.24",
     "langcodes[data]>=3.4.0",
 ]
@@ -58,6 +58,8 @@ dev = [
     "pytest>=8.3.0",
     "pytest-asyncio>=0.24.0",
     "pytest-httpx>=0.32.0",
+    # The SDKs' HTTP client; tests mock SDK traffic with its MockTransport.
+    "httpx2>=2.16.0",
 
     # Code formatting, linting, type checking
     "ruff>=0.15.12,<0.16",
