@@ -5,6 +5,7 @@
   import { api } from '../utils/api';
   import { formatBytes, formatDuration, formatNameList } from '../utils/format';
   import CopyButton from './CopyButton.svelte';
+  import UnsupportedCodecWarning from './UnsupportedCodecWarning.svelte';
 
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
   import ExternalLink from '@lucide/svelte/icons/external-link';
@@ -158,6 +159,10 @@
 
         <div class="modal-body">
           {#if book && metadata}
+            {#if $session.audioUnsupportedCodec}
+              <UnsupportedCodecWarning />
+            {/if}
+
             <div class="book-top">
               {#if coverImageUrl}
                 <img class="cover" src={coverImageUrl} alt="" />
