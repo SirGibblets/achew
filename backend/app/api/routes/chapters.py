@@ -21,6 +21,7 @@ from app.models.chapter_operation import (
     EditTimestampOperation,
     EditTitleOperation,
     RestoreChapterOperation,
+    SetPinnedOperation,
     TranscribeOperation,
 )
 from app.models.enums import Step
@@ -47,6 +48,18 @@ class UpdateTitleRequest(BaseModel):
 
 class UpdateTimestampRequest(BaseModel):
     timestamp: float
+
+
+class SetPinnedRequest(BaseModel):
+    pinned: bool
+
+
+class RealignResponse(BaseModel):
+    message: str
+    # Unpinned chapters that were re-aligned
+    realigned: int
+    # Of those, how many ended up at a different timestamp
+    moved: int
 
 
 class SetSelectionRequest(BaseModel):
@@ -262,6 +275,70 @@ async def update_chapter_timestamp(chapter_id: str, request: UpdateTimestampRequ
         raise
     except Exception as e:
         logger.error(f"Failed to update chapter timestamp: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/chapters/{chapter_id}/pinned")
+async def set_chapter_pinned(chapter_id: str, request: SetPinnedRequest):
+    """Pin or unpin a realigned chapter (pinned chapters are ground truth when realignment is re-run)"""
+    try:
+        app_state = get_app_state()
+
+        if not app_state.pipeline:
+            raise HTTPException(status_code=404, detail="Pipeline not found")
+
+        operation = SetPinnedOperation(chapter_id=chapter_id, pinned=request.pinned)
+        try:
+            operation.apply(app_state.pipeline)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        app_state.pipeline.add_to_history(operation)
+
+        await app_state.broadcast_chapter_update()
+        await app_state.broadcast_history_update()
+
+        return {"message": "Chapter pinned" if request.pinned else "Chapter unpinned"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to set chapter pinned state: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/chapters/realign", response_model=RealignResponse)
+async def rerun_realignment():
+    """Re-run realignment around the pinned and user-added chapters, as one undoable step"""
+    try:
+        app_state = get_app_state()
+
+        if not app_state.pipeline:
+            raise HTTPException(status_code=404, detail="Pipeline not found")
+
+        if app_state.pipeline.step != Step.CHAPTER_EDITING:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Can only re-run realignment during editing. Current step: {app_state.pipeline.step.value}",
+            )
+
+        try:
+            result = app_state.pipeline.rerun_realignment()
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+        await app_state.broadcast_chapter_update()
+        await app_state.broadcast_history_update()
+
+        return RealignResponse(
+            message=f"Realigned {result.realigned} chapters, {result.moved} moved",
+            realigned=result.realigned,
+            moved=result.moved,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to re-run realignment: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -825,6 +902,9 @@ async def export_realignment_fixture():
             "ground_truth": ground_truth,
             "padding": snapshot["padding"],
         }
+        for key in ("titles", "transcripts"):
+            if key in snapshot:
+                fixture[key] = snapshot[key]
 
         json_content = json.dumps(fixture, indent=2, ensure_ascii=False)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

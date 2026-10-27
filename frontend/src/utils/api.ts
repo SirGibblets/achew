@@ -29,6 +29,7 @@ import type {
   NearbyCuesResponse,
   PipelineState,
   PreassignedTitle,
+  RealignResponse,
   SelectedCuesResponse,
   ShiftOperation,
   ReferencesResponse,
@@ -189,10 +190,16 @@ export const session = {
     return apiRequest<StatusResponse>('/status');
   },
 
-  startWorkflow(workflow: string, refId?: string, detectionMode?: DetectionMode, thorough?: boolean) {
+  startWorkflow(
+    workflow: string,
+    refId?: string,
+    detectionMode?: DetectionMode,
+    thorough?: boolean,
+    transcribe?: boolean,
+  ) {
     return apiRequest<unknown>('/pipeline/start-workflow', {
       method: 'POST',
-      body: { workflow, ref_id: refId, detection_mode: detectionMode, thorough },
+      body: { workflow, ref_id: refId, detection_mode: detectionMode, thorough, transcribe },
     });
   },
 
@@ -243,6 +250,11 @@ export const session = {
     return apiRequest<CancelResponse>('/pipeline/cancel', { method: 'POST' });
   },
 
+  // Stop a realignment's transcription verification early, keeping what has been confirmed
+  finishVerification() {
+    return apiRequest<unknown>('/pipeline/finish-verification', { method: 'POST' });
+  },
+
   configureASR(action: string, preassignedTitles: PreassignedTitle[] = []) {
     return apiRequest<unknown>('/pipeline/configure-asr', {
       method: 'POST',
@@ -272,6 +284,17 @@ export const chapters = {
       method: 'PUT',
       body: { timestamp },
     });
+  },
+
+  setPinned(chapterId: string, pinned: boolean) {
+    return apiRequest<unknown>(`/chapters/${chapterId}/pinned`, {
+      method: 'PUT',
+      body: { pinned },
+    });
+  },
+
+  realign() {
+    return apiRequest<RealignResponse>('/chapters/realign', { method: 'POST', body: {} });
   },
 
   setSelection({ chapterIds = null, selected }: { chapterIds?: string[] | null; selected: boolean }) {

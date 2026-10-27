@@ -380,6 +380,30 @@ def make_missing_chapter(rng: random.Random, n: int = 20) -> Fixture:
     return fx
 
 
+def make_parallel_decoy_chain(rng: random.Random, n: int = 20) -> Tuple[Fixture, int, int]:
+    """Models the real parallel-decoy confident-wrong (a known aligner limit): across a run of
+    chapters every true boundary sits 5 s before its reference timestamp, and a LOUDER pause sits
+    exactly on the reference timestamp — a decoy chain with the same spacing as the true one, so
+    duration-shape can't tell them apart and gap + position both favour the decoys. Used by the
+    pin tests rather than the baseline gate. Returns the fixture and the run's first/last index."""
+    ref = _make_ref_chapters(rng, n)
+    first = rng.randint(4, 8)
+    last = first + rng.randint(5, 8)
+    true = [r - 5.0 if first <= i <= last else r for i, r in enumerate(ref)]
+    dur = ref[-1] + rng.uniform(600, 1800)
+    fx = build_fixture(
+        "parallel_decoy_chain",
+        rng=rng,
+        ref_times=ref,
+        true_times=true,
+        ref_duration=dur,
+        book_duration=dur,
+        boundary_gap=(1.6, 3.0),
+        forced_decoys=[(ref[i], 4.5) for i in range(first, last + 1)],
+    )
+    return fx, first, last
+
+
 # Builders keyed by name, for parametrized tests.
 SYNTHETIC_BUILDERS = {
     "clean": make_clean,

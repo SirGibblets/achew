@@ -23,8 +23,9 @@ Watch for the :lucide-triangle-alert:{ .icon-token .warning } warning icon. It m
 ## Spot-check and fix outliers
 
 1. Use the :lucide-play:{ .icon-token .primary } play button on the first and last few chapters to confirm they begin where you expect.
-2. For any chapter that sounds off, click its timestamp to edit directly. <kbd>Space</kbd> toggles playback, <kbd>↑</kbd> / <kbd>↓</kbd> nudge by ±1 second.
-3. For a more thorough fix, use the :lucide-plus:{ .icon-token } **Add** button to open the [Add Chapter Dialog](../editor/add-chapter-dialog.md), switch to the **Detected Cues** tab, and run **Detect Cues** on the surrounding region to surface alternative candidate timestamps.
+2. For any chapter that sounds off, click its timestamp to edit directly. <kbd>Space</kbd> toggles playback, <kbd>↑</kbd> / <kbd>↓</kbd> nudge by ±1 second, and <kbd>Shift</kbd> + <kbd>↑</kbd> / <kbd>↓</kbd> to nudge to the nearest cue.
+3. Editing a timestamp automatically pins that chapter (:lucide-lock:{ .icon-token .primary }). If its neighbors were off by a similar amount, click the :lucide-refresh-cw:{ .icon-token } refresh button next to the **Offset** header to [re-run realignment](../workflows/realign-chapters.md#pinning-chapters-and-re-running-realignment) around your fixes rather than correcting each chapter by hand.
+4. For a more thorough fix, use the :lucide-plus:{ .icon-token } **Add** button to open the [Add Chapter Dialog](../editor/add-chapter-dialog.md), switch to the **Detected Cues** tab, and run **Detect Cues** on the surrounding region to surface alternative candidate timestamps.
 
 ## Submit or export
 

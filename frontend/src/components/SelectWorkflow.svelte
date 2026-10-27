@@ -32,6 +32,7 @@
   let activeTab = $state('smart_detect');
   let detectionMode = $state<DetectionMode>(DetectionMode.AUTO);
   let isThorough = $state(false);
+  let enhanceWithTranscription = $state(false);
 
   const DETECTION_OPTIONS: { value: DetectionMode; label: string }[] = [
     { value: DetectionMode.STANDARD, label: 'Standard' },
@@ -105,7 +106,13 @@
           loading = false;
           return;
         }
-        await api.session.startWorkflow('realign', selectedRealignRef, detectionMode, isThorough);
+        await api.session.startWorkflow(
+          'realign',
+          selectedRealignRef,
+          detectionMode,
+          isThorough,
+          enhanceWithTranscription,
+        );
       } else if (activeTab === 'regenerate') {
         if (!selectedRegenerateRef) {
           alert('Please select a Chapter Reference.');
@@ -416,19 +423,37 @@
           {/if}
 
           <div class="workflow-footer">
-            <div class="option-toggle">
-              <label>
-                <input type="checkbox" bind:checked={isThorough} disabled={loading} />
-                <span>Find large shifts</span>
-              </label>
-              <div
-                class="help-icon"
-                use:tooltip={{
-                  text: 'Scans more of the audio during realignment. Slower, but may help catch chapters that have shifted unusually far from the reference timestamps. Rarely needed.',
-                  delay: 0,
-                }}
-              >
-                <CircleQuestionMark size="14" />
+            <div class="option-toggles">
+              <div class="option-toggle">
+                <label>
+                  <input type="checkbox" bind:checked={isThorough} disabled={loading} />
+                  <span>Find large shifts</span>
+                </label>
+                <div
+                  class="help-icon"
+                  use:tooltip={{
+                    text: 'Scans more of the audio during realignment. Slower, but may help catch chapters that have shifted unusually far from the reference timestamps. Rarely needed.',
+                    delay: 0,
+                  }}
+                >
+                  <CircleQuestionMark size="14" />
+                </div>
+              </div>
+              <div class="option-toggle">
+                <label>
+                  <input type="checkbox" bind:checked={enhanceWithTranscription} disabled={loading} />
+                  <span>Enhance with transcription</span>
+                </label>
+                <div
+                  class="help-icon"
+                  use:tooltip={{
+                    text: 'Significantly improves accuracy by matching titles to the transcripts of likely chapter cues, at the cost of speed. Only works if the existing titles closely resemble the narrated text at the start of each chapter.',
+                    delay: 0,
+                    maxWidth: 340,
+                  }}
+                >
+                  <CircleQuestionMark size="14" />
+                </div>
               </div>
             </div>
 
@@ -803,6 +828,13 @@
 
   .tab-description b {
     color: var(--text-primary);
+  }
+
+  .option-toggles {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.75rem 1.5rem;
   }
 
   .option-toggle {

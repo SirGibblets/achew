@@ -190,6 +190,7 @@ class AppState:
             "new_step": new_step.value,
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "restart_options": self.pipeline.get_restart_options() if self.pipeline else [],
+            "realign_pending": bool(self.pipeline and self.pipeline.pending_realign),
         }
 
         # Add any extra data provided by the caller
@@ -246,6 +247,12 @@ class AppState:
         self._warm_asr_service = await service.__aenter__()
         self._warm_asr_config_key = current_key
         return self._warm_asr_service
+
+    async def warm_asr_service(self, progress_callback: ProgressCallback) -> None:
+        """Load (or reuse) the ASR model up front so its download/load progress is reported,
+        rather than hidden inside the first snippet transcription."""
+        async with self._asr_lock:
+            await self.get_or_create_asr_service(progress_callback=progress_callback)
 
     async def release_asr_service(self):
         """Release the cached ASR service"""
@@ -335,11 +342,12 @@ class AppState:
         duration: float,
         label: str = "snippet",
         should_abort: Callable[[], bool] = lambda: False,
+        trim: Optional[bool] = None,
     ) -> Optional[str]:
         """Extract, optionally trim, and transcribe a short snippet of the book's audio.
 
         Returns the transcript ("" when the snippet held no speech), or None if extraction
-        failed or `should_abort` fired between steps.
+        failed or `should_abort` fired between steps. ``trim`` overrides the ASR options' setting.
         """
         import os
         import shutil
@@ -377,7 +385,7 @@ class AppState:
                 return None
 
             # Trim the segment; if trim produced nothing or is disabled, use the raw segment
-            if config.asr_options.trim:
+            if config.asr_options.trim if trim is None else trim:
                 trimmed_path = os.path.join(temp_dir, f"trimmed_{label}.{ext}")
                 await loop.run_in_executor(None, audio_service._trim_segment_to_path, segment_path, trimmed_path)
                 if os.path.exists(trimmed_path):

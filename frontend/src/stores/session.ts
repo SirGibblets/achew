@@ -37,6 +37,8 @@ export interface SessionState {
   audioUnsupportedCodec: boolean;
   audioInfo: AudioInfo | null;
   restartOptions: string[];
+  /** The ASR settings step is confirming settings for a transcription-enhanced realignment */
+  realignPending: boolean;
   transcriptionStatuses: Record<string, string>;
   version: string | null;
   buildMeta: string | null;
@@ -70,6 +72,7 @@ function initialState(): SessionState {
     audioUnsupportedCodec: false,
     audioInfo: null,
     restartOptions: [],
+    realignPending: false,
     transcriptionStatuses: {},
     version: null,
     buildMeta: null,
@@ -112,6 +115,7 @@ function createSessionStore() {
           ...(data.chapter_refs && { chapterRefs: data.chapter_refs }),
           ...(data.title_refs && { titleRefs: data.title_refs }),
           ...(data.restart_options && { restartOptions: data.restart_options }),
+          realignPending: data.realign_pending ?? false,
           ...(data.audio_unsupported_codec !== undefined && {
             audioUnsupportedCodec: data.audio_unsupported_codec,
           }),
@@ -253,6 +257,7 @@ function createSessionStore() {
           titleRefs: data.title_refs ?? [],
           book: data.book ?? null,
           restartOptions: data.restart_options ?? [],
+          realignPending: data.realign_pending ?? false,
           audioUnsupportedCodec: data.audio_unsupported_codec ?? false,
           audioInfo: data.audio_info ?? null,
           loading: false,

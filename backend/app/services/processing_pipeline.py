@@ -19,7 +19,12 @@ from ..core.constants import BOOK_END_IGNORE_WINDOW, REALIGN_PADDING_DEFAULT, RE
 from ..core.system_info import get_worker_count
 from ..models.ai_options import AIOptions
 from ..models.chapter import ChapterData, RealignmentData
-from ..models.chapter_operation import AICleanupOperation, BatchChapterOperation, ChapterOperation
+from ..models.chapter_operation import (
+    AICleanupOperation,
+    ApplyRealignmentOperation,
+    BatchChapterOperation,
+    ChapterOperation,
+)
 from ..models.enums import DetectionMode, RestartStep, Step
 from ..models.progress import ProgressCallback
 from ..models.references import (
@@ -34,6 +39,7 @@ from .asr_service_options import get_asr_buffer
 from .audio_service import AudioProcessingService, pick_segment_extension, probe_audio_info, probe_segment_extension
 from .chapter_aligner import ChapterAligner
 from .dramatized_detection import SAMPLE_WINDOW_SECONDS, DramatizedAnalysis, classify_dramatized
+from .realign_verification import RealignVerifier, VerificationOutcome, VerificationProgress, VerifiedChapter
 from .reference_parsers import csv_parser, cue_parser, epub_parser, json_parser, mobi_parser, text_parser
 from .vad_detection_service import VadDetectionService
 
@@ -85,6 +91,34 @@ class ProcessingError(Exception):
     pass
 
 
+class PendingRealign(BaseModel):
+    """A realignment waiting on the user to confirm transcription settings (CONFIGURE_ASR)."""
+
+    ref_id: str
+    detection_mode: DetectionMode
+    thorough: bool
+
+
+# Snippets transcribed at once during realignment verification. Extraction runs in parallel; the
+# transcription itself is serialized on the warm ASR model.
+VERIFY_PARALLEL_SNIPPETS = 4
+
+
+class RealignmentContext(BaseModel):
+    """What the realignment workflow aligned against, kept so the editor can re-run alignment."""
+
+    ref_duration: float
+    # Extraction padding the cues were detected with (post-expansion if a retry ran)
+    padding: float
+
+
+class RealignRerunResult(BaseModel):
+    # Unpinned chapters that were re-aligned
+    realigned: int
+    # Of those, how many ended up at a different timestamp
+    moved: int
+
+
 class PipelineProgress(BaseModel):
     step: Step
     percent: float = 0.0
@@ -116,6 +150,15 @@ class ProcessingPipeline:
         # captured when settings.DEBUG is set so the ChapterReview page can export a
         # test fixture. See _capture_realignment_snapshot / the debug export endpoint.
         self._realignment_snapshot: Optional[Dict[str, Any]] = None
+
+        # Set once the realignment workflow commits chapters; enables re-running from the editor
+        self._realignment_context: Optional[RealignmentContext] = None
+
+        # Transcription-enhanced realignment: the realignment waiting on CONFIGURE_ASR, the
+        # running verification, and the user's request to stop verifying and keep what's done
+        self.pending_realign: Optional[PendingRealign] = None
+        self._verification_task: Optional[asyncio.Task] = None
+        self._finish_verification = False
 
         # Cached result of the dramatized auto-detection probe
         self._dramatized_analysis: Optional[DramatizedAnalysis] = None
@@ -197,6 +240,9 @@ class ProcessingPipeline:
         if self._partial_scan_task:
             self._partial_scan_task.cancel()
             self._partial_scan_task = None
+        if self._verification_task:
+            self._verification_task.cancel()
+            self._verification_task = None
         self.cleanup_all_files()
 
     def cleanup_all_files(self):
@@ -336,6 +382,18 @@ class ProcessingPipeline:
             self._partial_scan_task = None
         self.cleanup_partial_scan_files()
 
+        # Cancel a running realignment verification
+        if self._verification_task:
+            logger.info("Cancelling realignment verification…")
+            self._verification_task.cancel()
+            try:
+                await self._verification_task
+            except asyncio.CancelledError:
+                logger.info("Realignment verification cancelled successfully")
+            except Exception as e:
+                logger.warning(f"Error waiting for realignment verification cancellation: {e}")
+            self._verification_task = None
+
         # Cancel any running ffmpeg processes. Snapshot under lock so workers
         # can't add a process between our iteration and the clear().
         with self._process_lock:
@@ -403,6 +461,8 @@ class ProcessingPipeline:
             self.vad_scanned_regions = []
             self.initial_chapter_selection_available = False
             self.is_realignment = False
+            self._realignment_context = None
+            self.pending_realign = None
             self.is_quick_edit = False
             self.step = Step.SELECT_WORKFLOW
 
@@ -938,6 +998,7 @@ class ProcessingPipeline:
         ref_id: Optional[str] = None,
         detection_mode: DetectionMode = DetectionMode.STANDARD,
         thorough: Optional[bool] = False,
+        transcribe: Optional[bool] = False,
     ):
         """Run the user-selected workflow."""
 
@@ -971,11 +1032,16 @@ class ProcessingPipeline:
             elif workflow == "realign":
                 if not ref_id:
                     raise ValueError("Reference ID is required for realign workflow")
-                dramatized = await self._resolve_dramatized(detection_mode)
-                if dramatized is None:
-                    # Auto probe was cancelled
+                if transcribe:
+                    if not self._get_chapter_ref(ref_id):
+                        raise ValueError(f"Invalid realignment Reference: {ref_id}")
+                    # Confirm transcription settings first; configure-asr resumes the realignment
+                    self.pending_realign = PendingRealign(
+                        ref_id=ref_id, detection_mode=detection_mode, thorough=thorough or False
+                    )
+                    self._notify_progress(Step.CONFIGURE_ASR, 0, "Confirm transcription settings")
                     return
-                await self.realign_chapters(ref_id, dramatized=dramatized, thorough=thorough or False)
+                await self._run_realign(ref_id, detection_mode, thorough or False, transcribe=False)
 
             else:
                 raise ValueError(f"Invalid workflow: {workflow}")
@@ -984,6 +1050,27 @@ class ProcessingPipeline:
             logger.error(f"Failed to start workflow: {e}", exc_info=True)
             await self.restart_at_step(RestartStep.SELECT_WORKFLOW, f"Processing failed: {str(e)}")
             raise
+
+    async def resume_pending_realign(self, transcribe: bool) -> None:
+        """Start the realignment that was waiting on transcription settings, with transcription
+        verification (or without, when the user chose to skip it)."""
+        pending = self.pending_realign
+        if pending is None:
+            raise ValueError("No realignment is waiting on transcription settings")
+        self.pending_realign = None
+        try:
+            await self._run_realign(pending.ref_id, pending.detection_mode, pending.thorough, transcribe=transcribe)
+        except Exception as e:
+            logger.error(f"Failed to start realignment: {e}", exc_info=True)
+            await self.restart_at_step(RestartStep.SELECT_WORKFLOW, f"Processing failed: {str(e)}")
+            raise
+
+    async def _run_realign(self, ref_id: str, detection_mode: DetectionMode, thorough: bool, transcribe: bool):
+        dramatized = await self._resolve_dramatized(detection_mode)
+        if dramatized is None:
+            # Auto probe was cancelled
+            return
+        await self.realign_chapters(ref_id, dramatized=dramatized, thorough=thorough, transcribe=transcribe)
 
     async def _quick_edit(self, ref_id: str):
         """Skip all processing and load chapters directly into the editor"""
@@ -1006,7 +1093,9 @@ class ProcessingPipeline:
         logger.info(f"Quick edit: loaded {len(self.chapters)} chapters from {chapter_ref.short_name}")
         self._notify_progress(Step.CHAPTER_EDITING, 0)
 
-    async def realign_chapters(self, ref_id: str, dramatized: bool = False, thorough: bool = False):
+    async def realign_chapters(
+        self, ref_id: str, dramatized: bool = False, thorough: bool = False, transcribe: bool = False
+    ):
         """Realign chapter timestamps from the user-selected reference.
 
         Detection only scans a padded window around each reference timestamp. If the
@@ -1014,7 +1103,9 @@ class ProcessingPipeline:
         shifted beyond the padding while the total durations stayed similar), the
         padding is widened to REALIGN_PADDING_EXPANDED and extraction, detection and
         alignment are re-run — at most once. ``thorough`` is a user option to start
-        at the expanded padding, for cases where the aligner fails to signal."""
+        at the expanded padding, for cases where the aligner fails to signal.
+        ``transcribe`` checks the alignment by transcribing chapter starts against their
+        titles before committing (see realign_verification)."""
 
         try:
             chapter_ref = next((src for src in self.chapter_refs if src.id == ref_id), None)
@@ -1059,7 +1150,9 @@ class ProcessingPipeline:
                     # Detection was canceled
                     return
 
-                needs_expansion = await self._realign_chapters(chapter_ref, padding, segment_times, allow_expansion)
+                needs_expansion = await self._realign_chapters(
+                    chapter_ref, padding, segment_times, allow_expansion, dramatized=dramatized, transcribe=transcribe
+                )
                 if not needs_expansion:
                     return
 
@@ -1118,12 +1211,16 @@ class ProcessingPipeline:
         padding: float,
         scanned_regions: List[Tuple[float, float]],
         allow_expansion: bool,
+        dramatized: bool = False,
+        transcribe: bool = False,
     ) -> bool:
         """Realign chapters using the detected silences and the reference chapters.
 
         Returns True — without committing any chapters — when the aligner signals that a
         boundary may sit outside the scanned regions and ``allow_expansion`` permits a
-        retry; the caller then re-runs the whole pass with REALIGN_PADDING_EXPANDED."""
+        retry; the caller then re-runs the whole pass with REALIGN_PADDING_EXPANDED. With
+        ``transcribe``, the alignment is verified by transcription before it is committed;
+        chapters whose titles were heard are committed pinned, with their transcripts."""
         self._notify_progress(Step.AUDIO_ANALYSIS, 100, "Aligning chapters…")
 
         try:
@@ -1143,33 +1240,40 @@ class ProcessingPipeline:
             if allow_expansion and stats.get("expansion_needed"):
                 return True
 
+            placements = [
+                VerifiedChapter(ch["timestamp"], ch["confidence"], ch["is_guess"], verified=False)
+                for ch in aligned_chapters
+            ]
+            transcripts: Optional[Dict[float, str]] = None
+            if transcribe:
+                outcome = await self._verify_realignment(ref, aligned_chapters, padding, scanned_regions, dramatized)
+                if outcome is None:
+                    # Cancelled; the cancel has already moved the pipeline on
+                    return False
+                placements = outcome.chapters
+                transcripts = outcome.transcripts
+                self.detected_cues = outcome.cues
+
             new_chapters = []
-            for i, ch in enumerate(aligned_chapters):
-                timestamp = ch["timestamp"]
-                confidence = ch["confidence"]
-                is_guess = ch["is_guess"]
-
-                if i == 0:
-                    timestamp = 0.0
-                    confidence = 1.0
-                    is_guess = False
-
-                original_chapter = ref.chapters[i]
-
+            for i, placed in enumerate(placements):
+                first = i == 0
                 chapter_data = ChapterData(
-                    timestamp=timestamp,
-                    title=ch["title"],
+                    timestamp=0.0 if first else placed.timestamp,
+                    title=ref.chapters[i].title,
+                    transcript=placed.transcript,
                     realignment=RealignmentData(
-                        original_timestamp=original_chapter.timestamp,
-                        confidence=confidence,
-                        is_guess=is_guess,
+                        original_timestamp=ref.chapters[i].timestamp,
+                        confidence=1.0 if first else placed.confidence,
+                        is_guess=False if first else placed.is_guess,
+                        pinned=placed.verified and not first,
                     ),
                 )
                 new_chapters.append(chapter_data)
 
             self.chapters = new_chapters
+            self._realignment_context = RealignmentContext(ref_duration=ref.duration, padding=padding)
 
-            self._capture_realignment_snapshot(ref, padding)
+            self._capture_realignment_snapshot(ref, padding, transcripts)
 
             self._notify_progress(Step.CHAPTER_EDITING, 0, f"Realigned {len(self.chapters)} chapters")
 
@@ -1180,12 +1284,235 @@ class ProcessingPipeline:
             await self.restart_at_step(RestartStep.SELECT_WORKFLOW, f"Alignment failed: {str(e)}")
             raise
 
-    def _capture_realignment_snapshot(self, ref: ChapterReference, padding: float) -> None:
+    async def _verify_realignment(
+        self,
+        ref: ChapterReference,
+        initial: List[Dict[str, Any]],
+        padding: float,
+        scanned_regions: List[Tuple[float, float]],
+        dramatized: bool,
+    ) -> Optional[VerificationOutcome]:
+        """Check the cue-based alignment by transcribing chapter starts against their titles
+        (see realign_verification). Returns None when cancelled. "Finish now" stops it early and
+        keeps what has been confirmed."""
+        app_state = get_app_state()
+        self._finish_verification = False
+        self._notify_progress(Step.REALIGN_VERIFICATION, -1, "Loading transcription model…")
+
+        def model_progress(step: Step, percent: float, message: str = "", details: Optional[Dict[str, Any]] = None):
+            if self.step == Step.REALIGN_VERIFICATION:
+                self._notify_progress(Step.REALIGN_VERIFICATION, -1, message or "Loading transcription model…")
+
+        await app_state.warm_asr_service(model_progress)
+        if self.step != Step.REALIGN_VERIFICATION:
+            return None
+
+        asr_options = get_app_config().asr_options
+        segment_length = asr_options.segment_length
+        limit = asyncio.Semaphore(VERIFY_PARALLEL_SNIPPETS)
+
+        def stopped() -> bool:
+            return self.step != Step.REALIGN_VERIFICATION or self._finish_verification
+
+        async def transcribe(times: List[float]) -> List[Optional[str]]:
+            async def one(t: float) -> Optional[str]:
+                duration = min(segment_length, self.book_duration - t)
+                if duration < 1.0:
+                    return ""
+                async with limit:
+                    text = await app_state.transcribe_snippet(
+                        t, duration, label=f"verify_{t:.2f}", should_abort=stopped
+                    )
+                    if text == "" and asr_options.trim and not stopped():
+                        # Some models (Parakeet) return nothing for a lone short phrase — a trimmed
+                        # "Three." or "Chapter Forty-Three." — so hear it again with what follows
+                        text = await app_state.transcribe_snippet(
+                            t, duration, label=f"verify_{t:.2f}_full", should_abort=stopped, trim=False
+                        )
+                    return text
+
+            return list(await asyncio.gather(*(one(t) for t in times)))
+
+        async def scan(regions: List[Tuple[float, float]]) -> Optional[List[DetectedCue]]:
+            return await self._scan_regions_for_cues(regions, dramatized)
+
+        def on_progress(progress: VerificationProgress) -> None:
+            if self.step != Step.REALIGN_VERIFICATION:
+                return
+            percent = progress.resolved / progress.total * 100 if progress.total else 0.0
+            details = {"feed_text": progress.feed_text} if progress.feed_text else {}
+            self._notify_progress(Step.REALIGN_VERIFICATION, percent, progress.message, details)
+
+        verifier = RealignVerifier(
+            ref.chapters,
+            self.detected_cues,
+            ref.duration,
+            self.book_duration,
+            padding,
+            scanned_regions,
+            transcribe,
+            scan,
+            on_progress,
+            should_stop=lambda: self._finish_verification,
+        )
+        self._verification_task = asyncio.create_task(verifier.run(initial))
+        try:
+            outcome = await self._verification_task
+        except asyncio.CancelledError:
+            return None
+        finally:
+            self._verification_task = None
+
+        if self.step != Step.REALIGN_VERIFICATION:
+            return None
+        logger.info(
+            f"Realignment verification: {outcome.matched} titles heard, {outcome.conceded} conceded, "
+            f"{outcome.transcriptions} transcriptions" + (" (titles not spoken)" if outcome.titles_not_spoken else "")
+        )
+        return outcome
+
+    def request_finish_verification(self) -> None:
+        """Stop realignment verification after the current transcriptions, keeping what's done."""
+        if self.step != Step.REALIGN_VERIFICATION:
+            raise ValueError("Realignment verification is not running")
+        self._finish_verification = True
+
+    async def _scan_regions_for_cues(
+        self, regions: List[Tuple[float, float]], dramatized: bool
+    ) -> Optional[List[DetectedCue]]:
+        """Detect cues in extra audio regions without leaving the current step (verification's
+        auto-expansion), using the same detection the realignment pass used."""
+        scan_dir = tempfile.mkdtemp(dir=self.temp_dir, prefix="verify_scan_")
+        try:
+            audio_service = AudioProcessingService(
+                _silent_progress, self._running_processes, process_lock=self._process_lock
+            )
+            files = await audio_service.extract_segments(
+                audio_file=self.audio_file_path,
+                timestamps=regions,
+                output_dir=scan_dir,
+                segment_extension=self.segment_extension,
+            )
+            if not files or len(files) != len(regions):
+                return None
+            segments = [(start, path) for (start, _), path in zip(regions, files)]
+
+            silences: Optional[List[Tuple[float, float]]]
+            if dramatized:
+                service = VadDetectionService(
+                    progress_callback=_silent_progress, running_processes=self._running_processes, tmp_dir=scan_dir
+                )
+                silences = await service.get_vad_silence_boundaries_from_segments(segments, duration=self.book_duration)
+            else:
+                silences = []
+                for start, path in segments:
+                    found = await audio_service.get_silence_boundaries(path, publish_progress=False)
+                    silences.extend((s + start, e + start) for s, e in (found or []))
+            if silences is None:
+                return None
+            return self._silences_to_cues(sorted(silences))
+        finally:
+            shutil.rmtree(scan_dir, ignore_errors=True)
+
+    def rerun_realignment(self) -> RealignRerunResult:
+        """Re-align the editor's chapters around the ones the user has fixed in place.
+
+        Pinned chapters and chapters the user added (which have no reference timestamp) keep
+        their timestamps and are ground truth for the aligner; every other realigned chapter is
+        re-aligned from its reference timestamp onto the detected cues (the realignment pass plus
+        any partial scans since). Deleted chapters are left out. Applied as one undoable step.
+        Raises ValueError when there is nothing to re-run."""
+        ctx = self._realignment_context
+        if ctx is None:
+            raise ValueError("There is no realignment to re-run")
+
+        active = sorted((ch for ch in self.chapters if not ch.deleted), key=lambda ch: ch.timestamp)
+        # Chapters with a reference timestamp, in reference order: the aligner's chapter list. The
+        # first is the chapter at 0:00, which the aligner always holds at 0.
+        aligned = sorted(
+            ((ch, ch.realignment) for ch in active if ch.realignment is not None),
+            key=lambda pair: (pair[1].original_timestamp, pair[0].timestamp),
+        )
+        if not aligned:
+            raise ValueError("There is no realignment to re-run")
+
+        free = [k for k in range(1, len(aligned)) if not aligned[k][1].pinned]
+        if not free:
+            raise ValueError("Every chapter is pinned, so there is nothing to realign")
+
+        # Pins must keep reference order. One the user moved past another pin can't be a reference
+        # anchor, so it is kept in place like an added chapter instead.
+        candidates = [(k, aligned[k][0].timestamp) for k in range(1, len(aligned)) if aligned[k][1].pinned]
+        pins = self._longest_increasing_pins(candidates, after=aligned[0][0].timestamp)
+        fixed_times = [ch.timestamp for ch in active if ch.realignment is None]
+        fixed_times += [t for k, t in candidates if k not in pins]
+
+        aligner = ChapterAligner(max_drift=ctx.padding)
+        results, _ = aligner.align(
+            [BasicChapter(timestamp=r.original_timestamp, title=ch.title) for ch, r in aligned],
+            list(self.detected_cues),
+            ctx.ref_duration,
+            self.book_duration,
+            pins=pins,
+            fixed_times=fixed_times,
+        )
+
+        operations: List[ChapterOperation] = []
+        moved = 0
+        for k in free:
+            chapter, old = aligned[k]
+            result = results[k]
+            new_timestamp = float(result["timestamp"])
+            new_realignment = RealignmentData(
+                original_timestamp=old.original_timestamp,
+                confidence=float(result["confidence"]),
+                is_guess=bool(result["is_guess"]),
+            )
+            if abs(new_timestamp - chapter.timestamp) > 0.005:
+                moved += 1
+            elif new_realignment == old:
+                continue
+            operations.append(
+                ApplyRealignmentOperation(
+                    chapter_id=chapter.id, new_timestamp=new_timestamp, new_realignment=new_realignment
+                )
+            )
+
+        if operations:
+            batch = BatchChapterOperation(operations=operations)
+            batch.apply(self)
+            self.add_to_history(batch)
+
+        logger.info(f"Re-ran realignment: {len(free)} chapters realigned around {len(pins)} pins, {moved} moved")
+        return RealignRerunResult(realigned=len(free), moved=moved)
+
+    @staticmethod
+    def _longest_increasing_pins(candidates: List[Tuple[int, float]], after: float) -> Dict[int, float]:
+        """The largest subset of ``candidates`` (chapter index, time), already in reference order,
+        whose times strictly increase and all come after ``after``."""
+        times = [(k, t) for k, t in candidates if t > after]
+        length = [1] * len(times)
+        prev = [-1] * len(times)
+        for b in range(len(times)):
+            for a in range(b):
+                if times[a][1] < times[b][1] and length[a] + 1 > length[b]:
+                    length[b], prev[b] = length[a] + 1, a
+        kept: Dict[int, float] = {}
+        k = max(range(len(times)), key=lambda x: length[x], default=-1)
+        while k >= 0:
+            kept[times[k][0]] = times[k][1]
+            k = prev[k]
+        return kept
+
+    def _capture_realignment_snapshot(
+        self, ref: ChapterReference, padding: float, transcripts: Optional[Dict[float, str]] = None
+    ) -> None:
         """When DEBUG is set, stash the aligner inputs so the ChapterReview page can export
         a regression fixture. The user-corrected ground-truth timestamps are read live from
         self.chapters at export time. ``padding`` records the extraction half-width the cues
         were detected with (post-expansion if a retry ran), so tests can reconstruct the
-        scanned regions exactly."""
+        scanned regions exactly. ``transcripts`` (snippet start -> text) are what verification
+        heard, kept so the title matcher can be tuned on real ASR output."""
         if not get_settings().DEBUG:
             self._realignment_snapshot = None
             return
@@ -1197,6 +1524,10 @@ class ProcessingPipeline:
             "detected_cues": [[c.timestamp, c.gap] for c in (self.detected_cues or [])],
             "padding": padding,
         }
+        if transcripts:
+            # Only with verification: the titles and what was heard, to tune the title matcher
+            self._realignment_snapshot["titles"] = [c.title for c in ref.chapters]
+            self._realignment_snapshot["transcripts"] = [[t, text] for t, text in sorted(transcripts.items())]
 
     @staticmethod
     def _format_duration_difference(diff_percent: float, diff_seconds: float) -> str:

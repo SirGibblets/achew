@@ -23,6 +23,8 @@ export interface PipelineState {
   restart_options?: string[];
   audio_unsupported_codec?: boolean;
   audio_info?: AudioInfo | null;
+  /** CONFIGURE_ASR is confirming settings for a transcription-enhanced realignment */
+  realign_pending?: boolean;
 }
 
 export interface StatusResponse {
@@ -286,6 +288,14 @@ export interface CustomInstructionsResponse {
 export interface BatchOperationResponse {
   message: string;
   affected_chapters: number;
+}
+
+export interface RealignResponse {
+  message: string;
+  /** Unpinned chapters that were re-aligned */
+  realigned: number;
+  /** Of those, how many ended up at a different timestamp */
+  moved: number;
 }
 
 export interface ShiftOperation {

@@ -28,6 +28,8 @@ class StartWorkflowRequest(BaseModel):
     ref_id: Optional[str] = None
     detection_mode: DetectionMode = DetectionMode.STANDARD
     thorough: Optional[bool] = False
+    # Realign only: verify the alignment by transcription (asks for ASR settings first)
+    transcribe: Optional[bool] = False
 
 
 class DramatizedFixtureRequest(BaseModel):
@@ -68,6 +70,8 @@ class PipelineStateResponse(BaseModel):
     restart_options: List[str] = []
     audio_unsupported_codec: bool = False
     audio_info: Optional[AudioInfo] = None
+    # CONFIGURE_ASR is confirming settings for a transcription-enhanced realignment
+    realign_pending: bool = False
 
 
 @router.post("/pipeline", response_model=dict)
@@ -152,6 +156,7 @@ async def get_pipeline_state():
             restart_options=pipeline.get_restart_options(),
             audio_unsupported_codec=pipeline.audio_unsupported_codec,
             audio_info=pipeline.audio_info,
+            realign_pending=pipeline.pending_realign is not None,
         )
 
     except HTTPException:
@@ -263,7 +268,7 @@ async def start_workflow(request: StartWorkflowRequest, background_tasks: Backgr
         async def run_workflow():
             try:
                 await pipeline.start_workflow(
-                    request.workflow, request.ref_id, request.detection_mode, request.thorough
+                    request.workflow, request.ref_id, request.detection_mode, request.thorough, request.transcribe
                 )
             except Exception as e:
                 logger.error(f"Failed to start workflow: {e}")
@@ -452,6 +457,19 @@ async def configure_asr(request: ConfigureASRRequest, background_tasks: Backgrou
 
         pipeline = app_state.pipeline
 
+        # A transcription-enhanced realignment was waiting on these settings
+        if pipeline.pending_realign is not None:
+            transcribe = request.action == "transcribe"
+
+            async def resume_realign():
+                try:
+                    await pipeline.resume_pending_realign(transcribe=transcribe)
+                except Exception as e:
+                    logger.error(f"Failed to resume realignment: {e}")
+
+            background_tasks.add_task(resume_realign)
+            return {"message": f"Realignment started (transcription {request.action})", "action": request.action}
+
         # Validate preassigned titles and build the cue_index -> title map
         cue_count = len(pipeline.cues)
         preassigned: Dict[int, str] = {}
@@ -539,6 +557,19 @@ async def restart_pipeline(request: RestartPipelineRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/pipeline/finish-verification")
+async def finish_verification():
+    """Stop transcription verification of a realignment early, keeping what has been confirmed"""
+    app_state = get_app_state()
+    if not app_state.pipeline:
+        raise HTTPException(status_code=404, detail="Pipeline not found")
+    try:
+        app_state.pipeline.request_finish_verification()
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"message": "Finishing verification"}
+
+
 @router.post("/pipeline/cancel")
 async def cancel_step():
     """Cancel the current processing pipeline step and return to the appropriate previous step"""
@@ -557,7 +588,7 @@ async def cancel_step():
                 raise HTTPException(status_code=404, detail="Pipeline not found")
             return {"message": "Pipeline cancelled and deleted", "action": "deleted"}
 
-        elif step in [Step.AUDIO_ANALYSIS, Step.VAD_PREP, Step.VAD_ANALYSIS]:
+        elif step in [Step.AUDIO_ANALYSIS, Step.VAD_PREP, Step.VAD_ANALYSIS, Step.REALIGN_VERIFICATION]:
             await pipeline.restart_at_step(RestartStep.SELECT_WORKFLOW)
             return {
                 "message": "Processing cancelled, returned to workflow selection",
