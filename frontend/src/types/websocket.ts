@@ -30,6 +30,7 @@ export interface StepChangeData {
   chapter_refs?: ChapterReference[];
   title_refs?: TitleReference[];
   restart_options?: string[];
+  realign_pending?: boolean;
   audio_unsupported_codec?: boolean;
   audio_info?: AudioInfo | null;
   chapter_id?: string;

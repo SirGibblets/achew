@@ -18,6 +18,7 @@ class Step(str, Enum):
     PARTIAL_SCAN_PREP = "partial_scan_prep"
     PARTIAL_AUDIO_ANALYSIS = "partial_audio_analysis"
     PARTIAL_VAD_ANALYSIS = "partial_vad_analysis"
+    REALIGN_VERIFICATION = "realign_verification"
     INITIAL_CHAPTER_SELECTION = "initial_chapter_selection"  # Interactive
     CONFIGURE_ASR = "configure_asr"  # Interactive
     AUDIO_EXTRACTION = "audio_extraction"

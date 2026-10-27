@@ -133,6 +133,7 @@
       case 'partial_scan_prep':
       case 'partial_audio_analysis':
       case 'partial_vad_analysis':
+      case 'realign_verification':
       case 'audio_extraction':
       case 'trimming':
       case 'asr_processing':

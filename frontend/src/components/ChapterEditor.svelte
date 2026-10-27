@@ -33,16 +33,18 @@
   import Check from '@lucide/svelte/icons/check';
   import ChevronLeft from '@lucide/svelte/icons/chevron-left';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
+  import Lock from '@lucide/svelte/icons/lock';
+  import LockOpen from '@lucide/svelte/icons/lock-open';
   import Pause from '@lucide/svelte/icons/pause';
   import Play from '@lucide/svelte/icons/play';
   import Plus from '@lucide/svelte/icons/plus';
+  import RefreshCw from '@lucide/svelte/icons/refresh-cw';
   import Trash2 from '@lucide/svelte/icons/trash-2';
   import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
   import X from '@lucide/svelte/icons/x';
-  import CircleHelp from '@lucide/svelte/icons/circle-help';
   import Mic from '@lucide/svelte/icons/mic';
 
-  import type { ApplyTitleMapping, DetectedCueEntry, EditorSettings } from '../types/api';
+  import type { ApplyTitleMapping, DetectedCueEntry, EditorSettings, RealignResponse } from '../types/api';
 
   interface AICleanupErrorInfo {
     message: string;
@@ -150,6 +152,33 @@
 
   let hasAlignmentData = $derived($chapters.some((chapter) => chapter.realignment != null));
 
+  // Re-running realignment: pinned and added chapters stay put, the rest are realigned around them
+  let realigning = $state(false);
+  let realignResult = $state<RealignResponse | null>(null);
+  let realignResultTimer: ReturnType<typeof setTimeout> | null = null;
+  let isTranscribing = $derived(Object.keys($transcriptionStatuses).length > 0);
+  let hasUnpinnedAlignment = $derived(
+    $chapters.some((chapter) => chapter.realignment != null && !chapter.realignment.pinned && chapter.timestamp > 0.01),
+  );
+  // Not disabled while a run is in flight: disabling drops focus, which would hide the result tooltip
+  let canRealign = $derived(!isTranscribing && hasUnpinnedAlignment);
+
+  const PIN_TOOLTIP =
+    'Click to pin this timestamp. Pinned chapters stay where they are when you re-run realignment, and the other chapters are realigned around them.';
+  const UNPIN_TOOLTIP =
+    'Pinned: this timestamp stays where it is when you re-run realignment, and the other chapters are realigned around it. Click to unpin.';
+
+  let realignTooltip = $derived.by(() => {
+    if (realignResult) {
+      const { realigned, moved } = realignResult;
+      const summary = moved === 0 ? 'no timestamps changed' : `${moved} timestamp${moved === 1 ? '' : 's'} changed`;
+      return `Realigned ${realigned} chapter${realigned === 1 ? '' : 's'}: ${summary}.`;
+    }
+    if (!hasUnpinnedAlignment) return 'Every chapter is pinned. Unpin a chapter to realign it.';
+    if (isTranscribing) return 'Re-run realignment is unavailable while chapters are being transcribed.';
+    return 'Re-run realignment. Pinned chapters and chapters you added stay where they are, and the other chapters are realigned around them. The Offset column shows each chapter’s distance from its reference timestamp.';
+  });
+
   let showTranscriptions = $derived(hasTranscriptions && !editorSettings.hide_transcriptions);
 
   // Load chapters and AI options when component mounts
@@ -224,6 +253,9 @@
     window.removeEventListener('keydown', handleKeydown);
     if (transcriptionBarTimer) {
       clearTimeout(transcriptionBarTimer);
+    }
+    if (realignResultTimer) {
+      clearTimeout(realignResultTimer);
     }
   });
 
@@ -410,6 +442,35 @@
       await api.chapters.updateTitle(chapterId, newTitle);
     } catch (err) {
       error = handleApiError(err);
+    }
+  }
+
+  async function setChapterPinned(chapterId: string, pinned: boolean) {
+    try {
+      await api.chapters.setPinned(chapterId, pinned);
+    } catch (err) {
+      error = handleApiError(err);
+    }
+  }
+
+  async function rerunRealignment() {
+    if (realigning || !canRealign) return;
+
+    realigning = true;
+    try {
+      const result = await api.chapters.realign();
+      // Timestamps moved, so cached chapter audio no longer lines up
+      audio.clearSegmentCache();
+      realignResult = result;
+      if (realignResultTimer) clearTimeout(realignResultTimer);
+      realignResultTimer = setTimeout(() => {
+        realignResult = null;
+        realignResultTimer = null;
+      }, 4000);
+    } catch (err) {
+      error = handleApiError(err);
+    } finally {
+      realigning = false;
     }
   }
 
@@ -975,15 +1036,23 @@
               <th style="width: 1px" class="offset-header">
                 <div class="header-with-icon">
                   Offset
-                  <div
-                    class="help-icon"
-                    use:tooltip={{
-                      text: 'The time difference between the reference chapter timestamp and the realigned timestamp.',
-                      delay: 0,
-                    }}
+                  <button
+                    type="button"
+                    class="realign-btn"
+                    class:spinning={realigning}
+                    class:done={realignResult !== null}
+                    onclick={rerunRealignment}
+                    disabled={!canRealign}
+                    aria-busy={realigning}
+                    aria-label="Re-run realignment"
+                    use:tooltip={{ text: realignTooltip, delay: 0, maxWidth: 320, dismissOnClick: false }}
                   >
-                    <CircleHelp size="14" />
-                  </div>
+                    {#if realignResult !== null}
+                      <Check size="14" />
+                    {:else}
+                      <RefreshCw size="14" />
+                    {/if}
+                  </button>
                 </div>
               </th>
             {/if}
@@ -1147,9 +1216,31 @@
                 <td class="offset-cell">
                   {#if chapter.realignment != null}
                     {@const offset = chapter.timestamp - chapter.realignment.original_timestamp}
-                    {@const isGuess = chapter.realignment.is_guess}
-                    {@const lowConfidence = chapter.realignment.confidence < 0.75}
+                    {@const pinned = chapter.realignment.pinned}
+                    <!-- A pinned timestamp is user-confirmed, so its estimate/confidence warning no longer applies -->
+                    {@const isGuess = !pinned && chapter.realignment.is_guess}
+                    {@const lowConfidence = !pinned && chapter.realignment.confidence < 0.75}
                     <div class="offset-display" class:warning={isGuess || lowConfidence}>
+                      {#if chapter.timestamp > 0.01}
+                        <button
+                          type="button"
+                          class="pin-btn"
+                          class:pinned
+                          onclick={() => setChapterPinned(chapter.id, !pinned)}
+                          aria-label={pinned ? 'Unpin timestamp' : 'Pin timestamp'}
+                          aria-pressed={pinned}
+                          use:tooltip={{ text: pinned ? UNPIN_TOOLTIP : PIN_TOOLTIP, delay: 0, maxWidth: 300 }}
+                        >
+                          {#if pinned}
+                            <Lock size="13" />
+                          {:else}
+                            <LockOpen size="13" />
+                          {/if}
+                        </button>
+                      {:else}
+                        <!-- The first chapter is always at 0:00; keep the offsets lined up without a toggle -->
+                        <span class="pin-placeholder" aria-hidden="true"></span>
+                      {/if}
                       <span class="offset-value">
                         {offset > 0 ? '+' : ''}{offset.toFixed(1)}s
                       </span>
@@ -2025,20 +2116,76 @@
     }
   }
 
-  .help-icon {
+  .realign-btn {
     display: inline-flex;
     align-items: center;
-    color: var(--text-secondary);
-    cursor: help;
-    position: relative;
+    justify-content: center;
     padding: 2px;
+    border: none;
     border-radius: 50%;
-    transition: all 0.2s ease;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition:
+      color 0.2s ease,
+      background-color 0.2s ease;
   }
 
-  .help-icon:hover {
+  .realign-btn:hover:not(:disabled) {
     color: var(--primary-color);
     background: var(--bg-tertiary);
+  }
+
+  .realign-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  .realign-btn.done {
+    color: var(--success);
+  }
+
+  .realign-btn.spinning :global(svg) {
+    animation: transcribe-spin 0.8s linear infinite;
+  }
+
+  .pin-btn,
+  .pin-placeholder {
+    flex-shrink: 0;
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+
+  .pin-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: none;
+    border-radius: 0.25rem;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    opacity: 0.35;
+    transition:
+      opacity 0.15s ease,
+      color 0.15s ease,
+      background-color 0.15s ease;
+  }
+
+  .chapter-row:hover .pin-btn,
+  .pin-btn:focus-visible {
+    opacity: 0.75;
+  }
+
+  .pin-btn:hover {
+    opacity: 1;
+    background: var(--hover-bg);
+  }
+
+  .pin-btn.pinned {
+    color: var(--primary-color);
+    opacity: 1;
   }
 
   .offset-cell {

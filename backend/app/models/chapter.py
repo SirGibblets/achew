@@ -8,6 +8,8 @@ class RealignmentData(BaseModel):
     original_timestamp: float
     confidence: float
     is_guess: bool
+    # Confirmed by the user: kept in place and used as ground truth when realignment is re-run
+    pinned: bool = False
 
 
 class BasicChapter(BaseModel):

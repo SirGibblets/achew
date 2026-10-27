@@ -21,14 +21,16 @@ from realignment_helpers import (
     cues_in_regions,
     extraction_regions,
     load_real_fixtures,
+    make_clean,
     make_front_matter_decoy,
     make_missing_chapter,
+    make_parallel_decoy_chain,
     production_padding,
     score_alignment,
 )
 
 from app.core.constants import REALIGN_PADDING_DEFAULT, REALIGN_PADDING_EXPANDED
-from app.services.chapter_aligner import ChapterAligner
+from app.services.chapter_aligner import FIXED_CUE_EXCLUSION, ChapterAligner
 
 # Seeds give us a handful of distinct books per scenario while staying deterministic.
 SEEDS = [1, 2, 3, 7, 11]
@@ -191,6 +193,125 @@ def test_expansion_fires_on_real_high_shift_fixtures(fx):
     the floor, so the shifted boundaries sit outside coverage), must request expansion."""
     _, stats, _ = _first_pass(fx, padding=REALIGN_PADDING_DEFAULT)
     assert stats["expansion_needed"], f"{fx.name}: shifted boundaries outside coverage but no expansion requested"
+
+
+# ── Pins (re-running realignment from the editor) ──────────────────────────────
+# Pinned chapters are ground truth: returned exactly, and the skeleton chains through them. The
+# behaviour gates below are aggregate because a pin changes the optimisation problem, so it can
+# occasionally flip a borderline placement elsewhere; what must hold is a clear net benefit.
+
+
+def _pin_inputs(fx: Fixture):
+    pad = production_padding(fx)
+    regions = extraction_regions([c.timestamp for c in fx.ref_chapters], fx.book_duration, pad)
+    return ChapterAligner(max_drift=pad), cues_in_regions(fx.detected_cues, regions)
+
+
+def _wrong(result, fx: Fixture) -> set:
+    return set(score_alignment(result, fx.ground_truth, tolerance=SCORE_TOLERANCE).wrong)
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_pins_are_returned_as_ground_truth(seed):
+    fx = SYNTHETIC_BUILDERS["per_chapter_jitter"](random.Random(seed))
+    aligner, cues = _pin_inputs(fx)
+    rng = random.Random(seed)
+    pins = {i: fx.ref_chapters[i].timestamp + rng.uniform(-3.0, 3.0) for i in sorted(rng.sample(range(1, 20), 4))}
+
+    result, _ = aligner.align(fx.ref_chapters, cues, fx.ref_duration, fx.book_duration, pins=pins)
+
+    for i, t in pins.items():
+        assert result[i]["timestamp"] == t
+        assert result[i]["confidence"] == 1.0 and not result[i]["is_guess"]
+    times = [r["timestamp"] for r in result]
+    assert times == sorted(times), "placements must stay in chapter order around the pins"
+
+
+def test_out_of_order_pins_are_rejected():
+    fx = make_clean(random.Random(0))
+    aligner, cues = _pin_inputs(fx)
+    t3, t5 = fx.ref_chapters[3].timestamp, fx.ref_chapters[5].timestamp
+    with pytest.raises(ValueError):
+        aligner.align(fx.ref_chapters, cues, fx.ref_duration, fx.book_duration, pins={3: t5, 5: t3})
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_fixed_times_are_never_reused(seed):
+    """A user-added chapter takes its boundary: with a fixed time on a true boundary, no
+    reference chapter may land on (or within the exclusion distance of) it."""
+    fx = make_clean(random.Random(seed))
+    aligner, cues = _pin_inputs(fx)
+    taken = fx.ref_chapters[7].timestamp
+
+    result, _ = aligner.align(fx.ref_chapters, cues, fx.ref_duration, fx.book_duration, fixed_times=[taken])
+
+    assert all(abs(r["timestamp"] - taken) >= FIXED_CUE_EXCLUSION for r in result)
+
+
+def test_pinning_both_ends_breaks_a_parallel_decoy_chain():
+    """Across a run where a louder, equally-spaced decoy chain captures every chapter, pinning
+    the run's two ends must correct most of it and leave everything outside the run alone."""
+    unpinned_wrong = pinned_wrong = 0
+    for seed in [1, 2, 3, 7, 11, 13, 17]:
+        fx, first, last = make_parallel_decoy_chain(random.Random(seed))
+        aligner, cues = _pin_inputs(fx)
+        before, _ = aligner.align(fx.ref_chapters, cues, fx.ref_duration, fx.book_duration)
+        pins = {first: fx.ground_truth[first], last: fx.ground_truth[last]}
+        after, _ = aligner.align(fx.ref_chapters, cues, fx.ref_duration, fx.book_duration, pins=pins)
+
+        assert _wrong(before, fx) == set(range(first, last + 1)), f"seed {seed}: decoy chain not reproduced"
+        assert _wrong(after, fx) <= set(range(first + 1, last)), f"seed {seed}: a pin disturbed the rest of the book"
+        unpinned_wrong += len(_wrong(before, fx))
+        pinned_wrong += len(_wrong(after, fx))
+    assert pinned_wrong * 3 <= unpinned_wrong, f"pins fixed too little: {unpinned_wrong} -> {pinned_wrong} wrong"
+
+
+def _pinning_cases():
+    return REAL_FIXTURES + [SYNTHETIC_BUILDERS[name](random.Random(s)) for name in SYNTHETIC_BUILDERS for s in SEEDS]
+
+
+def test_pinning_the_first_wrong_chapter_helps_more_than_it_hurts():
+    """Simulate the editor workflow on every case: the user fixes (pins at ground truth) the
+    first misplaced chapter and re-runs, up to three times. Re-running should correct further
+    chapters on its own far more often than it disturbs ones that were already right."""
+    auto_fixed = broke = 0
+    for fx in _pinning_cases():
+        aligner, cues = _pin_inputs(fx)
+        result, _ = aligner.align(fx.ref_chapters, cues, fx.ref_duration, fx.book_duration)
+        wrong, pins = _wrong(result, fx), {}
+        for _ in range(3):
+            if not wrong:
+                break
+            fix = min(wrong)
+            pins[fix] = fx.ground_truth[fix]
+            result, _ = aligner.align(fx.ref_chapters, cues, fx.ref_duration, fx.book_duration, pins=pins)
+            now = _wrong(result, fx)
+            auto_fixed += len(wrong - {fix} - now)
+            broke += len(now - wrong)
+            wrong = now
+    assert broke * 5 <= auto_fixed, f"re-run auto-fixed {auto_fixed} chapters but broke {broke}"
+
+
+@pytest.mark.parametrize("n_pins", [1, 3])
+def test_pinning_correct_chapters_helps_more_than_it_hurts(n_pins):
+    """Users also pin chapters they've verified as right. Doing so should, on balance, fix
+    other chapters rather than disturb them."""
+    fixed = broke = 0
+    rng = random.Random(42)
+    for fx in _pinning_cases():
+        aligner, cues = _pin_inputs(fx)
+        result, _ = aligner.align(fx.ref_chapters, cues, fx.ref_duration, fx.book_duration)
+        wrong = _wrong(result, fx)
+        correct = [i for i in range(1, len(result)) if fx.ground_truth[i] is not None and i not in wrong]
+        for _ in range(5):
+            if len(correct) < n_pins:
+                break
+            pins = {i: fx.ground_truth[i] for i in rng.sample(correct, n_pins)}
+            result, _ = aligner.align(fx.ref_chapters, cues, fx.ref_duration, fx.book_duration, pins=pins)
+            now = _wrong(result, fx)
+            fixed += len(wrong - now)
+            broke += len(now - wrong)
+    assert broke <= fixed, f"pinning correct chapters fixed {fixed} others but broke {broke}"
 
 
 # ── Regression gate ─────────────────────────────────────────────────────────────

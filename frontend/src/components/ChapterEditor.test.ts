@@ -27,6 +27,8 @@ vi.mock('../utils/api', () => ({
       updateTimestamp: vi.fn(),
       getNearbyCues: vi.fn(),
       shiftTimestamps: vi.fn(),
+      setPinned: vi.fn(),
+      realign: vi.fn(),
     },
     config: {
       getEditorSettings: vi.fn(),
@@ -471,5 +473,55 @@ describe('action bar docking', () => {
     unmount();
     expect(document.body.classList.contains('action-bar-dock-left')).toBe(false);
     expect(document.body.classList.contains('action-bar-collapsed')).toBe(false);
+  });
+});
+
+describe('realignment pins', () => {
+  function realigned(pinned: Partial<Record<string, boolean>> = {}): ChapterData[] {
+    return makeChapters().map((chapter) => ({
+      ...chapter,
+      realignment: {
+        original_timestamp: chapter.timestamp,
+        confidence: 0.85,
+        is_guess: false,
+        pinned: pinned[chapter.id] ?? false,
+      },
+    }));
+  }
+
+  it('offers a pin toggle for every realigned chapter but the first', async () => {
+    await setup({ chapters: realigned() });
+    expect(screen.getAllByRole('button', { name: 'Pin timestamp' })).toHaveLength(2);
+  });
+
+  it('pins and unpins a chapter', async () => {
+    const { user } = await setup({ chapters: realigned({ c3: true }) });
+
+    await user.click(screen.getByRole('button', { name: 'Pin timestamp' }));
+    expect(api.chapters.setPinned).toHaveBeenCalledWith('c2', true);
+
+    const unpin = screen.getByRole('button', { name: 'Unpin timestamp' });
+    expect(unpin).toHaveAttribute('aria-pressed', 'true');
+    await user.click(unpin);
+    expect(api.chapters.setPinned).toHaveBeenCalledWith('c3', false);
+  });
+
+  it('re-runs realignment from the Offset header', async () => {
+    vi.mocked(api.chapters.realign).mockResolvedValue({ message: '', realigned: 2, moved: 1 });
+    const { user } = await setup({ chapters: realigned({ c2: true }) });
+
+    await user.click(screen.getByRole('button', { name: 'Re-run realignment' }));
+    expect(api.chapters.realign).toHaveBeenCalledOnce();
+  });
+
+  it('disables re-running when every chapter is pinned', async () => {
+    await setup({ chapters: realigned({ c2: true, c3: true }) });
+    expect(screen.getByRole('button', { name: 'Re-run realignment' })).toBeDisabled();
+  });
+
+  it('has no Offset column without realignment data', async () => {
+    await setup();
+    expect(screen.queryByRole('button', { name: 'Re-run realignment' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Pin timestamp' })).not.toBeInTheDocument();
   });
 });

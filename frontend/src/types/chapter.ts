@@ -2,6 +2,8 @@ export interface RealignmentData {
   original_timestamp: number;
   confidence: number;
   is_guess: boolean;
+  /** Confirmed by the user: kept in place and used as ground truth when realignment is re-run */
+  pinned: boolean;
 }
 
 export interface BasicChapter {

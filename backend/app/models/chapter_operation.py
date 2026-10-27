@@ -148,12 +148,61 @@ class EditTimestampOperation(ChapterOperation):
         self.old_timestamp = chapter.timestamp
         chapter.timestamp = self.new_timestamp
 
+        # A timestamp the user set is confirmed, so it is pinned for any realignment re-run
         self.old_realignment = chapter.realignment
         if chapter.realignment:
             new_realignment = RealignmentData(
-                original_timestamp=chapter.realignment.original_timestamp, confidence=1.0, is_guess=False
+                original_timestamp=chapter.realignment.original_timestamp,
+                confidence=1.0,
+                is_guess=False,
+                pinned=True,
             )
             chapter.realignment = new_realignment
+
+        pipeline.chapters.sort(key=lambda c: c.timestamp)
+
+    def undo(self, pipeline: "ProcessingPipeline"):
+        chapter = self.find_chapter(pipeline, self.chapter_id)
+        chapter.timestamp = self.old_timestamp
+        chapter.realignment = self.old_realignment
+
+        pipeline.chapters.sort(key=lambda c: c.timestamp)
+
+
+class SetPinnedOperation(ChapterOperation):
+    chapter_id: str
+    pinned: bool
+    old_realignment: Optional[RealignmentData] = None
+
+    def apply(self, pipeline: "ProcessingPipeline"):
+        chapter = self.find_chapter(pipeline, self.chapter_id)
+        if chapter.realignment is None:
+            raise ValueError("Only realigned chapters can be pinned")
+
+        self.old_realignment = chapter.realignment
+        chapter.realignment = chapter.realignment.model_copy(update={"pinned": self.pinned})
+
+    def undo(self, pipeline: "ProcessingPipeline"):
+        chapter = self.find_chapter(pipeline, self.chapter_id)
+        chapter.realignment = self.old_realignment
+
+
+class ApplyRealignmentOperation(ChapterOperation):
+    """One chapter's result from re-running realignment: new timestamp and alignment data."""
+
+    chapter_id: str
+    new_timestamp: float
+    new_realignment: RealignmentData
+    old_timestamp: float = 0.0
+    old_realignment: Optional[RealignmentData] = None
+
+    def apply(self, pipeline: "ProcessingPipeline"):
+        chapter = self.find_chapter(pipeline, self.chapter_id)
+
+        self.old_timestamp = chapter.timestamp
+        self.old_realignment = chapter.realignment
+        chapter.timestamp = self.new_timestamp
+        chapter.realignment = self.new_realignment
 
         pipeline.chapters.sort(key=lambda c: c.timestamp)
 

@@ -52,6 +52,21 @@ genuinely missing boundary (e.g. two chapters narrated as one) — expansion can
 does not fire the signal by itself when its surroundings were densely covered. Known limit: a
 shifted region whose every chapter gets captured by a decoy chain inside the scanned windows
 leaves nothing unplaced and is undetectable post-hoc.
+
+PINS. A re-run from the editor passes ``pins``: chapters whose timestamps the user has confirmed,
+treated as ground truth. Chapter 0 at t=0 is the original, implicit pin, so pins generalise it:
+the skeleton DP runs as one chain per segment between consecutive pins, entering from the lower
+pin and (when bounded) paying the duration term into the upper one; between two pins the position
+prior and search window are interpolated from them, while the trailing segment keeps the global
+line. A wrong chain (e.g. a parallel decoy) therefore breaks at a pin, since its spacing to the
+pin is off. The pin-adjacent duration terms are capped (PIN_TERM_CAP) so a step right next to a
+pin cannot drag its neighbours. Pins join the scale-revision fit and are confident anchors for
+fill/polish, which never move them. Pins and ``fixed_times`` (boundaries the user added that have
+no reference position) are taken: cues within FIXED_CUE_EXCLUSION of one are dropped, after the
+strong pool is chosen, so no chapter lands on top of them. With no pins or fixed times the single
+segment from chapter 0 reproduces the pin-free aligner exactly. Measured by simulated pinning on
+the real fixtures: pinning the first wrong chapter auto-corrects about one more chapter per pin,
+and pinning already-correct chapters fixes more chapters than it disturbs.
 """
 
 from typing import Any, Dict, List, Optional, Tuple
@@ -131,6 +146,19 @@ FILL_ENTRY_CAP = 50.0
 POLISH_WINDOW = 6.0
 POLISH_ITERS = 3
 
+# Pins/fixed times: a cue this close to a chapter the user fixed in place belongs to that chapter,
+# so it is removed before alignment and no other chapter can land on (or right next to) it. Matches
+# the editor's 1 s minimum spacing between chapters.
+FIXED_CUE_EXCLUSION = 1.0
+# The skeleton's duration terms into and out of a user pin are capped (Huber-style, like
+# FILL_ENTRY_CAP). The pin itself is right, but the interval next to it is often exactly why the
+# user had to fix it: a chapter running long or short against its reference (a disc announcement,
+# an inserted passage). Uncapped, that one step would drag the neighbouring chain off its real cues
+# to make the spacing to the pin fit. Below the cap the term still breaks a parallel decoy chain a
+# few seconds off. Tuned on simulated pinning over the real fixtures: uncapped broke ~3x as many
+# already-correct chapters, and a tighter cap (10 s) traded a few fixes for more breaks.
+PIN_TERM_CAP = 20.0
+
 
 class ChapterAligner:
     def __init__(self, max_drift: float = 120.0, slack: int = SLACK):
@@ -146,10 +174,28 @@ class ChapterAligner:
         total_duration_ref: float,
         total_duration_actual: float,
         scanned_regions: Optional[List[Tuple[float, float]]] = None,
+        pins: Optional[Dict[int, float]] = None,
+        fixed_times: Optional[List[float]] = None,
     ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+        """Align ``ref_chapters`` onto ``detected_cues``. ``pins`` maps chapter index -> confirmed
+        time (ground truth; must increase with index, chapter 0 is always pinned at 0).
+        ``fixed_times`` are further taken boundaries with no reference position (e.g. chapters the
+        user added); cues near any pin or fixed time are excluded. See the module docstring."""
         n = len(ref_chapters)
         if n == 0:
             return [], {"scale": 1.0, "offset": 0.0, "expansion_needed": False}
+
+        pins = {0: 0.0, **{i: float(t) for i, t in (pins or {}).items() if 0 < i < n}}
+        pin_order = sorted(pins)
+        if any(pins[a] >= pins[b] for a, b in zip(pin_order, pin_order[1:])):
+            raise ValueError("Pinned chapter times must increase with chapter order")
+
+        # A cue at a pin or fixed time belongs to that chapter, so it is dropped (see the strong-pool
+        # selection below for why this happens after the pool is chosen).
+        all_cues = list(detected_cues)
+        taken = np.array([t for i, t in pins.items() if i > 0] + list(fixed_times or []), dtype=float)
+        free = [taken.size == 0 or float(np.min(np.abs(taken - c.timestamp))) >= FIXED_CUE_EXCLUSION for c in all_cues]
+        detected_cues = [c for c, ok in zip(all_cues, free) if ok]
 
         scale = total_duration_actual / total_duration_ref if total_duration_ref > 0 else 1.0
         ref = np.array([c.timestamp for c in ref_chapters], dtype=float)
@@ -158,28 +204,31 @@ class ChapterAligner:
         cue_g = np.array([c.gap for c in detected_cues], dtype=float)
         window = max(90.0, abs(total_duration_actual - total_duration_ref) * 2.0, self.max_drift)
 
-        # placed[chapter] = (time, cue_index, residual, confident). Chapter 0 anchors at 0.
-        placed: Dict[int, Tuple[float, int, float, bool]] = {0: (0.0, -1, 0.0, True)}
+        # placed[chapter] = (time, cue_index, residual, confident). Pins (chapter 0 at 0 included)
+        # are confident anchors with no cue.
+        placed: Dict[int, Tuple[float, int, float, bool]] = {i: (t, -1, 0.0, True) for i, t in pins.items()}
 
         if detected_cues:
             # ── Tier 1: skeleton on the strongest cues ──────────────────────
             # Pool depth is coverage-aware: the n//4 headroom only on a wide scan (see SLACK).
+            # The pool is chosen from the FULL cue set and only then are taken cues dropped. Dropping
+            # them first would promote the next-strongest cue into the pool — often a mid-strength
+            # decoy near a boundary — and flip matches that were right before the user pinned.
             headroom = n // 4 if self.max_drift >= REALIGN_PADDING_EXPANDED else 0
-            n_keep = min(len(detected_cues), n + self.slack + headroom)
-            strong = sorted(
-                sorted(range(len(detected_cues)), key=lambda k: cue_g[k], reverse=True)[:n_keep],
-                key=lambda k: cue_t[k],
-            )
+            n_keep = min(len(all_cues), n + self.slack + headroom)
+            top = sorted(range(len(all_cues)), key=lambda k: all_cues[k].gap, reverse=True)[:n_keep]
+            filtered_index = np.cumsum(free) - 1
+            strong = sorted((int(filtered_index[k]) for k in top if free[k]), key=lambda k: cue_t[k])
             s_time = cue_t[strong]
             s_gap = cue_g[strong]
-            skel_match = self._skeleton_dp(ref, s_time, s_gap, scale, window)
+            skel_match = self._skeleton_dp(ref, s_time, s_gap, scale, window, pins) if strong else [-1] * n
 
             # Revise the scale if the slope through the skeleton's matches disagrees with the
             # global duration ratio (trailing/front content contaminating the ratio); re-run once.
-            revised = self._scale_from_matches(ref, s_time, skel_match)
-            if revised is not None and abs(revised - scale) > SCALE_REVISION_MIN_DELTA:
+            revised = self._scale_from_matches(ref, s_time, skel_match, pins)
+            if strong and revised is not None and abs(revised - scale) > SCALE_REVISION_MIN_DELTA:
                 scale = revised
-                skel_match = self._skeleton_dp(ref, s_time, s_gap, scale, window)
+                skel_match = self._skeleton_dp(ref, s_time, s_gap, scale, window, pins)
 
             for i in range(1, n):
                 j = skel_match[i]
@@ -211,7 +260,7 @@ class ChapterAligner:
             # ── Tier 3: polish fills against their now-dense local neighbourhood ──
             self._polish(n, ref, cue_t, cue_g, placed)
 
-        results = self._build(ref_chapters, placed, cue_g, scale)
+        results = self._build(ref_chapters, placed, cue_g, scale, pins, taken)
 
         expansion_needed = scanned_regions is not None and self._needs_expansion(
             results, placed, window, scanned_regions, total_duration_actual
@@ -220,12 +269,18 @@ class ChapterAligner:
         return results, {"scale": scale, "offset": -scale * ref0, "expansion_needed": expansion_needed}
 
     @staticmethod
-    def _scale_from_matches(ref: np.ndarray, s_time: np.ndarray, skel_match: List[int]) -> Optional[float]:
+    def _scale_from_matches(
+        ref: np.ndarray, s_time: np.ndarray, skel_match: List[int], pins: Dict[int, float]
+    ) -> Optional[float]:
         """Robust (Theil–Sen) slope of matched cue time vs reference time over the skeleton's
-        confident matches — an offset-invariant estimate of the chapter region's time-base,
-        immune to a minority of decoy matches. Returns None when too few matches to trust, or
-        the slope is implausibly far from 1.0 (a bad fit rather than a real time-base shift)."""
+        confident matches and the user's pins — an offset-invariant estimate of the chapter
+        region's time-base, immune to a minority of decoy matches. Returns None when too few
+        matches to trust, or the slope is implausibly far from 1.0 (a bad fit rather than a real
+        time-base shift). Chapter 0's implicit pin is not a measurement, so it is left out."""
         pts = [(ref[i], float(s_time[j])) for i, j in enumerate(skel_match) if j >= 0]
+        pts += [(ref[i], t) for i, t in pins.items() if i > 0]
+        # Pairs are only taken forward in reference order, so the appended pins must be merged in.
+        pts.sort(key=lambda p: p[0])
         if len(pts) < SCALE_REVISION_MIN_MATCHES:
             return None
         rs = np.array([p[0] for p in pts])
@@ -280,36 +335,100 @@ class ChapterAligner:
         return False
 
     def _skeleton_dp(
-        self, ref: np.ndarray, s_time: np.ndarray, s_gap: np.ndarray, scale: float, window: float
+        self,
+        ref: np.ndarray,
+        s_time: np.ndarray,
+        s_gap: np.ndarray,
+        scale: float,
+        window: float,
+        pins: Dict[int, float],
     ) -> List[int]:
         """Monotonic DP matching reference chapters to strong cues, scored on duration-shape
         (spacing vs. reference spacing) plus a weak position prior and a gap tie-breaker.
-        Chapters may be left unmatched and strong cues skipped; chapter 0 anchors at t=0."""
-        n, m = len(ref), len(s_time)
-        ref0 = ref[0]
+        Chapters may be left unmatched and strong cues skipped. Pinned chapters (chapter 0 at
+        t=0 always) are forced states the chain must pass through, so the match decomposes into
+        one independent chain per segment between consecutive pins."""
+        n = len(ref)
         g_lo, g_hi = float(s_gap.min()), float(s_gap.max())
         g_span = g_hi - g_lo
+        matches = [-1] * n
+        pin_order = sorted(pins)
+        for a, lo in enumerate(pin_order):
+            hi = pin_order[a + 1] if a + 1 < len(pin_order) else None
+            seg = self._skeleton_segment(
+                ref, s_time, s_gap, g_lo, g_span, scale, window, lo, pins[lo], hi, pins[hi] if hi is not None else None
+            )
+            for i, j in seg.items():
+                matches[i] = j
+        return matches
+
+    @staticmethod
+    def _skeleton_segment(
+        ref: np.ndarray,
+        s_time: np.ndarray,
+        s_gap: np.ndarray,
+        g_lo: float,
+        g_span: float,
+        scale: float,
+        window: float,
+        lo: int,
+        t_lo: float,
+        hi: Optional[int],
+        t_hi: Optional[float],
+    ) -> Dict[int, int]:
+        """One skeleton chain over the chapters strictly between pin ``lo`` (at ``t_lo``) and pin
+        ``hi`` (at ``t_hi``), or through the last chapter when ``hi`` is None. The position prior
+        and search window centre on the expected position: interpolated between the two pins, or
+        the global line for the trailing segment (so with no user pins this is exactly the pin-free
+        skeleton). A bounded chain also pays the duration term into the upper pin. Duration terms
+        touching a user pin are capped at PIN_TERM_CAP. Returns ``{chapter: strong_cue_index}``."""
+        n, m = len(ref), len(s_time)
+        end = hi if hi is not None else n
+
+        def expected(i: int) -> float:
+            # Between two pins, interpolate: the pins pin down the local offset. The trailing segment
+            # keeps the global line rather than extrapolating a pin's offset over the rest of the
+            # book, since the offset at one pin rarely holds all the way to the end (re-anchoring
+            # there broke several times as many already-correct chapters in simulated pinning).
+            if hi is not None and t_hi is not None and ref[hi] > ref[lo]:
+                return t_lo + (ref[i] - ref[lo]) / (ref[hi] - ref[lo]) * (t_hi - t_lo)
+            return scale * (ref[i] - ref[0])
 
         def unary(i: int, j: int) -> float:
-            pos = abs(s_time[j] - scale * (ref[i] - ref0))
+            pos = abs(s_time[j] - expected(i))
             rel = (s_gap[j] - g_lo) / g_span if g_span > 1e-6 else 0.5
             return SK_W_POS * pos - SK_GAP_REWARD * rel
 
         def dur(ip: int, i: int, tp: float, tc: float) -> float:
             return SK_W_DUR * abs((tc - tp) - scale * (ref[i] - ref[ip]))
 
+        def exit_cost(ip: int, tp: float) -> float:
+            # Duration into the upper pin (always a user pin), capped; the trailing segment has none.
+            return min(dur(ip, hi, tp, t_hi), PIN_TERM_CAP) if hi is not None and t_hi is not None else 0.0
+
+        # Candidates sit strictly inside the segment. The trailing segment from chapter 0 keeps the
+        # pin-free behaviour of admitting any cue (a cue at exactly t=0 included).
+        def in_segment(t: float) -> bool:
+            if lo > 0 and t <= t_lo:
+                return False
+            return t_hi is None or t < t_hi
+
         INF = float("inf")
-        dp: List[Dict[int, float]] = [dict() for _ in range(n)]
-        back: List[Dict[int, Optional[Tuple[int, int]]]] = [dict() for _ in range(n)]
-        for i in range(1, n):
+        dp: Dict[int, Dict[int, float]] = {i: {} for i in range(lo + 1, end)}
+        back: Dict[int, Dict[int, Optional[Tuple[int, int]]]] = {i: {} for i in range(lo + 1, end)}
+        for i in range(lo + 1, end):
             for j in range(m):
-                if abs(s_time[j] - scale * (ref[i] - ref0)) > window:
+                if abs(s_time[j] - expected(i)) > window or not in_segment(s_time[j]):
                     continue
                 best, best_from = INF, None
-                cost = unary(i, j) + (i - 1) * SK_UNMATCHED + dur(0, i, 0.0, s_time[j])
+                # Entry from the lower pin; capped only for a user pin (chapter 0 keeps the pin-free cost).
+                entry = dur(lo, i, t_lo, s_time[j])
+                if lo > 0:
+                    entry = min(entry, PIN_TERM_CAP)
+                cost = unary(i, j) + (i - lo - 1) * SK_UNMATCHED + entry
                 if cost < best:
-                    best, best_from = cost, (0, -1)
-                for ip in range(1, i):
+                    best, best_from = cost, (lo, -1)
+                for ip in range(lo + 1, i):
                     skipped = (i - ip - 1) * SK_UNMATCHED
                     for jp, prev in dp[ip].items():
                         if s_time[jp] >= s_time[j]:
@@ -321,17 +440,18 @@ class ChapterAligner:
                     dp[i][j] = best
                     back[i][j] = best_from
 
-        matches = [-1] * n
-        best_end, end = (n - 1) * SK_UNMATCHED, None
-        for ip in range(1, n):
-            trailing = (n - 1 - ip) * SK_UNMATCHED
+        matches: Dict[int, int] = {}
+        best_end, last = (end - lo - 1) * SK_UNMATCHED + exit_cost(lo, t_lo), None
+        for ip in range(lo + 1, end):
+            trailing = (end - 1 - ip) * SK_UNMATCHED
             for jp, cost in dp[ip].items():
-                if cost + trailing < best_end:
-                    best_end, end = cost + trailing, (ip, jp)
-        state = end
+                total = cost + trailing + exit_cost(ip, float(s_time[jp]))
+                if total < best_end:
+                    best_end, last = total, (ip, jp)
+        state = last
         while state is not None:
             i, j = state
-            if i == 0:
+            if i == lo:
                 break
             matches[i] = j
             state = back[i][j]
@@ -496,11 +616,13 @@ class ChapterAligner:
         placed: Dict[int, Tuple[float, int, float, bool]],
         cue_g: np.ndarray,
         scale: float,
+        pins: Dict[int, float],
+        taken: np.ndarray,
     ) -> List[Dict[str, Any]]:
         results: List[Dict[str, Any]] = []
         for i, chapter in enumerate(ref_chapters):
-            if i == 0:
-                results.append(self._result(chapter.title, 0.0, 1.0, False, 0.0))
+            if i in pins:
+                results.append(self._result(chapter.title, pins[i], 1.0, False, 0.0))
                 continue
             if i in placed:
                 t, idx, _res, confident = placed[i]
@@ -516,7 +638,13 @@ class ChapterAligner:
                     ts = lo_t + f * (placed[hi][0] - lo_t)
                 else:
                     ts = lo_t + scale * (ref_chapters[i].timestamp - lo_ref)
-                results.append(self._result(chapter.title, max(0.0, ts), 0.25, True, 0.0))
+                # An interpolated guess must not land on a pinned or fixed chapter either: move it to
+                # the near edge of that chapter's exclusion zone (it stays flagged as a guess).
+                if taken.size:
+                    k = int(np.argmin(np.abs(taken - ts)))
+                    if abs(taken[k] - ts) < FIXED_CUE_EXCLUSION:
+                        ts = taken[k] + (FIXED_CUE_EXCLUSION if ts >= taken[k] else -FIXED_CUE_EXCLUSION)
+                results.append(self._result(chapter.title, max(0.0, float(ts)), 0.25, True, 0.0))
         return results
 
     @staticmethod

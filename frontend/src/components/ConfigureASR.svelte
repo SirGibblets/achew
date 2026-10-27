@@ -13,6 +13,8 @@
 
   let chapterRefs = $derived($session.chapterRefs ?? []);
   let toTranscribeCount = $derived(cues.length - preassignedTitles.length);
+  // Confirming settings for a transcription-enhanced realignment rather than titling cues
+  let forRealign = $derived($session.realignPending);
 
   async function loadCues() {
     try {
@@ -53,20 +55,34 @@
   }
 
   onMount(async () => {
-    await loadCues();
+    if (!forRealign) await loadCues();
   });
 </script>
 
 <div class="configure-asr">
   <div class="header">
-    <h2>
-      Transcribe Titles <DocLink path="/reference/transcription/" featureName="Transcription Settings" size="16" />
-    </h2>
-    <p>
-      Titles will be generated for <strong>{toTranscribeCount}</strong>
-      chapter{toTranscribeCount !== 1 ? 's' : ''} using a local transcription model.<br />
-      Configure the transcription settings below.
-    </p>
+    {#if forRealign}
+      <h2>
+        Transcription Settings <DocLink
+          path="/workflows/realign-chapters/"
+          featureName="Transcription-Enhanced Realignment"
+          size="16"
+        />
+      </h2>
+      <p>
+        Chapter transcripts will be used to improve realignment accuracy.<br />
+        Confirm the transcription settings below.
+      </p>
+    {:else}
+      <h2>
+        Transcribe Titles <DocLink path="/reference/transcription/" featureName="Transcription Settings" size="16" />
+      </h2>
+      <p>
+        Titles will be generated for <strong>{toTranscribeCount}</strong>
+        chapter{toTranscribeCount !== 1 ? 's' : ''} using a local transcription model.<br />
+        Configure the transcription settings below.
+      </p>
+    {/if}
   </div>
 
   <div class="asr-configuration">
@@ -78,6 +94,8 @@
       {#if loading}
         <span class="btn-spinner"></span>
         Processing…
+      {:else if forRealign}
+        Realign Without Transcription
       {:else}
         Skip Transcription
       {/if}
@@ -86,11 +104,13 @@
     <button
       class="btn btn-verify"
       onclick={proceedWithTranscription}
-      disabled={loading || (toTranscribeCount === 0 && preassignedTitles.length === 0)}
+      disabled={loading || (!forRealign && toTranscribeCount === 0 && preassignedTitles.length === 0)}
     >
       {#if loading}
         <span class="btn-spinner"></span>
         Starting…
+      {:else if forRealign}
+        Start Realignment
       {:else if toTranscribeCount === 0 && preassignedTitles.length > 0}
         Apply {preassignedTitles.length} Title{preassignedTitles.length === 1 ? '' : 's'}
       {:else}
@@ -99,7 +119,7 @@
     </button>
   </div>
 
-  {#if chapterRefs.length > 0 && cues.length > 0}
+  {#if !forRealign && chapterRefs.length > 0 && cues.length > 0}
     <AlignedTitlesPanel {cues} {chapterRefs} bind:preassignedTitles />
   {/if}
 </div>

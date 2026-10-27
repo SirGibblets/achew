@@ -75,6 +75,11 @@
       description: 'Analyzing voice activity in selected region…',
       icon: AudioLines,
     },
+    realign_verification: {
+      title: 'Verifying Alignment',
+      description: 'Listening to chapter starts and comparing to chapter titles…',
+      icon: Mic,
+    },
     audio_extraction: {
       title: 'Extracting',
       description: 'Extracting short segments of chapter audio…',
@@ -126,6 +131,19 @@
     const latest = details?.feed_text;
     if (latest) feedText = latest;
   });
+
+  let finishing = $state(false);
+
+  // Realignment verification can stop early and keep what it has confirmed so far
+  async function handleFinishNow() {
+    finishing = true;
+    try {
+      await api.session.finishVerification();
+    } catch (error) {
+      console.error('Failed to finish verification:', error);
+      finishing = false;
+    }
+  }
 
   async function handleCancel() {
     try {
@@ -230,6 +248,19 @@
 
     <div class="action-section">
       <button class="btn btn-cancel" onclick={handleCancel} disabled={$session.loading}> Cancel </button>
+      {#if $session.step === 'realign_verification'}
+        <button
+          class="btn btn-verify"
+          onclick={handleFinishNow}
+          disabled={finishing}
+          use:tooltip={{
+            text: 'Stop checking and open the editor now. Chapters already confirmed stay pinned; the rest keep their realigned timestamps.',
+            maxWidth: 300,
+          }}
+        >
+          {finishing ? 'Finishing…' : 'Finish Now'}
+        </button>
+      {/if}
     </div>
 
     {#if showConnectionWarning}
@@ -388,6 +419,7 @@
   .action-section {
     display: flex;
     justify-content: center;
+    gap: 1rem;
     margin-top: 2rem;
     margin-bottom: 2rem;
   }
