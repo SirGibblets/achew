@@ -15,6 +15,11 @@ logging.basicConfig(
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+from .core.ffmpeg import put_ffmpeg_on_path
+
+# Before anything can spawn ffmpeg, including ASR libraries that run it by name
+put_ffmpeg_on_path()
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
@@ -40,6 +45,16 @@ async def lifespan(achew_app: FastAPI):
     # Startup
     logger.info("Starting Achew")
     logger.info(f"CORS origins: {settings.cors_origins_list}")
+
+    from .core.ffmpeg import FFMPEG_ENV_VAR, ffmpeg_path, ffmpeg_version
+
+    if version := ffmpeg_version():
+        logger.info(f"Using {ffmpeg_path()} ({version})")
+    else:
+        logger.error(
+            f"ffmpeg not found or not runnable: {ffmpeg_path()}. Install ffmpeg or set {FFMPEG_ENV_VAR} "
+            "to an ffmpeg binary; audio processing will fail without it."
+        )
 
     # Migrate legacy shelve config to JSON before any config access
     from .core.config import set_migration_failed

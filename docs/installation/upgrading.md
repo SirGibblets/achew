@@ -32,6 +32,9 @@ git pull
 
 The run script re-runs `uv sync` on launch, so new Python dependencies install automatically.
 
+??? note "No system ffmpeg needed"
+    Achew 1.14.0 and higher installs its own build of [ffmpeg](../reference/glossary.md#ffmpeg) along with its other dependencies and doesn't use a system-wide ffmpeg. If you installed ffmpeg for an older version of Achew, you can keep it, or remove it if nothing else on your system needs it.
+
 ## Native (Windows)
 
 ```powershell
@@ -41,6 +44,9 @@ git pull
 ```
 
 The run script re-runs `uv sync` on launch, so new Python dependencies install automatically.
+
+??? note "No system ffmpeg needed"
+    Achew 1.14.0 and higher installs its own build of [ffmpeg](../reference/glossary.md#ffmpeg) along with its other dependencies and doesn't use a system-wide ffmpeg. If you installed ffmpeg for an older version of Achew, you can keep it, or remove it if nothing else on your system needs it.
 
 ## After upgrading
 

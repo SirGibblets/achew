@@ -34,6 +34,7 @@ export interface SessionState {
   book: Book | null;
   chapterRefs: ChapterReference[];
   titleRefs: TitleReference[];
+  audioXheAac: boolean;
   audioUnsupportedCodec: boolean;
   audioInfo: AudioInfo | null;
   restartOptions: string[];
@@ -69,6 +70,7 @@ function initialState(): SessionState {
     book: null,
     chapterRefs: [],
     titleRefs: [],
+    audioXheAac: false,
     audioUnsupportedCodec: false,
     audioInfo: null,
     restartOptions: [],
@@ -116,6 +118,9 @@ function createSessionStore() {
           ...(data.title_refs && { titleRefs: data.title_refs }),
           ...(data.restart_options && { restartOptions: data.restart_options }),
           realignPending: data.realign_pending ?? false,
+          ...(data.audio_xhe_aac !== undefined && {
+            audioXheAac: data.audio_xhe_aac,
+          }),
           ...(data.audio_unsupported_codec !== undefined && {
             audioUnsupportedCodec: data.audio_unsupported_codec,
           }),
@@ -258,6 +263,7 @@ function createSessionStore() {
           book: data.book ?? null,
           restartOptions: data.restart_options ?? [],
           realignPending: data.realign_pending ?? false,
+          audioXheAac: data.audio_xhe_aac ?? false,
           audioUnsupportedCodec: data.audio_unsupported_codec ?? false,
           audioInfo: data.audio_info ?? null,
           loading: false,

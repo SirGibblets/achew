@@ -10,6 +10,7 @@ import subprocess
 
 import numpy as np
 
+from app.core.ffmpeg import ffmpeg_path
 from app.models.enums import Step
 from app.models.progress import ProgressCallback
 from app.services.asr_service import ASRService
@@ -77,7 +78,7 @@ class ParakeetASRService(ASRService):
         """Convert audio file to 16kHz float32 numpy array"""
         try:
             cmd = [
-                "ffmpeg",
+                ffmpeg_path(),
                 "-loglevel",
                 "error",
                 "-y",

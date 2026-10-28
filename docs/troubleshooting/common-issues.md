@@ -17,9 +17,9 @@ Transcription models can vary wildly on capitalization, number formatting, and p
 [^@]: English-only models: Parakeet `0.6b v2`, Whisper `.en`
 [^#]: Multilingual models: Parakeet `0.6b v3`, Whisper non-`.en`
 
-## xHE-AAC books fail
+## "Unsupported Audio Codec (xHE-AAC)" warning
 
-These books are not currently supported in Achew. See [Supported Formats](../reference/supported-formats.md).
+Achew's bundled ffmpeg decodes xHE-AAC audiobooks, so this warning means Achew is running a different ffmpeg that lacks the `libfdk_aac` decoder. This happens when `ACHEW_FFMPEG` points to another build, or on platforms without a bundled build. Unset `ACHEW_FFMPEG` (or point it to an ffmpeg with `libfdk_aac`) and reload the book. See [Supported Formats](../reference/supported-formats.md#xhe-aac).
 
 ## First launch takes forever
 

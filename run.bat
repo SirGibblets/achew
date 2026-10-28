@@ -76,14 +76,6 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM Check ffmpeg
-where ffmpeg >nul 2>&1
-if errorlevel 1 (
-    echo ffmpeg is not installed. Please install ffmpeg first.
-    echo For installation instructions, visit: https://ffmpeg.org/download.html
-    exit /b 1
-)
-
 REM Check uv
 where uv >nul 2>&1
 if errorlevel 1 (
@@ -120,6 +112,15 @@ cd backend
 uv sync --frozen
 if errorlevel 1 (
     echo Failed to install backend dependencies
+    cd ..
+    exit /b 1
+)
+
+REM Achew installs its own ffmpeg on supported platforms; elsewhere it needs one on PATH
+REM or in ACHEW_FFMPEG. The check prints instructions when neither works.
+uv run python -m app.core.ffmpeg
+if errorlevel 1 (
+    echo ffmpeg is required.
     cd ..
     exit /b 1
 )

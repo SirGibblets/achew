@@ -7,12 +7,11 @@
 
 - [npm](https://nodejs.org/en/download){:target="_blank"} (bundled with the Node.js installer)
 - [uv package manager](https://docs.astral.sh/uv/getting-started/installation/){:target="_blank"}
-- [ffmpeg](https://ffmpeg.org/download.html){:target="_blank"}
 
 === "macOS (Homebrew)"
 
     ```bash
-    brew install node ffmpeg
+    brew install node
     curl -LsSf https://astral.sh/uv/install.sh | sh
     ```
 
@@ -20,14 +19,14 @@
 
     ```bash
     sudo apt update
-    sudo apt install -y npm ffmpeg
+    sudo apt install -y npm
     curl -LsSf https://astral.sh/uv/install.sh | sh
     ```
 
 === "Fedora / RHEL"
 
     ```bash
-    sudo dnf install -y npm ffmpeg
+    sudo dnf install -y npm
     curl -LsSf https://astral.sh/uv/install.sh | sh
     ```
 

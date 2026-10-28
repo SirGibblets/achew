@@ -5,9 +5,12 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
 import threading
 import time
+from collections.abc import Generator
 from concurrent.futures import ThreadPoolExecutor, as_completed, wait
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, cast
 
@@ -18,6 +21,7 @@ from app.core.constants import (
     MIN_SILENCE_DURATION,
     MIN_TRIMMED_SEGMENT_LENGTH,
 )
+from app.core.ffmpeg import ffmpeg_path, ffmpeg_version, supports_xhe_aac
 from app.core.system_info import get_worker_count
 from app.models.enums import Step
 from app.models.progress import ProgressCallback
@@ -55,7 +59,7 @@ def _ffmpeg_probe_stderr(audio_file: str) -> str:
     was specified, but the stream header info is still printed to stderr."""
     try:
         result = subprocess.run(
-            ["ffmpeg", "-hide_banner", "-i", audio_file],
+            [ffmpeg_path(), "-hide_banner", "-i", audio_file],
             capture_output=True,
             timeout=30,
             encoding="utf-8",
@@ -67,25 +71,11 @@ def _ffmpeg_probe_stderr(audio_file: str) -> str:
         return ""
 
 
-@functools.lru_cache(maxsize=1)
-def _ffmpeg_version() -> str:
-    """Return the first line of `ffmpeg -version` (e.g. "ffmpeg version 6.1.1 …"),
-    or an empty string if the probe failed."""
-    try:
-        result = subprocess.run(
-            ["ffmpeg", "-version"],
-            capture_output=True,
-            timeout=10,
-            encoding="utf-8",
-            errors="replace",
-        )
-        lines = result.stdout.splitlines()
-        return lines[0].strip() if lines else ""
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
-        logger.warning(f"Failed to get ffmpeg version: {e}")
-        return ""
-
-
+# Its own cache, far larger than the probe-text cache: decoder_args() asks this for
+# every mp4-family file it decodes, including each segment of an ALAC book, and those
+# segment paths must not evict the book itself (~60 ms to re-probe a 1 GB+ m4b, vs.
+# ~4 ms for a segment). A bool per path is cheap to keep.
+@functools.lru_cache(maxsize=4096)
 def audio_uses_xhe_aac(audio_file: str) -> bool:
     """Return True if ffmpeg reports the audio stream as xHE-AAC."""
     return "xhe-aac" in _ffmpeg_probe_stderr(audio_file).lower()
@@ -116,7 +106,7 @@ def probe_audio_info(audio_file: str) -> Tuple[Optional[str], str, bool]:
         lines.pop()
     cleaned = "\n".join(lines)
 
-    version = _ffmpeg_version()
+    version = ffmpeg_version()
     diagnostic = f"{version}\n\n{cleaned}" if version else cleaned
 
     return codec, diagnostic, uses_xhe_aac
@@ -132,6 +122,12 @@ _REMUX_CONTAINER_EXTS = {"m4b", "m4a", "mp4"}
 # via a symlink (see _extract_range_block). WAV/FLAC/M4A/MP4/OGG all patch
 # headers at trailer-write time and would fail against a non-seekable sink.
 _NULL_SINK_SAFE_EXTS = {"aac", "mp3", "ac3", "eac3"}
+
+# Range extraction seeks each ffmpeg to this many seconds before its first range,
+# then copies or decodes forward to it (see _extract_range_block). Decoded (WAV)
+# extraction starts a new ffmpeg at any longer gap between ranges, since that
+# costs less than decoding through the gap.
+_RANGE_SEEK_MARGIN = 60.0
 
 # Candidates probed (in order) when the source is an mp4-family container.
 # `aac` is cheapest (raw ADTS, no per-segment moov, null-sink-safe). `m4a`
@@ -150,6 +146,63 @@ _CODEC_EXT_MAP = {
     "eac3": "eac3",
 }
 
+# FFmpeg's native aac decoder can't decode xHE-AAC (USAC) speech-mode frames and
+# garbles most of the rest, so xHE-AAC input goes through libfdk_aac, which the
+# bundled achew-ffmpeg build includes. -drc_level -2 turns off fdk's default
+# loudness normalization so levels, and with them silencedetect thresholds, match
+# every other codec.
+XHE_AAC_DECODER_ARGS = ["-c:a", "libfdk_aac", "-drc_level", "-2"]
+
+
+def decoder_args(audio_file: str) -> List[str]:
+    """Return the ffmpeg input options (placed before -i) audio_file needs to decode
+    correctly: the libfdk_aac options for xHE-AAC, otherwise none.
+
+    Only the source book and stream copies of it can be xHE-AAC, and those are always
+    mp4-family files, so other extensions skip the probe. Returns none when the ffmpeg
+    in use lacks libfdk_aac; the book is flagged unsupported instead."""
+    if Path(audio_file).suffix.lstrip(".").lower() not in _REMUX_CONTAINER_EXTS:
+        return []
+    if audio_uses_xhe_aac(audio_file) and supports_xhe_aac():
+        return list(XHE_AAC_DECODER_ARGS)
+    return []
+
+
+def extraction_args(audio_file: str, extension: str) -> Tuple[List[str], List[str]]:
+    """Return (input options, output options) for extracting audio_file into a segment
+    with this extension: a stream copy, or for WAV a 16 kHz mono decode (exact cuts for
+    codecs whose stream copies can only start at sparse independent frames)."""
+    if extension == "wav":
+        return decoder_args(audio_file), ["-ac", "1", "-ar", "16000"]
+    return [], ["-c", "copy"]
+
+
+@contextmanager
+def decodable_audio(audio_file: str) -> Generator[str, None, None]:
+    """Yield a path any ffmpeg can decode without extra options: audio_file itself, or
+    a temporary 16 kHz mono WAV decoded from it when it needs decoder_args().
+
+    For ASR libraries, which run ffmpeg themselves and can't pass decoder options."""
+    args = decoder_args(audio_file)
+    if not args:
+        yield audio_file
+        return
+    fd, wav_path = tempfile.mkstemp(suffix=".wav", dir=os.path.dirname(audio_file) or None)
+    os.close(fd)
+    try:
+        subprocess.run(
+            [ffmpeg_path(), "-y", "-loglevel", "error", *args, "-i", audio_file, "-map", "0:a:0"]
+            + ["-ac", "1", "-ar", "16000", wav_path],
+            capture_output=True,
+            check=True,
+        )
+        yield wav_path
+    finally:
+        try:
+            os.remove(wav_path)
+        except OSError:
+            pass
+
 
 def pick_segment_extension(audio_file: str, fallback_ext: Optional[str] = None) -> str:
     """Choose an output file extension suitable for `ffmpeg -c copy` segments.
@@ -161,6 +214,9 @@ def pick_segment_extension(audio_file: str, fallback_ext: Optional[str] = None) 
     ext = (fallback_ext if fallback_ext is not None else Path(audio_file).suffix.lstrip(".")).lower()
     if ext not in _REMUX_CONTAINER_EXTS:
         return ext
+    # ADTS can't carry xHE-AAC (USAC), so its stream copies stay in mp4
+    if audio_uses_xhe_aac(audio_file):
+        return "m4a"
     codec = get_audio_codec(audio_file)
     if codec and codec in _CODEC_EXT_MAP:
         return _CODEC_EXT_MAP[codec]
@@ -177,7 +233,7 @@ def _probe_extension(audio_file: str, ext: str, temp_dir: str) -> bool:
     with tempfile.TemporaryDirectory(dir=temp_dir) as tmp_dir_path:
         output_pattern = os.path.join(tmp_dir_path, f"probe_%03d.{ext}")
         cmd = [
-            "ffmpeg",
+            ffmpeg_path(),
             "-y",
             "-hide_banner",
             "-loglevel",
@@ -210,6 +266,11 @@ def probe_segment_extension(audio_file: str, temp_dir: str) -> str:
     src_ext = Path(audio_file).suffix.lstrip(".").lower()
     if src_ext not in _REMUX_CONTAINER_EXTS:
         return src_ext
+    # xHE-AAC can only be cut at its independent frames, up to ~1 s apart, so stream
+    # copies split by the segment muxer start late (clipping words, shifting cues).
+    # Decoding to WAV cuts exactly; see extraction_args().
+    if audio_uses_xhe_aac(audio_file):
+        return "wav"
 
     codec = get_audio_codec(audio_file)
     candidates = list(_PROBE_CANDIDATES)
@@ -278,7 +339,7 @@ def crop_start_to_tempfile(audio_file: str, crop_seconds: float) -> str | None:
 
     try:
         subprocess.run(
-            ["ffmpeg", "-y", "-ss", str(crop_seconds), "-i", audio_file, "-c", "copy", temp_path],
+            [ffmpeg_path(), "-y", "-ss", str(crop_seconds), "-i", audio_file, "-c", "copy", temp_path],
             capture_output=True,
             check=True,
         )
@@ -359,7 +420,8 @@ class AudioProcessingService:
         else:
             # noinspection SpellCheckingInspection
             cmd = [
-                "ffmpeg",
+                ffmpeg_path(),
+                *decoder_args(input_file),
                 "-i",
                 input_file,
                 "-vn",
@@ -481,9 +543,10 @@ class AudioProcessingService:
 
         # noinspection SpellCheckingInspection
         cmd = [
-            "ffmpeg",
+            ffmpeg_path(),
             "-ss",
             str(seek),
+            *decoder_args(input_file),
             "-i",
             input_file,
             "-t",
@@ -727,26 +790,23 @@ class AudioProcessingService:
 
         This is more efficient than the segment-split approach for small numbers of chapters.
         """
-        extension = Path(output_path).suffix.lstrip(".")
-        use_copy = extension not in ["wav"]
+        input_args, output_args = extraction_args(audio_file, Path(output_path).suffix.lstrip("."))
 
         command = [
-            "ffmpeg",
+            ffmpeg_path(),
             "-y",
             "-ss",
             str(start_time + CHAPTER_START_PADDING - self.asr_buffer),
             "-t",
             str(duration),
+            *input_args,
             "-i",
             audio_file,
             "-map",
             "0:a:0",
+            *output_args,
+            output_path,
         ]
-
-        if use_copy:
-            command.extend(["-acodec", "copy"])
-
-        command.append(output_path)
 
         process = subprocess.Popen(
             command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace"
@@ -785,7 +845,7 @@ class AudioProcessingService:
             # Create temp file for trimmed audio
             temp_path = segment_path.replace(f".{extension}", f"_tmp.{extension}")
             trim_cmd = [
-                "ffmpeg",
+                ffmpeg_path(),
                 "-y",
                 "-i",
                 segment_path,
@@ -811,7 +871,7 @@ class AudioProcessingService:
             trim_point = max(MIN_TRIMMED_SEGMENT_LENGTH, longest[0] + self.asr_buffer)
 
             trim_cmd = [
-                "ffmpeg",
+                ffmpeg_path(),
                 "-y",
                 "-i",
                 segment_path,
@@ -840,12 +900,14 @@ class AudioProcessingService:
     ) -> List[str]:
         """Extract a list of [start, end) ranges in parallel.
 
-        Ranges are sorted and partitioned into at most `num_workers` contiguous
-        blocks. Each block runs as one ffmpeg invocation with an input-side
-        `-ss`/`-t` so that worker only demuxes its own portion of the source
-        file. Within each block we use ffmpeg's segment muxer with timestamps
-        relative to the block start, splitting the kept ranges out from the
-        inter-range gaps.
+        Ranges are sorted and partitioned into contiguous blocks: for stream
+        copies, at most `num_workers` balanced blocks; for decoded (WAV) output,
+        a new block at every gap longer than _RANGE_SEEK_MARGIN, since decoding
+        through a long gap costs more than a fresh seek. Each block runs as one
+        ffmpeg invocation with an input-side `-ss`/`-t` so that worker only
+        demuxes its own portion of the source file. Within each block we use
+        ffmpeg's segment muxer with timestamps relative to the block start,
+        splitting the kept ranges out from the inter-range gaps.
 
         `name_timestamps`, when provided, gives the timestamp to use for each
         output file's name (segment_<ms>.ext). If None, each range's own start
@@ -864,22 +926,32 @@ class AudioProcessingService:
         sorted_names = [n for _, n in indexed]
 
         num_workers = get_worker_count()
-        num_blocks = max(1, min(num_workers, len(sorted_ranges)))
-
-        # Split into balanced contiguous blocks — index-range slicing so
-        # neighboring ranges stay together (amortizes the input-seek)
-        k, m = divmod(len(sorted_ranges), num_blocks)
+        extension = "wav" if use_wav else (segment_extension or pick_segment_extension(audio_file))
         blocks: List[List[Tuple[float, float]]] = []
         block_names: List[List[float]] = []
-        pos = 0
-        for i in range(num_blocks):
-            size = k + (1 if i < m else 0)
-            if size:
-                blocks.append(sorted_ranges[pos : pos + size])
-                block_names.append(sorted_names[pos : pos + size])
-            pos += size
 
-        extension = "wav" if use_wav else (segment_extension or pick_segment_extension(audio_file))
+        if extension == "wav":
+            # Decoding: a block decodes its gaps too, so start a new one at each long gap
+            for rng, name in zip(sorted_ranges, sorted_names):
+                if blocks and rng[0] - blocks[-1][-1][1] <= _RANGE_SEEK_MARGIN:
+                    blocks[-1].append(rng)
+                    block_names[-1].append(name)
+                else:
+                    blocks.append([rng])
+                    block_names.append([name])
+        else:
+            # Split into balanced contiguous blocks — index-range slicing so
+            # neighboring ranges stay together (amortizes the input-seek)
+            num_blocks = max(1, min(num_workers, len(sorted_ranges)))
+            k, m = divmod(len(sorted_ranges), num_blocks)
+            pos = 0
+            for i in range(num_blocks):
+                size = k + (1 if i < m else 0)
+                if size:
+                    blocks.append(sorted_ranges[pos : pos + size])
+                    block_names.append(sorted_names[pos : pos + size])
+                pos += size
+
         cancelled = threading.Event()
         completed = [0]
         progress_lock = threading.Lock()
@@ -891,7 +963,7 @@ class AudioProcessingService:
         block_results: List[Optional[List[str]]] = [None] * len(blocks)
         worker_failed = False
 
-        with ThreadPoolExecutor(max_workers=len(blocks)) as executor:
+        with ThreadPoolExecutor(max_workers=min(num_workers, len(blocks))) as executor:
             futures = {
                 executor.submit(
                     self._extract_range_block,
@@ -984,7 +1056,7 @@ class AudioProcessingService:
 
         block_prefix = f"xrng{block_idx:02d}_"
         output_pattern = os.path.join(output_dir, f"{block_prefix}%03d.{extension}")
-        use_copy = extension != "wav"
+        input_args, output_args = extraction_args(audio_file, extension)
 
         # Gap segments (odd indices) are pure overhead — ffmpeg must write them
         # so the segment muxer can split at our range boundaries. For codecs
@@ -1016,21 +1088,21 @@ class AudioProcessingService:
                             pass
                     break
 
-        # Two-stage seek: a fast input-side -ss to ~safe_margin before the block
-        # start, then an accurate output-side -ss to b_start, with -copyts so the
-        # segment muxer splits at the right boundaries. A single input -ss + -t
+        # Two-stage seek: a fast input-side -ss to _RANGE_SEEK_MARGIN before the
+        # block start, then an accurate output-side -ss to b_start, with -copyts so
+        # the segment muxer splits at the right boundaries. A single input -ss + -t
         # can mis-cut the segments on certain files and fails to bound -t on some
         # containers, erroneously shifting each segment's audio.
-        safe_margin = 60.0
-        fast_start = max(0.0, b_start - safe_margin)
+        fast_start = max(0.0, b_start - _RANGE_SEEK_MARGIN)
 
         # noinspection SpellCheckingInspection
         cmd = [
-            "ffmpeg",
+            ffmpeg_path(),
             "-y",
             "-ss",
             f"{fast_start:.6f}",
             "-copyts",
+            *input_args,
             "-i",
             audio_file,
             "-ss",
@@ -1039,21 +1111,13 @@ class AudioProcessingService:
             f"{b_end - b_start:.6f}",
             "-map",
             "0:a:0",
+            *output_args,
+            "-f",
+            "segment",
+            "-segment_times",
+            segment_times_str,
+            output_pattern,
         ]
-        if use_copy:
-            cmd.extend(["-acodec", "copy"])
-        else:
-            # Use 16 kHz mono for WAV fallback
-            cmd.extend(["-ac", "1", "-ar", "16000"])
-        cmd.extend(
-            [
-                "-f",
-                "segment",
-                "-segment_times",
-                segment_times_str,
-                output_pattern,
-            ]
-        )
 
         process = subprocess.Popen(
             cmd,
@@ -1064,6 +1128,26 @@ class AudioProcessingService:
         )
         with self._process_lock:
             self._running_processes.append(process)
+
+        # Ranges of this block counted toward progress so far
+        counted = 0
+
+        def mark_extracted(count: int) -> None:
+            nonlocal counted
+            counted += count
+            with progress_lock:
+                completed[0] += count
+                if total > 0:
+                    pct = min((completed[0] / total) * 100, 99.0)
+                    self._notify_progress(
+                        Step.AUDIO_EXTRACTION,
+                        pct,
+                        f"Extracted chapter {completed[0]} of {total}…",
+                        {
+                            "segments_created": completed[0],
+                            "total_segments": total,
+                        },
+                    )
 
         try:
             open_pattern = re.compile(
@@ -1086,19 +1170,7 @@ class AudioProcessingService:
                     # a kept segment (output 0, 2, 4, …). Odd opens are gap
                     # segments; don't count them toward progress.
                     if block_opens >= 2 and block_opens % 2 == 0:
-                        with progress_lock:
-                            completed[0] += 1
-                            if total > 0:
-                                pct = min((completed[0] / total) * 100, 99.0)
-                                self._notify_progress(
-                                    Step.AUDIO_EXTRACTION,
-                                    pct,
-                                    f"Extracted chapter {completed[0]} of {total}…",
-                                    {
-                                        "segments_created": completed[0],
-                                        "total_segments": total,
-                                    },
-                                )
+                        mark_extracted(1)
             process.wait()
             if cancelled.is_set() or process.returncode in [254, 255]:
                 return None
@@ -1108,6 +1180,10 @@ class AudioProcessingService:
                     f"(exit {process.returncode}). Last stderr:\n" + "\n".join(stderr_tail)
                 )
                 raise subprocess.CalledProcessError(process.returncode, cmd)
+            # The block's last range is never followed by another open, and a block
+            # of one range (decoded extraction) has no other: count them on exit
+            if counted < len(block):
+                mark_extracted(len(block) - counted)
         finally:
             with self._process_lock:
                 try:
@@ -1323,7 +1399,7 @@ class AudioProcessingService:
                 trim_point = max(MIN_TRIMMED_SEGMENT_LENGTH, longest[0] + self.asr_buffer)
 
                 trim_cmd = [
-                    "ffmpeg",
+                    ffmpeg_path(),
                     "-y",
                     "-i",
                     path,
@@ -1394,7 +1470,8 @@ class AudioProcessingService:
 
         # noinspection SpellCheckingInspection
         cmd = [
-            "ffmpeg",
+            ffmpeg_path(),
+            *decoder_args(input_file),
             "-i",
             input_file,
             "-af",
@@ -1504,7 +1581,7 @@ class AudioProcessingService:
                     f.write(f"file '{escaped_path}'\n")
 
             cmd = [
-                "ffmpeg",
+                ffmpeg_path(),
                 "-y",
                 "-progress",
                 "pipe:2",

@@ -2,6 +2,7 @@ import asyncio
 import glob
 import json
 import logging
+import math
 import os
 import subprocess
 import sys
@@ -15,6 +16,7 @@ from app.core.constants import (
     VAD_NEG_SPEECH_THRESHOLD,
     VAD_SPEECH_THRESHOLD,
 )
+from app.core.ffmpeg import ffmpeg_path
 from app.core.system_info import get_worker_count
 from app.models.enums import Step
 from app.models.progress import ProgressCallback
@@ -77,7 +79,7 @@ class VadDetectionService:
 
         # Use ffmpeg segment to efficiently split the file
         cmd = [
-            "ffmpeg",
+            ffmpeg_path(),
             "-y",  # -y to overwrite existing files
             "-i",
             audio_file,
@@ -161,14 +163,38 @@ class VadDetectionService:
         vad_worker_path: str,
         progress_tracker: dict,
         segment_duration: Optional[float] = None,
+        source_chunks: int = 0,
     ) -> List[Tuple[int, List[Tuple[float, float]]]]:
-        """Process a batch of audio chunks with VAD using a single subprocess for efficiency"""
+        """Process a batch of audio chunks with VAD using a single subprocess for efficiency.
+
+        A nonzero source_chunks means each chunk is a range of the source file, out of
+        that many in total, rather than a file of its own."""
         chunk_indices = [chunk_index for chunk_index, _ in chunk_batch]
         logger.debug(f"Starting subprocess for chunk batch {[i + 1 for i in chunk_indices]}")
 
-        worker_chunk_data = [[chunk_file, chunk_index] for chunk_index, chunk_file in chunk_batch]
-        chunk_data = json.dumps(worker_chunk_data)
+        from .audio_service import decoder_args
+
         duration_to_use = segment_duration if segment_duration is not None else self.segment_duration
+        if source_chunks:
+            # [source, index, seek start, seek duration]: the worker decodes that range.
+            # The last chunk runs to the end of the file (duration None): the chunk count
+            # comes from the book's metadata duration, which can fall short of the audio.
+            worker_chunk_data = [
+                [
+                    chunk_file,
+                    chunk_index,
+                    chunk_index * duration_to_use,
+                    None if chunk_index == source_chunks - 1 else duration_to_use,
+                ]
+                for chunk_index, chunk_file in chunk_batch
+            ]
+        else:
+            worker_chunk_data = [[chunk_file, chunk_index] for chunk_index, chunk_file in chunk_batch]
+        chunk_data = json.dumps(worker_chunk_data)
+
+        # Chunks come from one book, so they share a codec: the first one's decoder
+        # options (libfdk_aac for xHE-AAC) apply to the whole batch.
+        chunk_decoder_args = decoder_args(chunk_batch[0][1]) if chunk_batch else []
 
         cmd = [
             sys.executable,
@@ -180,6 +206,8 @@ class VadDetectionService:
             str(VAD_SPEECH_THRESHOLD),
             str(VAD_NEG_SPEECH_THRESHOLD),
             str(VAD_MIN_SPEECH_DURATION_MS),
+            ffmpeg_path(),
+            json.dumps(chunk_decoder_args),
         ]
 
         loop = asyncio.get_event_loop()
@@ -286,8 +314,12 @@ class VadDetectionService:
         chunk_files: List[str],
         vad_worker_path: str,
         total_duration: float,
+        source_ranges: bool = False,
     ) -> List[Tuple[float, float]]:
-        """Process all audio chunks with VAD using optimized parallel subprocesses"""
+        """Process all audio chunks with VAD using optimized parallel subprocesses.
+
+        With source_ranges, every entry of chunk_files is the source itself and the
+        workers decode each chunk's segment_duration range of it."""
         all_gaps = []
 
         self._check_cancellation()
@@ -328,7 +360,12 @@ class VadDetectionService:
         worker_tasks = []
         for worker_batch in worker_batches:
             if worker_batch:  # Only create task if worker has chunks to process
-                task = self._process_chunk_batch_subprocess(worker_batch, vad_worker_path, progress_tracker)
+                task = self._process_chunk_batch_subprocess(
+                    worker_batch,
+                    vad_worker_path,
+                    progress_tracker,
+                    source_chunks=total_chunks if source_ranges else 0,
+                )
                 worker_tasks.append(task)
 
         # Create a task to monitor overall progress
@@ -590,9 +627,21 @@ class VadDetectionService:
         try:
             self._check_cancellation()
 
+            from .audio_service import decoder_args
+
             # Step 1: Split audio into chunks using efficient ffmpeg segmentation
             self._notify_progress(Step.VAD_PREP, 0, "Preparing…")
-            chunk_files = await self._split_audio_into_chunks_async(audio_file, duration, temp_dir, segment_extension)
+            # Stream copies of xHE-AAC can only be split at its independent frames, up to
+            # ~1 s past each chunk boundary, which would shift every chunk's timeline.
+            # Workers instead seek-decode their chunk's range of the source directly:
+            # exact, still parallel, and no temp files.
+            source_ranges = bool(decoder_args(audio_file))
+            if source_ranges:
+                chunk_files = [audio_file] * math.ceil(duration / self.segment_duration)
+            else:
+                chunk_files = await self._split_audio_into_chunks_async(
+                    audio_file, duration, temp_dir, segment_extension
+                )
 
             self._check_cancellation()
 
@@ -604,7 +653,7 @@ class VadDetectionService:
             self._check_cancellation()
 
             # Step 2: Process all chunks with VAD using subprocesses
-            all_gaps = await self._process_audio_chunks_async(chunk_files, vad_worker_path, duration)
+            all_gaps = await self._process_audio_chunks_async(chunk_files, vad_worker_path, duration, source_ranges)
 
             self._check_cancellation()
 

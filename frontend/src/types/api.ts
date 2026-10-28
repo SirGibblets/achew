@@ -21,6 +21,7 @@ export interface PipelineState {
   title_refs?: TitleReference[];
   book?: Book | null;
   restart_options?: string[];
+  audio_xhe_aac?: boolean;
   audio_unsupported_codec?: boolean;
   audio_info?: AudioInfo | null;
   /** CONFIGURE_ASR is confirming settings for a transcription-enhanced realignment */

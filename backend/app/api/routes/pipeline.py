@@ -68,6 +68,7 @@ class PipelineStateResponse(BaseModel):
     chapter_refs: List[ChapterReference] = []
     title_refs: List[TitleReference] = []
     restart_options: List[str] = []
+    audio_xhe_aac: bool = False
     audio_unsupported_codec: bool = False
     audio_info: Optional[AudioInfo] = None
     # CONFIGURE_ASR is confirming settings for a transcription-enhanced realignment
@@ -101,6 +102,7 @@ async def create_pipeline(request: CreatePipelineRequest, background_tasks: Back
                     extras={
                         "chapter_refs": pipeline.chapter_refs,
                         "title_refs": pipeline.title_refs,
+                        "audio_xhe_aac": pipeline.audio_xhe_aac,
                         "audio_unsupported_codec": pipeline.audio_unsupported_codec,
                         "audio_info": pipeline.audio_info,
                     },
@@ -154,6 +156,7 @@ async def get_pipeline_state():
             chapter_refs=pipeline.chapter_refs,
             title_refs=pipeline.title_refs,
             restart_options=pipeline.get_restart_options(),
+            audio_xhe_aac=pipeline.audio_xhe_aac,
             audio_unsupported_codec=pipeline.audio_unsupported_codec,
             audio_info=pipeline.audio_info,
             realign_pending=pipeline.pending_realign is not None,

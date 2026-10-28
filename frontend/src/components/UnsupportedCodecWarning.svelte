@@ -8,13 +8,14 @@
   <div class="codec-warning-content">
     <p class="codec-warning-title">
       Unsupported Audio Codec (xHE-AAC) <DocLink
-        path="/reference/supported-formats/#audio"
+        path="/reference/supported-formats/#xhe-aac"
         featureName="Supported Formats"
       />
     </p>
     <p class="codec-warning-text">
-      This audiobook uses a codec that is not currently supported by Achew. Features like Smart Detect, chapter
-      realignment, transcription, audio playback, etc. may not work as expected.
+      This audiobook uses xHE-AAC, which needs an ffmpeg with the libfdk_aac decoder, and the ffmpeg Achew is using
+      doesn't have it. Features like Smart Detect, chapter realignment, transcription, audio playback, etc. may not work
+      as expected.
     </p>
   </div>
 </div>

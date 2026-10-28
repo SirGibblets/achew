@@ -117,7 +117,7 @@ server {
         proxy_read_timeout 3600;
         proxy_send_timeout 3600;
 
-        # Audio playback via range requests
+        # Audio playback
         proxy_buffering off;
     }
 }

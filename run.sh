@@ -117,13 +117,6 @@ if ! command -v npm &> /dev/null; then
     exit 1
 fi
 
-# Check ffmpeg
-if ! command -v ffmpeg &> /dev/null; then
-    log_error "ffmpeg is not installed. Please install ffmpeg first."
-    log_error "For installation instructions, visit: https://ffmpeg.org/download.html"
-    exit 1
-fi
-
 # Check uv
 if ! command -v uv &> /dev/null; then
     log_error "uv is not installed. Please install uv first."
@@ -148,6 +141,13 @@ log_info "Building backend..."
 log_info "Installing backend dependencies..."
 cd backend
 uv sync --frozen
+
+# Achew installs its own ffmpeg on supported platforms; elsewhere it needs one on PATH
+# or in ACHEW_FFMPEG. The check prints instructions when neither works.
+if ! uv run python -m app.core.ffmpeg; then
+    log_error "ffmpeg is required."
+    exit 1
+fi
 
 log_success "Backend dependencies installed"
 

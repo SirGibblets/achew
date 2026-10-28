@@ -67,6 +67,8 @@ def process_multiple_chunks(
     threshold=0.5,
     neg_threshold=0.35,
     min_speech_duration_ms=250.0,
+    ffmpeg="ffmpeg",
+    decoder_args=(),
 ):
     """Process multiple chunks sequentially in a single worker process"""
     results = []
@@ -95,22 +97,30 @@ def process_multiple_chunks(
 
     except Exception as e:
         error_result = {"error": f"Failed to load VAD model: {str(e)}"}
-        for chunk_file, chunk_index in chunk_files_with_indices:
+        for chunk_file, chunk_index, *_ in chunk_files_with_indices:
             results.append({**error_result, "chunk_index": chunk_index, "gaps": []})
         return results
 
-    # Process each chunk with the loaded model
-    for i, (chunk_file, chunk_index) in enumerate(chunk_files_with_indices):
+    # Process each chunk with the loaded model. Entries are [file, index], or
+    # [source, index, seek start, seek duration] to decode a range of the source.
+    for i, (chunk_file, chunk_index, *seek) in enumerate(chunk_files_with_indices):
         try:
             # Calculate start time for this chunk
             start_time = chunk_index * segment_duration
+            seek_args = []
+            if seek:
+                seek_start, seek_duration = seek
+                # A seek duration of None decodes to the end of the source
+                seek_args = ["-ss", str(seek_start)] + ([] if seek_duration is None else ["-t", str(seek_duration)])
 
             # Load the audio file
             cmd = [
-                "ffmpeg",
+                ffmpeg,
                 "-loglevel",
                 "error",
                 "-y",
+                *seek_args,
+                *decoder_args,
                 "-i",
                 chunk_file,
                 "-ac",
@@ -126,7 +136,9 @@ def process_multiple_chunks(
             sr = 16000
 
             if len(wav) == 0:
-                result = {"chunk_index": chunk_index, "gaps": [], "error": "Empty audio"}
+                # A range past the end of the source (the book's metadata duration ran
+                # long) has no audio and no gaps; it isn't an error
+                result = {"chunk_index": chunk_index, "gaps": [], "error": None if seek else "Empty audio"}
                 results.append(result)
                 print(f"RESULT:{json.dumps(result)}", flush=True)
                 continue
@@ -231,6 +243,10 @@ if __name__ == "__main__":
         neg_threshold = float(sys.argv[6]) if len(sys.argv) >= 7 else threshold - 0.15
         min_speech_duration_ms = float(sys.argv[7]) if len(sys.argv) >= 8 else 250.0
 
+        # The ffmpeg binary and the chunks' decoder input options (libfdk_aac for xHE-AAC)
+        ffmpeg = sys.argv[8] if len(sys.argv) >= 9 else "ffmpeg"
+        decoder_args = json.loads(sys.argv[9]) if len(sys.argv) >= 10 else []
+
         process_multiple_chunks(
             chunk_files_with_indices,
             segment_duration,
@@ -239,6 +255,8 @@ if __name__ == "__main__":
             threshold=threshold,
             neg_threshold=neg_threshold,
             min_speech_duration_ms=min_speech_duration_ms,
+            ffmpeg=ffmpeg,
+            decoder_args=decoder_args,
         )
 
     except (json.JSONDecodeError, ValueError) as e:
