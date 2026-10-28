@@ -1,5 +1,6 @@
-import { writable, derived } from 'svelte/store';
+import { writable, derived, get } from 'svelte/store';
 import { api } from '../utils/api';
+import { session } from './session';
 
 interface AudioState {
   currentSegmentId: string | null;
@@ -30,6 +31,19 @@ function createAudioStore() {
 
   let audioElement: HTMLAudioElement | null = null;
   let currentPlayPromise: Promise<void> | null = null;
+
+  // Pause and rewind. A transcoded preview is a live server-side encode, so drop its
+  // source instead: that closes the request, and the server stops encoding.
+  const halt = (): void => {
+    if (!audioElement) return;
+    audioElement.pause();
+    if (audioElement.src.includes('/api/audio/preview')) {
+      audioElement.removeAttribute('src');
+      audioElement.load();
+    } else {
+      audioElement.currentTime = 0;
+    }
+  };
 
   const createAudioElement = (): HTMLAudioElement => {
     if (audioElement) return audioElement;
@@ -108,7 +122,10 @@ function createAudioStore() {
         audio.src = '';
         audio.load();
 
-        const streamUrl = api.audio.getStreamUrl();
+        // Few browsers decode xHE-AAC, so those books stream a server-side transcode
+        // that already starts at the chapter instead of seeking into the original file
+        const transcoded = get(session).audioXheAac;
+        const streamUrl = transcoded ? api.audio.getPreviewUrl(chapterTimestamp ?? 0) : api.audio.getStreamUrl();
         audio.src = streamUrl;
 
         update((state) => ({
@@ -119,7 +136,7 @@ function createAudioStore() {
           currentTime: 0,
         }));
 
-        if (chapterTimestamp !== null) {
+        if (chapterTimestamp !== null && !transcoded) {
           await new Promise<void>((resolve, reject) => {
             const onLoadedMetadata = () => {
               audio.removeEventListener('loadedmetadata', onLoadedMetadata);
@@ -160,23 +177,10 @@ function createAudioStore() {
 
     stop(): void {
       if (currentPlayPromise) {
-        currentPlayPromise
-          .then(() => {
-            if (audioElement) {
-              audioElement.pause();
-              audioElement.currentTime = 0;
-            }
-          })
-          .catch(() => {
-            if (audioElement) {
-              audioElement.pause();
-              audioElement.currentTime = 0;
-            }
-          });
+        currentPlayPromise.then(halt).catch(halt);
         currentPlayPromise = null;
-      } else if (audioElement) {
-        audioElement.pause();
-        audioElement.currentTime = 0;
+      } else {
+        halt();
       }
 
       update((state) => ({

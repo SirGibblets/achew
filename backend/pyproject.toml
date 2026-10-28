@@ -32,6 +32,7 @@ dependencies = [
     "github-copilot-sdk>=1.0.26,<2",
     "python-multipart==0.0.24",
     "langcodes[data]>=3.4.0",
+    "achew-ffmpeg==9.0.2.post1; (sys_platform == 'linux' and platform_machine == 'x86_64') or (sys_platform == 'linux' and platform_machine == 'aarch64') or (sys_platform == 'darwin' and platform_machine == 'arm64') or (sys_platform == 'darwin' and platform_machine == 'x86_64') or (sys_platform == 'win32' and platform_machine == 'AMD64')",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -50,6 +51,16 @@ requires-dist = [
     "tiktoken",
     "huggingface_hub",
     "scipy",
+]
+
+# One wheel per platform from https://github.com/SirGibblets/achew-ffmpeg releases.
+[tool.uv.sources]
+achew-ffmpeg = [
+  { url = "https://github.com/SirGibblets/achew-ffmpeg/releases/download/v9.0.2.post1/achew_ffmpeg-9.0.2.post1-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.musllinux_1_1_x86_64.whl", marker = "sys_platform == 'linux' and platform_machine == 'x86_64'" },
+  { url = "https://github.com/SirGibblets/achew-ffmpeg/releases/download/v9.0.2.post1/achew_ffmpeg-9.0.2.post1-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.musllinux_1_1_aarch64.whl", marker = "sys_platform == 'linux' and platform_machine == 'aarch64'" },
+  { url = "https://github.com/SirGibblets/achew-ffmpeg/releases/download/v9.0.2.post1/achew_ffmpeg-9.0.2.post1-py3-none-macosx_11_0_arm64.whl", marker = "sys_platform == 'darwin' and platform_machine == 'arm64'" },
+  { url = "https://github.com/SirGibblets/achew-ffmpeg/releases/download/v9.0.2.post1/achew_ffmpeg-9.0.2.post1-py3-none-macosx_11_0_x86_64.whl", marker = "sys_platform == 'darwin' and platform_machine == 'x86_64'" },
+  { url = "https://github.com/SirGibblets/achew-ffmpeg/releases/download/v9.0.2.post1/achew_ffmpeg-9.0.2.post1-py3-none-win_amd64.whl", marker = "sys_platform == 'win32' and platform_machine == 'AMD64'" },
 ]
 
 [project.optional-dependencies]

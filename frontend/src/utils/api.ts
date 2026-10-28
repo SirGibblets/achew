@@ -468,6 +468,12 @@ export const audio = {
     const timestamp = Date.now();
     return `${API_BASE}/api/audio/stream?t=${timestamp}`;
   },
+
+  /** Book audio from `start` seconds, transcoded server-side for codecs browsers can't play. */
+  getPreviewUrl(start: number): string {
+    const timestamp = Date.now();
+    return `${API_BASE}/api/audio/preview?start=${start}&t=${timestamp}`;
+  },
 };
 
 export const health = {

@@ -24,6 +24,12 @@ No. All audio stays on the Achew host. When you use cloud LLMs for AI Cleanup, o
 
 See the [Transcription](reference/transcription.md#what-should-i-start-with) page for recommendations.
 
+## Do I need to install ffmpeg?
+
+Not on most systems. Achew installs its own build of [ffmpeg](reference/glossary.md#ffmpeg) on Linux (x86_64 and ARM64), macOS, and Windows (x64), including the decoder needed for [xHE-AAC](reference/glossary.md#xhe-aac) audiobooks. If you need Achew to use a different ffmpeg, set the `ACHEW_FFMPEG` [environment variable](installation/index.md#environment-variables).
+
+On other platforms, such as 32-bit Raspberry Pi OS or Windows on ARM, install ffmpeg yourself and Achew uses the one on your `PATH` (or the one `ACHEW_FFMPEG` points to). If it can't find one, Achew stops at startup and says what to install.
+
 ## Can I run Achew on a low-memory system?
 
 Achew has been tested on as little as [4GB of memory](installation/index.md#system-requirements). By default, Achew auto-detects a safe worker count based on available CPU cores and memory (and respects Docker memory limits). If you still run tight, set `ACHEW_WORKER_COUNT=1` to disable parallelism (slowest but most frugal). You can also raise the value to utilize more of a beefy machine. See [Tuning the worker count](troubleshooting/performance-tuning.md#tuning-the-worker-count).

@@ -7,7 +7,6 @@
 
 - [npm](https://nodejs.org/en/download){:target="_blank"} (bundled with the Node.js installer)
 - [uv package manager](https://docs.astral.sh/uv/getting-started/installation/){:target="_blank"}
-- [ffmpeg](https://ffmpeg.org/download.html){:target="_blank"}: make sure `ffmpeg.exe` is on your `PATH`.
 - *(Optional)* [Visual C++ Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170#latest-supported-redistributable-version){:target="_blank"}: only required if using the Parakeet transcription model.
 
 ## 2. Clone the project

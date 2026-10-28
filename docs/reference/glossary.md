@@ -64,6 +64,9 @@ Achew's detection mode for audiobooks with music and/or sound effects. Uses [VAD
 ## Embedded chapters
 Chapters baked into an audio file's metadata. Achew reads these from Audiobookshelf and exposes them as the **Embedded Chapters** [Reference](../getting-started/chapter-references.md).
 
+## ffmpeg
+The audio tool Achew uses to read, analyze, and convert audiobook files. Achew installs its own build of ffmpeg, which includes the decoder needed for [xHE-AAC](#xhe-aac) audiobooks, so you don't need to install it yourself. See [Supported Formats](supported-formats.md).
+
 ## File Data
 An auto-added [Chapter Reference](../getting-started/chapter-references.md) for [multi-file books](#multi-file-book). Each track becomes one chapter, with timestamps derived from the file durations and titles derived from the file names.
 
@@ -107,4 +110,4 @@ OpenAI's multilingual transcription model. Supports 99+ languages. Achew ships w
 A set of task-oriented processing steps taken after selecting a book: [Smart Detect](../workflows/smart-detect.md), [Realign Chapters](../workflows/realign-chapters.md), [Regenerate Titles](../workflows/regenerate-titles.md), and [Quick Edit](../workflows/quick-edit.md). Each workflow feeds into the [chapter editor](#chapter-editor).
 
 ## xHE-AAC
-Extended High-Efficiency AAC. A newer audio codec Achew does not fully support. Books encoded with xHE-AAC may fail Smart Detect, realignment, transcription, or playback. See [Supported Formats](supported-formats.md).
+Extended High-Efficiency AAC. A newer audio codec used by some audiobooks. Achew decodes it with the Fraunhofer FDK AAC decoder included in its [ffmpeg](#ffmpeg) build, and converts it on the fly for playback since most browsers can't play it. See [Supported Formats](supported-formats.md).

@@ -2,15 +2,30 @@ version = 1
 revision = 3
 requires-python = ">=3.11, <3.14"
 resolution-markers = [
-    "(python_full_version >= '3.13' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version >= '3.13' and platform_python_implementation != 'CPython' and sys_platform == 'linux') or (python_full_version >= '3.13' and sys_platform != 'darwin' and sys_platform != 'linux')",
+    "python_full_version >= '3.13' and platform_machine == 'x86_64' and sys_platform == 'linux'",
+    "python_full_version >= '3.13' and platform_machine == 'aarch64' and platform_python_implementation != 'CPython' and sys_platform == 'linux'",
+    "python_full_version >= '3.13' and platform_machine == 'AMD64' and sys_platform == 'win32'",
+    "(python_full_version >= '3.13' and platform_machine != 'aarch64' and platform_machine != 'x86_64' and sys_platform == 'linux') or (python_full_version >= '3.13' and platform_machine != 'AMD64' and sys_platform == 'win32') or (python_full_version >= '3.13' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')",
     "python_full_version >= '3.13' and platform_machine == 'aarch64' and platform_python_implementation == 'CPython' and sys_platform == 'linux'",
-    "python_full_version >= '3.13' and sys_platform == 'darwin'",
-    "(python_full_version == '3.12.*' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version == '3.12.*' and platform_python_implementation != 'CPython' and sys_platform == 'linux') or (python_full_version == '3.12.*' and sys_platform != 'darwin' and sys_platform != 'linux')",
+    "python_full_version >= '3.13' and platform_machine == 'arm64' and sys_platform == 'darwin'",
+    "python_full_version >= '3.13' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
+    "python_full_version >= '3.13' and platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'aarch64' and platform_python_implementation != 'CPython' and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'AMD64' and sys_platform == 'win32'",
+    "(python_full_version == '3.12.*' and platform_machine != 'aarch64' and platform_machine != 'x86_64' and sys_platform == 'linux') or (python_full_version == '3.12.*' and platform_machine != 'AMD64' and sys_platform == 'win32') or (python_full_version == '3.12.*' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')",
     "python_full_version == '3.12.*' and platform_machine == 'aarch64' and platform_python_implementation == 'CPython' and sys_platform == 'linux'",
-    "(python_full_version < '3.12' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version < '3.12' and platform_python_implementation != 'CPython' and sys_platform == 'linux') or (python_full_version < '3.12' and sys_platform != 'darwin' and sys_platform != 'linux')",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'aarch64' and platform_python_implementation != 'CPython' and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'AMD64' and sys_platform == 'win32'",
+    "(python_full_version < '3.12' and platform_machine != 'aarch64' and platform_machine != 'x86_64' and sys_platform == 'linux') or (python_full_version < '3.12' and platform_machine != 'AMD64' and sys_platform == 'win32') or (python_full_version < '3.12' and sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')",
     "python_full_version < '3.12' and platform_machine == 'aarch64' and platform_python_implementation == 'CPython' and sys_platform == 'linux'",
-    "python_full_version == '3.12.*' and sys_platform == 'darwin'",
-    "python_full_version < '3.12' and sys_platform == 'darwin'",
+    "python_full_version == '3.12.*' and platform_machine == 'arm64' and sys_platform == 'darwin'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
+    "python_full_version == '3.12.*' and platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin'",
+    "python_full_version < '3.12' and platform_machine == 'arm64' and sys_platform == 'darwin'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
+    "python_full_version < '3.12' and platform_machine != 'arm64' and platform_machine != 'x86_64' and sys_platform == 'darwin'",
 ]
 
 [manifest]
@@ -25,6 +40,11 @@ name = "achew"
 version = "1.13.0"
 source = { editable = "." }
 dependencies = [
+    { name = "achew-ffmpeg", version = "9.0.2.post1", source = { url = "https://github.com/SirGibblets/achew-ffmpeg/releases/download/v9.0.2.post1/achew_ffmpeg-9.0.2.post1-py3-none-macosx_11_0_arm64.whl" }, marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
+    { name = "achew-ffmpeg", version = "9.0.2.post1", source = { url = "https://github.com/SirGibblets/achew-ffmpeg/releases/download/v9.0.2.post1/achew_ffmpeg-9.0.2.post1-py3-none-macosx_11_0_x86_64.whl" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
+    { name = "achew-ffmpeg", version = "9.0.2.post1", source = { url = "https://github.com/SirGibblets/achew-ffmpeg/releases/download/v9.0.2.post1/achew_ffmpeg-9.0.2.post1-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.musllinux_1_1_aarch64.whl" }, marker = "platform_machine == 'aarch64' and sys_platform == 'linux'" },
+    { name = "achew-ffmpeg", version = "9.0.2.post1", source = { url = "https://github.com/SirGibblets/achew-ffmpeg/releases/download/v9.0.2.post1/achew_ffmpeg-9.0.2.post1-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.musllinux_1_1_x86_64.whl" }, marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
+    { name = "achew-ffmpeg", version = "9.0.2.post1", source = { url = "https://github.com/SirGibblets/achew-ffmpeg/releases/download/v9.0.2.post1/achew_ffmpeg-9.0.2.post1-py3-none-win_amd64.whl" }, marker = "platform_machine == 'AMD64' and sys_platform == 'win32'" },
     { name = "aiohttp" },
     { name = "aiosqlite" },
     { name = "anthropic" },
@@ -59,6 +79,11 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "achew-ffmpeg", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'", url = "https://github.com/SirGibblets/achew-ffmpeg/releases/download/v9.0.2.post1/achew_ffmpeg-9.0.2.post1-py3-none-macosx_11_0_arm64.whl" },
+    { name = "achew-ffmpeg", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'", url = "https://github.com/SirGibblets/achew-ffmpeg/releases/download/v9.0.2.post1/achew_ffmpeg-9.0.2.post1-py3-none-macosx_11_0_x86_64.whl" },
+    { name = "achew-ffmpeg", marker = "platform_machine == 'aarch64' and sys_platform == 'linux'", url = "https://github.com/SirGibblets/achew-ffmpeg/releases/download/v9.0.2.post1/achew_ffmpeg-9.0.2.post1-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.musllinux_1_1_aarch64.whl" },
+    { name = "achew-ffmpeg", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'", url = "https://github.com/SirGibblets/achew-ffmpeg/releases/download/v9.0.2.post1/achew_ffmpeg-9.0.2.post1-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.musllinux_1_1_x86_64.whl" },
+    { name = "achew-ffmpeg", marker = "platform_machine == 'AMD64' and sys_platform == 'win32'", url = "https://github.com/SirGibblets/achew-ffmpeg/releases/download/v9.0.2.post1/achew_ffmpeg-9.0.2.post1-py3-none-win_amd64.whl" },
     { name = "aiohttp", specifier = ">=3.9.0" },
     { name = "aiosqlite", specifier = ">=0.19.0" },
     { name = "anthropic", specifier = ">=2.3.0" },
@@ -87,6 +112,74 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.24.0" },
 ]
 provides-extras = ["dev"]
+
+[[package]]
+name = "achew-ffmpeg"
+version = "9.0.2.post1"
+source = { url = "https://github.com/SirGibblets/achew-ffmpeg/releases/download/v9.0.2.post1/achew_ffmpeg-9.0.2.post1-py3-none-macosx_11_0_arm64.whl" }
+resolution-markers = [
+    "python_full_version >= '3.13' and platform_machine == 'arm64' and sys_platform == 'darwin'",
+    "python_full_version == '3.12.*' and platform_machine == 'arm64' and sys_platform == 'darwin'",
+    "python_full_version < '3.12' and platform_machine == 'arm64' and sys_platform == 'darwin'",
+]
+wheels = [
+    { url = "https://github.com/SirGibblets/achew-ffmpeg/releases/download/v9.0.2.post1/achew_ffmpeg-9.0.2.post1-py3-none-macosx_11_0_arm64.whl", hash = "sha256:4cf6fc5da0f61ffc84ea96f771f2ab107ffe435add6cce61addfeb8465bbd555" },
+]
+
+[[package]]
+name = "achew-ffmpeg"
+version = "9.0.2.post1"
+source = { url = "https://github.com/SirGibblets/achew-ffmpeg/releases/download/v9.0.2.post1/achew_ffmpeg-9.0.2.post1-py3-none-macosx_11_0_x86_64.whl" }
+resolution-markers = [
+    "python_full_version >= '3.13' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
+]
+wheels = [
+    { url = "https://github.com/SirGibblets/achew-ffmpeg/releases/download/v9.0.2.post1/achew_ffmpeg-9.0.2.post1-py3-none-macosx_11_0_x86_64.whl", hash = "sha256:08db3cef0d4b58efa7fce11c73ce46b95310a3dc5d811f466a68b09abdada128" },
+]
+
+[[package]]
+name = "achew-ffmpeg"
+version = "9.0.2.post1"
+source = { url = "https://github.com/SirGibblets/achew-ffmpeg/releases/download/v9.0.2.post1/achew_ffmpeg-9.0.2.post1-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.musllinux_1_1_aarch64.whl" }
+resolution-markers = [
+    "python_full_version >= '3.13' and platform_machine == 'aarch64' and platform_python_implementation != 'CPython' and sys_platform == 'linux'",
+    "python_full_version >= '3.13' and platform_machine == 'aarch64' and platform_python_implementation == 'CPython' and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'aarch64' and platform_python_implementation != 'CPython' and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'aarch64' and platform_python_implementation == 'CPython' and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'aarch64' and platform_python_implementation != 'CPython' and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'aarch64' and platform_python_implementation == 'CPython' and sys_platform == 'linux'",
+]
+wheels = [
+    { url = "https://github.com/SirGibblets/achew-ffmpeg/releases/download/v9.0.2.post1/achew_ffmpeg-9.0.2.post1-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.musllinux_1_1_aarch64.whl", hash = "sha256:db7baf94c2bad15b27a42a67cb9a20c4d955e9de25d86311f15196ec782c6611" },
+]
+
+[[package]]
+name = "achew-ffmpeg"
+version = "9.0.2.post1"
+source = { url = "https://github.com/SirGibblets/achew-ffmpeg/releases/download/v9.0.2.post1/achew_ffmpeg-9.0.2.post1-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.musllinux_1_1_x86_64.whl" }
+resolution-markers = [
+    "python_full_version >= '3.13' and platform_machine == 'x86_64' and sys_platform == 'linux'",
+    "python_full_version == '3.12.*' and platform_machine == 'x86_64' and sys_platform == 'linux'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'",
+]
+wheels = [
+    { url = "https://github.com/SirGibblets/achew-ffmpeg/releases/download/v9.0.2.post1/achew_ffmpeg-9.0.2.post1-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.musllinux_1_1_x86_64.whl", hash = "sha256:27bbd39f735d52c36f21514d8ddf6768e312e61c21cc212af83dd11ef7ff5890" },
+]
+
+[[package]]
+name = "achew-ffmpeg"
+version = "9.0.2.post1"
+source = { url = "https://github.com/SirGibblets/achew-ffmpeg/releases/download/v9.0.2.post1/achew_ffmpeg-9.0.2.post1-py3-none-win_amd64.whl" }
+resolution-markers = [
+    "python_full_version >= '3.13' and platform_machine == 'AMD64' and sys_platform == 'win32'",
+    "python_full_version == '3.12.*' and platform_machine == 'AMD64' and sys_platform == 'win32'",
+    "python_full_version < '3.12' and platform_machine == 'AMD64' and sys_platform == 'win32'",
+]
+wheels = [
+    { url = "https://github.com/SirGibblets/achew-ffmpeg/releases/download/v9.0.2.post1/achew_ffmpeg-9.0.2.post1-py3-none-win_amd64.whl", hash = "sha256:52b71448544b88cd3a05e913477f488b9c1ccecc58fe7890d5e9d1fa7db21c4f" },
+]
 
 [[package]]
 name = "aiohappyeyeballs"

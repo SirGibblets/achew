@@ -59,6 +59,14 @@ class ASRService(ABC):
         return _deduplicate_words(result.strip(". \t\n\r\x0b\x0c"))
 
     def transcribe_file(self, audio_file: str) -> str:
+        from app.services.audio_service import decodable_audio
+
+        # ASR libraries decode with their own ffmpeg call, which can't take the
+        # libfdk_aac options xHE-AAC needs, so they get a plain WAV for those files
+        with decodable_audio(audio_file) as decodable_file:
+            return self._transcribe_with_jitter(decodable_file)
+
+    def _transcribe_with_jitter(self, audio_file: str) -> str:
         from app.core.constants import MAX_JITTER_CROP, MAX_JITTER_RETRIES
         from app.services.audio_service import crop_start_to_tempfile
 

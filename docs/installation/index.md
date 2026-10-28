@@ -40,6 +40,7 @@ This section covers how to install, set up, and upgrade Achew. Pick the install 
 - Achew must be able to reach your Audiobookshelf server.
 - Cloud LLM providers (optional) used for [AI Cleanup](../editor/ai-cleanup.md) require internet access.
 - Local [transcription services](../reference/transcription.md) require internet access for initial model downloads.
+- Installing or upgrading requires internet access to download dependencies.
 
 ## Environment variables
 
@@ -51,3 +52,4 @@ A few launch-time knobs can be set as environment variables:
 | `PORT` | `8000` | Listen port. Equivalent to `--port`. |
 | `DEBUG` | `false` | Enables debug logging and FastAPI auto-reload. Equivalent to `--debug` / `--no-debug`. |
 | `ACHEW_WORKER_COUNT` | auto | Overrides the number of parallel workers used for audio analysis. Equivalent to `--workers`. See [Tuning the worker count](../troubleshooting/performance-tuning.md#tuning-the-worker-count). |
+| `ACHEW_FFMPEG` | bundled | Path to an ffmpeg binary to use instead of the one Achew installs. Only needed for troubleshooting or on platforms without a bundled build. xHE-AAC audiobooks require an ffmpeg build with the `libfdk_aac` decoder. |

@@ -19,7 +19,6 @@ RUN npm run build
 RUN node scripts/generate-notices.mjs > frontend-notices.txt
 
 # Stage 2: Backend and final image
-FROM mwader/static-ffmpeg:8.1.1 AS ffmpeg
 FROM astral/uv:0.11.21-python3.11-trixie-slim
 
 # Build arguments for image metadata
@@ -48,9 +47,6 @@ LABEL org.opencontainers.image.authors="Sir Gibblets <gibbletssir@gmail.com>" \
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
-
-# Copy in ffmpeg
-COPY --from=ffmpeg /ffmpeg /usr/local/bin/
 
 WORKDIR /achew
 

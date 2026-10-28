@@ -16,6 +16,7 @@ from app.models.abs import AudioFile, AudioInfo, Book
 
 from ..core.config import get_app_config, get_settings
 from ..core.constants import BOOK_END_IGNORE_WINDOW, REALIGN_PADDING_DEFAULT, REALIGN_PADDING_EXPANDED
+from ..core.ffmpeg import ffmpeg_path, supports_xhe_aac
 from ..core.system_info import get_worker_count
 from ..models.ai_options import AIOptions
 from ..models.chapter import ChapterData, RealignmentData
@@ -36,7 +37,13 @@ from ..models.references import (
 )
 from .abs_service import ABSService
 from .asr_service_options import get_asr_buffer
-from .audio_service import AudioProcessingService, pick_segment_extension, probe_audio_info, probe_segment_extension
+from .audio_service import (
+    AudioProcessingService,
+    extraction_args,
+    pick_segment_extension,
+    probe_audio_info,
+    probe_segment_extension,
+)
 from .chapter_aligner import ChapterAligner
 from .dramatized_detection import SAMPLE_WINDOW_SECONDS, DramatizedAnalysis, classify_dramatized
 from .realign_verification import RealignVerifier, VerificationOutcome, VerificationProgress, VerifiedChapter
@@ -188,6 +195,9 @@ class ProcessingPipeline:
         # Processing data
         self.book: Optional[Book] = None
         self.audio_file_path: str = ""
+        # xHE-AAC needs libfdk_aac to decode and isn't playable in most browsers
+        self.audio_xhe_aac: bool = False
+        # The audio needs a decoder the ffmpeg in use lacks (e.g. xHE-AAC without libfdk_aac)
         self.audio_unsupported_codec: bool = False
         self.audio_info: Optional[AudioInfo] = None
         self.segment_extension: Optional[str] = None
@@ -938,11 +948,16 @@ class ProcessingPipeline:
                     container=audio_files[0].metadata.ext.lower().lstrip(".") if audio_files else None,
                     ffmpeg_output=ffmpeg_output,
                 )
+                self.audio_xhe_aac = uses_xhe_aac
                 if uses_xhe_aac:
-                    logger.warning(
-                        f"Audio file uses xHE-AAC codec which is not currently supported: {first_original_file}"
-                    )
-                    self.audio_unsupported_codec = True
+                    if supports_xhe_aac():
+                        logger.info(f"Audio file uses xHE-AAC; decoding with libfdk_aac: {first_original_file}")
+                    else:
+                        logger.warning(
+                            f"Audio file uses xHE-AAC, but {ffmpeg_path()} lacks the libfdk_aac decoder "
+                            f"it needs: {first_original_file}"
+                        )
+                        self.audio_unsupported_codec = True
 
                 # Concat multi-file audio if needed
                 if len(audio_file_paths) > 1:
@@ -2602,20 +2617,21 @@ class ProcessingPipeline:
         seg_end: float,
         output_path: str,
     ) -> bool:
-        """Extract a single contiguous audio range using stream copy. Returns True on success."""
+        """Extract a single contiguous audio range (stream copy, or a decode for WAV). Returns True on success."""
+        input_args, output_args = extraction_args(self.audio_file_path, os.path.splitext(output_path)[1].lstrip("."))
         cmd = [
-            "ffmpeg",
+            ffmpeg_path(),
             "-y",
             "-ss",
             str(seg_start),
             "-to",
             str(seg_end),
+            *input_args,
             "-i",
             self.audio_file_path,
             "-map",
             "0:a:0",
-            "-c",
-            "copy",
+            *output_args,
             output_path,
         ]
         # Use subprocess.PIPE and process.communicate() to capture error output in memory
@@ -2654,20 +2670,21 @@ class ProcessingPipeline:
             return False
 
         segment_times_str = ",".join(str(b) for b in relative_boundaries)
+        input_args, output_args = extraction_args(self.audio_file_path, os.path.splitext(output_pattern)[1].lstrip("."))
 
         cmd = [
-            "ffmpeg",
+            ffmpeg_path(),
             "-y",
             "-ss",
             str(seg_start),
             "-to",
             str(seg_end),
+            *input_args,
             "-i",
             self.audio_file_path,
             "-map",
             "0:a:0",
-            "-c",
-            "copy",
+            *output_args,
             "-f",
             "segment",
             "-segment_times",
