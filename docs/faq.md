@@ -28,7 +28,7 @@ See the [Transcription](reference/transcription.md#what-should-i-start-with) pag
 
 Not on most systems. Achew installs its own build of [ffmpeg](reference/glossary.md#ffmpeg) on Linux (x86_64 and ARM64), macOS, and Windows (x64), including the decoder needed for [xHE-AAC](reference/glossary.md#xhe-aac) audiobooks. If you need Achew to use a different ffmpeg, set the `ACHEW_FFMPEG` [environment variable](installation/index.md#environment-variables).
 
-On other platforms, such as 32-bit Raspberry Pi OS or Windows on ARM, install ffmpeg yourself and Achew uses the one on your `PATH` (or the one `ACHEW_FFMPEG` points to). If it can't find one, Achew stops at startup and says what to install.
+On other platforms, such as 32-bit Raspberry Pi OS or Windows on ARM, install ffmpeg yourself and Achew uses the one on your `PATH` (or the one `ACHEW_FFMPEG` points to). If it can't find one, Achew stops at startup and says what to install. On 32-bit Raspberry Pi OS, also install uv and Node.js yourself, since Achew's [bundled tools](installation/installation-linux-macos.md#bundled-tools) need a 64-bit system.
 
 ## Can I run Achew on a low-memory system?
 

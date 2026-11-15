@@ -36,6 +36,23 @@ export interface StatusResponse {
   build_meta?: string | null;
 }
 
+/** GET /update: whether this install can update itself from the app (see routes/update.py). */
+export interface UpdateStatusResponse {
+  install: 'git' | 'archive' | 'docker';
+  version: string;
+  can_update: boolean;
+  /** Why it can't, when can_update is false (null for Docker, which updates by pulling the image) */
+  reason: string | null;
+  /** A terminal command that can do the update instead, when one would work */
+  command: string | null;
+}
+
+/** POST /update. When updated, Achew is restarting through its run script. */
+export interface UpdateResponse {
+  updated: boolean;
+  version: string;
+}
+
 export interface ABSConfigResponse {
   url: string;
   api_key: string;

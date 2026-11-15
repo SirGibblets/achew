@@ -13,6 +13,9 @@ frontend-notices.txt
 # Environments
 .venv
 
+# Project-local uv, Node.js, Python and caches installed by run.sh / dev.sh / run.bat
+.toolchain/
+
 # Python
 __pycache__/
 

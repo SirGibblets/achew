@@ -29,6 +29,8 @@ ARG BUILD_META=""
 ARG LEGACY_CPU=0
 
 ENV MODEL_CACHE_DIR="/root/.cache/huggingface/hub"
+# Tells the app it runs from this image, which updates by pulling a new one (see routes/update.py)
+ENV ACHEW_DOCKER="1"
 ENV BUILD_META="${BUILD_META}"
 
 # Container image metadata

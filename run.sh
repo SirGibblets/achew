@@ -2,6 +2,9 @@
 
 set -e  # Exit on any error
 
+# Run from the repo root, wherever the script was started from
+cd "$(dirname "$0")"
+
 echo "Starting build..."
 
 # Colors for output
@@ -38,6 +41,7 @@ show_usage() {
     echo "  --listen                 Listen on all interfaces (equivalent to --host 0.0.0.0)"
     echo "  --workers N              Number of parallel audio workers (default: auto-detect)"
     echo "  --debug                  Enable debug mode"
+    echo "  --update                 Update Achew to the latest version, then start it"
     echo "  --help                   Show this help message"
     echo ""
     echo "Examples:"
@@ -47,12 +51,19 @@ show_usage() {
     echo "  $0 --workers 2"
 }
 
+# The arguments to start the app again with, after an update
+RUN_ARGS=()
+for arg in "$@"; do
+    [ "$arg" = "--update" ] || RUN_ARGS+=("$arg")
+done
+
 # Default arguments
 HOST="127.0.0.1"
 PORT="8000"
 DEBUG="false"
 LISTEN_FLAG=""
 WORKERS=""
+UPDATE="false"
 
 # Parse command-line arguments
 while [[ $# -gt 0 ]]; do
@@ -88,6 +99,10 @@ while [[ $# -gt 0 ]]; do
             DEBUG="true"
             shift
             ;;
+        --update)
+            UPDATE="true"
+            shift
+            ;;
         --help)
             show_usage
             exit 0
@@ -107,21 +122,16 @@ log_info "  DEBUG: $DEBUG"
 log_info "  WORKER COUNT: ${WORKERS:-auto}"
 log_info ""
 
-# Check if required dependencies are installed
-log_info "Checking dependencies..."
+# Install the pinned uv and Node.js into .toolchain/ (ACHEW_SYSTEM_TOOLS=1 uses your own instead)
+log_info "Preparing toolchain..."
+source scripts/toolchain.sh
 
-# Check npm
-if ! command -v npm &> /dev/null; then
-    log_error "npm is not installed. Please install Node.js (which includes npm) first."
-    log_error "For installation instructions, visit: https://nodejs.org/en/download/"
-    exit 1
-fi
-
-# Check uv
-if ! command -v uv &> /dev/null; then
-    log_error "uv is not installed. Please install uv first."
-    log_error "For installation instructions, visit: https://docs.astral.sh/uv/getting-started/installation/"
-    exit 1
+if [ "$UPDATE" = "true" ]; then
+    log_info "Updating Achew..."
+    # Runs before the backend's dependencies are installed, so it only needs Python itself
+    uv run --no-project --python "${UV_PYTHON:->=3.11}" python -I backend/app/core/updater.py
+    # Start over with the updated scripts
+    exec "$ACHEW_ROOT/run.sh" "${RUN_ARGS[@]}"
 fi
 
 # Install frontend dependencies
@@ -144,7 +154,7 @@ uv sync --frozen
 
 # Achew installs its own ffmpeg on supported platforms; elsewhere it needs one on PATH
 # or in ACHEW_FFMPEG. The check prints instructions when neither works.
-if ! uv run python -m app.core.ffmpeg; then
+if ! uv run --frozen python -m app.core.ffmpeg; then
     log_error "ffmpeg is required."
     exit 1
 fi
@@ -168,5 +178,23 @@ if [ -n "$WORKERS" ]; then
     export ACHEW_WORKER_COUNT="$WORKERS"
 fi
 
-# Run the backend server
-uv run python -m uvicorn app.main:app --host "$HOST" --port "$PORT" $UVICORN_ARGS
+# Lets an in-app update restart Achew through this script. Not with --reload, whose file
+# watcher would restart the server by itself partway through an update.
+if [ "$DEBUG" != "true" ]; then
+    export ACHEW_RESTART_FILE="$ACHEW_ROOT/.toolchain/restart-requested"
+    rm -f "$ACHEW_RESTART_FILE"
+fi
+
+# Run the backend server. After an in-app update, start this script over so the new version's
+# dependencies and frontend get installed. In braces so bash reads the whole block before
+# running it, since the update can replace this file while the server runs.
+{
+    status=0
+    uv run --frozen python -m uvicorn app.main:app --host "$HOST" --port "$PORT" $UVICORN_ARGS || status=$?
+    if [ -n "${ACHEW_RESTART_FILE:-}" ] && [ -f "$ACHEW_RESTART_FILE" ]; then
+        rm -f "$ACHEW_RESTART_FILE"
+        log_info "Restarting Achew to finish the update..."
+        exec "$ACHEW_ROOT/run.sh" "${RUN_ARGS[@]}"
+    fi
+    exit "$status"
+}

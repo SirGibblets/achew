@@ -2,7 +2,7 @@
 
 ## Storage Locations
 
-Achew writes to three locations: **Settings**, **Transcription Model Cache**, and **Temporary Data**.
+Achew writes to three locations: **Settings**, **Transcription Model Cache**, and **Temporary Data**. Native installs also keep their **Bundled Tools** in the install folder.
 
 ### Settings
 
@@ -49,6 +49,15 @@ Contains transient data for the current session:
 - Book audio files
 - Chapter Reference files
 - Audio segments used for detection and transcription
+
+### Bundled Tools
+
+!!! quote ""
+    Directory location
+    
+    - Windows/Linux/macOS: `path/to/achew/.toolchain/`
+
+Contains the copies of uv, Node.js, and Python that native installs run with, and their download caches, which can take up a GB or more. This directory is safe to delete while Achew isn't running; the next launch downloads everything it needs again. See [Bundled tools](installation-linux-macos.md#bundled-tools).
 
 ## Back up
 
