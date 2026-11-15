@@ -23,7 +23,15 @@ Achew's bundled ffmpeg decodes xHE-AAC audiobooks, so this warning means Achew i
 
 ## First launch takes forever
 
-Achew is downloading and installing Python dependencies and building the project. This process may take several minutes, but subsequent launches will be much faster.
+Achew is downloading its [bundled tools](../installation/installation-linux-macos.md#bundled-tools) and Python dependencies, then building the project. This process may take several minutes, but subsequent launches will be much faster.
+
+## Achew doesn't come back after updating
+
+After an in-app update, Achew restarts through its run script, which reinstalls dependencies and rebuilds the app before starting again. If the page keeps waiting, check the terminal or window Achew runs in for an error. Once the problem is fixed, start Achew again with `./run.sh` (or `run.bat` on Windows).
+
+## Downloading uv or Node.js fails on launch
+
+The run script downloads uv from GitHub and Node.js from nodejs.org. If a firewall or proxy blocks either site, or the download is interrupted, the script stops with an error and keeps nothing it downloaded, so running it again retries cleanly. A *checksum mismatch* error means the file that arrived differs from the one Achew expects, which is usually caused by a proxy that rewrites downloads. If you can't allow these downloads, install uv and Node.js yourself and set `ACHEW_SYSTEM_TOOLS=1`. See [Using your own uv and Node.js](../installation/installation-linux-macos.md#bundled-tools).
 
 ## Uploading an e-book Reference fails
 

@@ -46,6 +46,20 @@
 
 ## Quick install
 
+**Linux / macOS**
+
+```bash
+curl -LsSf https://raw.githubusercontent.com/SirGibblets/achew/main/install.sh | sh
+```
+
+**Windows** (in PowerShell)
+
+```powershell
+irm https://raw.githubusercontent.com/SirGibblets/achew/main/install.ps1 | iex
+```
+
+Achew installs into an `achew` folder in your home directory and starts once it's ready. To update later, click the download icon next to the version number in the app.
+
 | Platform | Guide |
 | --- | --- |
 | Docker | [Install with Docker](https://achew.readthedocs.io/latest/installation/installation-docker/) |

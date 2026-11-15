@@ -2,6 +2,9 @@
 
 set -e  # Exit on any error
 
+# Run from the repo root, wherever the script was started from
+cd "$(dirname "$0")"
+
 echo "Starting build..."
 
 # Colors for output
@@ -125,22 +128,9 @@ log_info "  DEBUG: $DEBUG"
 log_info "  WORKER COUNT: ${WORKERS:-auto}"
 log_info ""
 
-# Check if required dependencies are installed
-log_info "Checking dependencies..."
-
-# Check npm
-if ! command -v npm &> /dev/null; then
-    log_error "npm is not installed. Please install Node.js (which includes npm) first."
-    log_error "For installation instructions, visit: https://nodejs.org/en/download/"
-    exit 1
-fi
-
-# Check uv
-if ! command -v uv &> /dev/null; then
-    log_error "uv is not installed. Please install uv first."
-    log_error "For installation instructions, visit: https://docs.astral.sh/uv/getting-started/installation/"
-    exit 1
-fi
+# Install the pinned uv and Node.js into .toolchain/ (ACHEW_SYSTEM_TOOLS=1 uses your own instead)
+log_info "Preparing toolchain..."
+source scripts/toolchain.sh
 
 # Install frontend dependencies
 log_info "Installing frontend dependencies..."

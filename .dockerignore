@@ -24,6 +24,9 @@ run.bat
 **/._*
 **/Thumbs.db
 
+# Project-local toolchain from run.sh / dev.sh / run.bat
+.toolchain/
+
 # Python venv and cache
 backend/.venv/
 backend/__pycache__/

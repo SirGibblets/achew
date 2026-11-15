@@ -1,0 +1,6 @@
+# Fixed line endings for the launch scripts, whatever core.autocrlf says: cmd.exe misreads
+# labels in LF-only batch files, and bash fails on CRLF scripts (e.g. a Windows checkout
+# run from WSL). toolchain.env is read by both.
+*.bat text eol=crlf
+*.sh text eol=lf
+toolchain.env text eol=lf

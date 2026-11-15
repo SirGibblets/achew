@@ -20,6 +20,7 @@
   import ProgressDisplay from './components/ProgressDisplay.svelte';
   import SelectWorkflow from './components/SelectWorkflow.svelte';
   import SubmitSuccess from './components/SubmitSuccess.svelte';
+  import UpdateDialog from './components/UpdateDialog.svelte';
   import Welcome from './components/Welcome.svelte';
 
   import BookOpen from '@lucide/svelte/icons/book-open';
@@ -48,6 +49,7 @@
   let darkMode = $state(false);
   let showRestartOptions = $state(false);
   let showBookInfo = $state(false);
+  let showUpdate = $state(false);
   let showSettingsMenu = $state(false);
   let checkingConfig = $state(true);
   let previousStep = $state<string | null>(null);
@@ -608,19 +610,18 @@
           v{$session.version}
         </a>
         {#if updateAvailable}
-          <a
-            href={updateUrl}
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
             class="update-button"
+            onclick={() => (showUpdate = true)}
             aria-label="New version available: v{latestVersion}"
             use:tooltip={`New version available: v${latestVersion}`}
           >
             <Download size={14} />
-          </a>
+          </button>
         {/if}
       {/if}
     </div>
+    <UpdateDialog bind:isOpen={showUpdate} currentVersion={$session.version} {latestVersion} releaseUrl={updateUrl} />
   {/if}
 </main>
 
@@ -1067,7 +1068,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    text-decoration: none;
+    background: none;
+    border: none;
+    padding: 0;
     cursor: pointer;
   }
 

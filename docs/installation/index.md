@@ -53,3 +53,5 @@ A few launch-time knobs can be set as environment variables:
 | `DEBUG` | `false` | Enables debug logging and FastAPI auto-reload. Equivalent to `--debug` / `--no-debug`. |
 | `ACHEW_WORKER_COUNT` | auto | Overrides the number of parallel workers used for audio analysis. Equivalent to `--workers`. See [Tuning the worker count](../troubleshooting/performance-tuning.md#tuning-the-worker-count). |
 | `ACHEW_FFMPEG` | bundled | Path to an ffmpeg binary to use instead of the one Achew installs. Only needed for troubleshooting or on platforms without a bundled build. xHE-AAC audiobooks require an ffmpeg build with the `libfdk_aac` decoder. |
+| `ACHEW_SYSTEM_TOOLS` | unset | Set to `1` to have `run.sh`, `dev.sh`, and `run.bat` use the `uv` and `npm` on your `PATH` instead of their [bundled tools](installation-linux-macos.md#bundled-tools). |
+| `ACHEW_DIR` | `~/achew` | Where the [install script](installation-linux-macos.md#1-install) puts Achew. Only read by the install script. |

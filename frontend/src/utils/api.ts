@@ -36,6 +36,8 @@ import type {
   StatusResponse,
   TranscribeSnippetResponse,
   TitleReference,
+  UpdateResponse,
+  UpdateStatusResponse,
   ValidateItemResponse,
 } from '../types';
 import type { ChapterData } from '../types/chapter';
@@ -485,6 +487,16 @@ export const health = {
   },
 };
 
+export const update = {
+  getStatus() {
+    return apiRequest<UpdateStatusResponse>('/update');
+  },
+
+  run() {
+    return apiRequest<UpdateResponse>('/update', { method: 'POST' });
+  },
+};
+
 export function handleApiError(error: unknown): string {
   console.error('API Error:', error);
 
@@ -717,6 +729,7 @@ export const api = {
   audiobookshelf,
   references,
   abs,
+  update,
 };
 
 export default api;

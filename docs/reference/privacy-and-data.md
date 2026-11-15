@@ -5,7 +5,8 @@ Achew talks to:
 - Your Audiobookshelf server for finding books and saving chapters.
 - LLM providers for AI Cleanup (optional).
 - Hugging Face to download transcription models.
-- The GitHub Releases API to check for new versions of Achew.
+- GitHub to check for new versions of Achew, and to download them when you update.
+- GitHub, nodejs.org, PyPI, and the npm registry to download Achew's tools and dependencies when a native install launches.
 
 ## Audiobookshelf
 
@@ -31,6 +32,12 @@ Achew reaches out to Hugging Face to download any requested transcription models
 ## Upgrade checks
 
 On launch, Achew queries the GitHub Releases API to check for a new version. This is a plain GitHub API call (no account info) and can be blocked at the network level if desired; it only affects the upgrade icon.
+
+Updating a native install, from the app or with `--update`, downloads the new release from GitHub.
+
+## Installing and launching
+
+Native installs download their own copies of uv and Python from GitHub and Node.js from nodejs.org, and Achew's Python and JavaScript dependencies from PyPI and the npm registry. Docker images come with all of this already installed.
 
 ## Local storage
 
