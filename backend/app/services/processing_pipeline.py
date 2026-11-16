@@ -2005,6 +2005,21 @@ class ProcessingPipeline:
         transcripts = await self._transcription_task
         self._transcription_task = None
 
+        # Trimming cuts each clip at its longest pause, which can leave nothing but silence (LibriVox
+        # files pause after their preamble), so blank clips are heard again untrimmed. The trimmed
+        # files pair with the segments by index unless a trim failed outright.
+        aligned = len(self.trimmed_segment_files) == len(self.segment_files) == len(transcripts)
+        blank = [i for i, text in enumerate(transcripts) if not text.strip()] if aligned else []
+        if blank and get_app_config().asr_options.trim and self.step == Step.ASR_PROCESSING:
+            logger.info(f"Retrying {len(blank)} blank transcriptions without trimming")
+            self._transcription_task = asyncio.create_task(
+                asr_service.transcribe([self.segment_files[i] for i in blank])
+            )
+            retried = await self._transcription_task
+            self._transcription_task = None
+            for i, text in zip(blank, retried):
+                transcripts[i] = text
+
         # Check if processing was cancelled during transcription
         if self.step != Step.ASR_PROCESSING:
             logger.info("Processing was cancelled during transcription, stopping transcription")

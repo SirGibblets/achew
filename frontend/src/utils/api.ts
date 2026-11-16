@@ -40,6 +40,7 @@ import type {
   TranscribeSnippetResponse,
   TitleReference,
   UpdateResponse,
+  MCPSettingsResponse,
   UpdateStatusResponse,
   ValidateItemResponse,
 } from '../types';
@@ -500,6 +501,23 @@ export const update = {
   },
 };
 
+export const mcp = {
+  getSettings() {
+    return apiRequest<MCPSettingsResponse>('/mcp/settings');
+  },
+
+  updateSettings(settings: { enabled?: boolean; allow_submit?: boolean }) {
+    return apiRequest<MCPSettingsResponse>('/mcp/settings', {
+      method: 'PUT',
+      body: settings,
+    });
+  },
+
+  regenerateToken() {
+    return apiRequest<MCPSettingsResponse>('/mcp/settings/token', { method: 'POST' });
+  },
+};
+
 export function handleApiError(error: unknown): string {
   console.error('API Error:', error);
 
@@ -750,6 +768,7 @@ export const api = {
   references,
   abs,
   update,
+  mcp,
 };
 
 export default api;

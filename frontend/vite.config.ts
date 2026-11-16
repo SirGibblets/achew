@@ -31,6 +31,11 @@ export default defineConfig({
         ws: true,
         changeOrigin: true,
       },
+      // The MCP server for agents (Settings → Agent Access)
+      '/mcp': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
     },
   },
 

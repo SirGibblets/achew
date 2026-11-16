@@ -31,6 +31,9 @@ export interface StepChangeData {
   title_refs?: TitleReference[];
   restart_options?: string[];
   realign_pending?: boolean;
+  /** Undo/redo availability, which a restart or a new book resets */
+  can_undo?: boolean;
+  can_redo?: boolean;
   audio_xhe_aac?: boolean;
   audio_unsupported_codec?: boolean;
   audio_info?: AudioInfo | null;

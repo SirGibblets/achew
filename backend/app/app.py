@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import random
+import time
 from datetime import datetime, timezone
 from typing import Callable, List, Optional
 
@@ -55,6 +56,11 @@ class AppState:
             self._transcription_queue: asyncio.Queue = asyncio.Queue()
             self._transcription_worker_task: Optional[asyncio.Task] = None
             self._transcription_cancel_event: asyncio.Event = asyncio.Event()
+
+            # Latest progress update and error banner, for clients that poll instead of
+            # listening on the WebSocket (the MCP server's wait tool)
+            self.last_progress: Optional[dict] = None
+            self.last_error: Optional[tuple[float, str]] = None
 
             AppState._initialized = True
 
@@ -159,6 +165,7 @@ class AppState:
 
     async def _handle_progress_update(self, step: Step, percent: float, message: str, details: dict):
         """Handle progress updates from processing pipeline"""
+        self.last_progress = {"step": step.value, "percent": percent, "message": message}
         try:
             # Broadcast progress update
             message_obj = WSMessage(
@@ -192,6 +199,9 @@ class AppState:
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "restart_options": self.pipeline.get_restart_options() if self.pipeline else [],
             "realign_pending": bool(self.pipeline and self.pipeline.pending_realign),
+            # A restart or a new book resets the history, which no history update reports
+            "can_undo": bool(self.pipeline and self.pipeline.can_undo()),
+            "can_redo": bool(self.pipeline and self.pipeline.can_redo()),
         }
 
         # Add any extra data provided by the caller
@@ -210,6 +220,7 @@ class AppState:
 
     async def broadcast_error(self, message: str):
         """Show an error banner on all connected clients"""
+        self.last_error = (time.time(), message)
         error_msg = WSMessage(
             type=WSMessageType.ERROR,
             data={
@@ -468,6 +479,20 @@ class AppState:
                             label=chapter_id,
                             should_abort=self._transcription_cancel_event.is_set,
                         )
+                        if (
+                            transcription == ""
+                            and config.asr_options.trim
+                            and not self._transcription_cancel_event.is_set()
+                        ):
+                            # Trimming cuts at the longest pause, which can leave nothing but silence
+                            # (LibriVox files pause after their preamble), so hear the whole clip
+                            transcription = await self.transcribe_snippet(
+                                start_time,
+                                duration,
+                                label=f"{chapter_id}_full",
+                                should_abort=self._transcription_cancel_event.is_set,
+                                trim=False,
+                            )
 
                         if self._transcription_cancel_event.is_set():
                             break

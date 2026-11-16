@@ -130,6 +130,22 @@ sudo ln -s /etc/nginx/sites-available/achew.conf /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
+## Agent Access
+
+If you turn on [Agent Access](../getting-started/agent-access.md), agents connect to `/mcp` on the same hostname, e.g. `https://achew.example.com/mcp`. Achew checks its own token on that path, which affects how it fits with your proxy's authentication:
+
+- **Basic auth:** The proxy and Achew both expect an `Authorization` header. Send the proxy's credentials in `Authorization`, and Achew's token in an `X-Achew-Token` header instead. For example, with Claude Code (the `Basic` value is `your-username:your-password` in base64):
+
+    ```bash
+    claude mcp add --transport http achew https://achew.example.com/mcp \
+      --header "Authorization: Basic eW91ci11c2VybmFtZTp5b3VyLXBhc3N3b3Jk" \
+      --header "X-Achew-Token: YOUR_TOKEN"
+    ```
+
+- **SSO (Authelia, authentik, Cloudflare Access):** Agents can't complete a browser sign-in. Exclude the `/mcp` path from the SSO rule (Achew's token still protects it), or use your SSO's service tokens if it has them.
+- **Tailscale:** Works without changes.
+- **Streaming:** Agent requests stream their progress as server-sent events and can stay open for minutes. Turn off response buffering (`proxy_buffering off;` in the nginx example above) and keep the long timeouts.
+
 ## Stronger authentication options
 
 HTTP basic auth (shown above) is the easiest, but for stronger or more flexible auth you can put one of these in front of (or in place of) your reverse proxy:

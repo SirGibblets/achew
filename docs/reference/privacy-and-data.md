@@ -32,6 +32,10 @@ Achew reaches out to Hugging Face to download any requested transcription models
 
 The [OpenAI-Compatible API](transcription.md#openai-compatible-api) service sends a short audio segment from the start of each chapter (a few seconds, set by **Transcription Length**), along with the selected language and any Bias Words, to the server you configure. If that server is self-hosted, the audio stays on your own hardware; if it is a cloud service, the audio is handled under that provider's terms.
 
+## AI agents (Agent Access)
+
+[Agent Access](../getting-started/agent-access.md) is off by default. When you turn it on and connect an agent, your agent's AI provider sees what the agent reads from Achew: book titles, authors, and durations, chapter titles and timestamps, your Chapter Search results, and the text of any audio the agent asks to transcribe. Achew never sends audio to the agent; transcription happens in Achew with your transcription settings, as above.
+
 ## Upgrade checks
 
 On launch, Achew queries the GitHub Releases API to check for a new version. This is a plain GitHub API call (no account info) and can be blocked at the network level if desired; it only affects the upgrade icon.
@@ -44,7 +48,7 @@ Native installs download their own copies of uv and Python from GitHub and Node.
 
 ## Local storage
 
-- API keys (ABS, LLM, transcription server) are stored in plain text in `app_config.json` in the Settings directory. See [Storage and Backup](../installation/storage-and-backup.md) for more information.
+- API keys (ABS, LLM, transcription server) and the Agent Access token are stored in plain text in `app_config.json` in the Settings directory. See [Storage and Backup](../installation/storage-and-backup.md) for more information.
 - Browser `localStorage` holds your theme preference, last-used Audnexus search region, last-selected library, and notification chime settings. Nothing sensitive.
 
 ## Notes on privacy

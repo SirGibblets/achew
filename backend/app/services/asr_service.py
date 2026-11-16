@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import random
+import re
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 
@@ -9,6 +10,22 @@ from app.models.enums import Step
 from app.models.progress import ProgressCallback
 
 logger = logging.getLogger(__name__)
+
+
+# Annotations models write in place of speech: whisper.cpp's [BLANK_AUDIO], Whisper's [Music]
+# or "(upbeat music)", and music notes. Left in, a blank clip reads as text, so the retries for
+# empty results never run and the annotation can end up as a chapter title. Square brackets
+# never hold speech; parentheses only count when they name a non-speech sound.
+NON_SPEECH_RE = re.compile(
+    r"\[[^\]]*\]"
+    r"|\([^)]*\b(?:music|silence|blank|applause|laugh\w*|noise|inaudible|sighs?|static|indistinct)\b[^)]*\)"
+    r"|[\u266a\u266b\u266c]",
+    re.IGNORECASE,
+)
+
+
+def strip_non_speech(text: str) -> str:
+    return re.sub(r"\s+", " ", NON_SPEECH_RE.sub(" ", text)).strip()
 
 
 def _deduplicate_words(text: str) -> str:
@@ -71,7 +88,7 @@ class ASRService(ABC):
         self.progress_callback(step, percent, message, details or {})
 
     def _clean_transcription(self, result: str) -> str:
-        return _deduplicate_words(result.strip(". \t\n\r\x0b\x0c"))
+        return _deduplicate_words(strip_non_speech(result).strip(". \t\n\r\x0b\x0c"))
 
     def transcribe_file(self, audio_file: str) -> str:
         from app.services.audio_service import decodable_audio

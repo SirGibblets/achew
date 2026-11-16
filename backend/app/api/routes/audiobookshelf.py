@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from typing import List, Optional
 
@@ -9,7 +8,8 @@ from pydantic import BaseModel
 from ...core.config import is_abs_configured
 from ...models.abs import Book, BookSearchResult, LibrarySearchResponse
 from ...services.abs_service import ABSService
-from ...services.audible_providers import provider_dropdown, region_for_provider
+from ...services.audible_providers import provider_dropdown
+from ...services.session_actions import audnexus_candidates
 
 logger = logging.getLogger(__name__)
 
@@ -269,46 +269,16 @@ async def search_books(
             id = ""
 
     try:
-        async with ABSService() as abs_service:
-            results = await abs_service.search_books(
-                provider=provider,
-                title=title,
-                author=author,
-                book_id=id,
-            )
-
-        if not results:
-            return []
-
-        # Sort by confidence and cap at 10
-        results.sort(key=lambda r: r.matchConfidence or 0.0, reverse=True)
-        results = results[:10]
-
-        region = region_for_provider(provider) or "US"
-
-        # Fetch Audnexus chapter data for each result concurrently
-        async def _enrich(result: BookSearchResult) -> Optional[BookSearchResultWithChapters]:
-            if not result.asin:
-                return None
-            try:
-                async with ABSService() as svc:
-                    chapter_data = await svc.get_audnexus_chapters(result.asin, region=region)
-                if not chapter_data or not chapter_data.chapters:
-                    return None
-
-                enriched = BookSearchResultWithChapters(**result.model_dump())
-                enriched.chapter_count = len(chapter_data.chapters)
-                enriched.chapters = [
-                    {"timestamp": ch.startOffsetMs / 1000, "title": ch.title} for ch in chapter_data.chapters
-                ]
-                return enriched
-            except Exception as e:
-                logger.warning(f"Could not fetch Audnexus chapters for {result.asin}: {e}")
-                return None
-
-        enriched_results = await asyncio.gather(*[_enrich(r) for r in results])
-        # Exclude results that couldn't be enriched with chapter data
-        return [r for r in enriched_results if r is not None]
+        candidates = await audnexus_candidates(provider=provider, title=title, author=author, book_id=id)
+        results = []
+        for result, chapter_data in candidates:
+            enriched = BookSearchResultWithChapters(**result.model_dump())
+            enriched.chapter_count = len(chapter_data.chapters)
+            enriched.chapters = [
+                {"timestamp": ch.startOffsetMs / 1000, "title": ch.title} for ch in chapter_data.chapters
+            ]
+            results.append(enriched)
+        return results
 
     except HTTPException:
         raise

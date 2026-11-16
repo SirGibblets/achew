@@ -14,22 +14,19 @@ from pydantic import BaseModel
 from app.models.ai_options import AIOptions
 from app.models.chapter import ChapterData
 from app.models.chapter_operation import (
-    AddChapterOperation,
     BatchChapterOperation,
-    ChapterOperation,
     DeleteChapterOperation,
     EditTimestampOperation,
     EditTitleOperation,
-    RestoreChapterOperation,
     SetPinnedOperation,
-    TranscribeOperation,
 )
 from app.models.enums import Step
 
 from ...app import get_app_state
 from ...core.config import get_app_config, get_settings
-from ...core.constants import CHAPTER_START_PADDING, MIN_SEGMENT_GAP
+from ...core.constants import CHAPTER_START_PADDING
 from ...services.asr_service_options import get_asr_config_key
+from ...services.session_actions import build_add_chapter_operation, nearby_cues, require_pipeline, snippet_duration
 
 logger = logging.getLogger(__name__)
 
@@ -1073,33 +1070,8 @@ async def get_add_options(chapter_id: str):
 async def get_nearby_cues(chapter_id: str):
     """Get detected cues between the previous and next chapters"""
     try:
-        app_state = get_app_state()
-
-        if not app_state.pipeline:
-            raise HTTPException(status_code=404, detail="Pipeline not found")
-
-        if app_state.pipeline.step != Step.CHAPTER_EDITING:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Can only fetch nearby cues during editing. Current step: {app_state.pipeline.step.value}",
-            )
-
-        if not app_state.pipeline.book:
-            raise HTTPException(status_code=404, detail="Book not found")
-
-        chapters = sorted([ch for ch in app_state.pipeline.chapters if not ch.deleted], key=lambda ch: ch.timestamp)
-        current_index = next((i for i, ch in enumerate(chapters) if ch.id == chapter_id), -1)
-        if current_index == -1:
-            raise HTTPException(status_code=404, detail="Chapter not found")
-
-        prev_chapter = chapters[current_index - 1] if current_index > 0 else None
-        next_chapter = chapters[current_index + 1] if current_index < len(chapters) - 1 else None
-
-        min_timestamp = (prev_chapter.timestamp if prev_chapter else 0.0) + 1
-        max_timestamp = (next_chapter.timestamp if next_chapter else app_state.pipeline.book.duration) - 1
-
-        cues = [cue for cue in app_state.pipeline.detected_cues if min_timestamp < cue.timestamp < max_timestamp]
-        return NearbyCuesResponse(cues=cues)
+        pipeline = require_pipeline(get_app_state())
+        return NearbyCuesResponse(cues=nearby_cues(pipeline, chapter_id))
 
     except HTTPException:
         raise
@@ -1148,41 +1120,9 @@ async def add_chapter(request: AddChapterRequest):
         if not app_state.pipeline:
             raise HTTPException(status_code=404, detail="Pipeline not found")
 
-        existing_deleted = None
-        for chapter in app_state.pipeline.chapters:
-            if chapter.deleted and abs(chapter.timestamp - request.timestamp) < 0.25:
-                existing_deleted = chapter
-                break
-
-        operation: ChapterOperation
-        new_chapter_id: str
-
-        if existing_deleted:
-            restore_op = RestoreChapterOperation(chapter_id=existing_deleted.id)
-            if request.title:
-                restore_op.new_title = request.title
-            operation = restore_op
-            new_chapter_id = existing_deleted.id
-
-        else:
-            from ...models.chapter import ChapterData
-
-            new_chapter = ChapterData(
-                timestamp=request.timestamp,
-                title=request.title or "",
-            )
-            new_chapter.selected = True
-            operation = AddChapterOperation(chapter=new_chapter)
-            new_chapter_id = new_chapter.id
-
-        if request.transcript is not None:
-            # Same result as the transcription worker, but as one undo step with the add
-            transcribe_op = TranscribeOperation(
-                chapter_id=new_chapter_id,
-                new_transcript=request.transcript,
-                new_title=request.transcript,
-            )
-            operation = BatchChapterOperation(operations=[operation, transcribe_op])
+        operation, new_chapter_id = build_add_chapter_operation(
+            app_state.pipeline, request.timestamp, request.title, request.transcript
+        )
 
         operation.apply(app_state.pipeline)
         app_state.pipeline.add_to_history(operation)
@@ -1295,23 +1235,7 @@ async def transcribe_snippet(request: TranscribeSnippetRequest):
         if not pipeline:
             raise HTTPException(status_code=404, detail="No active pipeline")
 
-        if pipeline.step != Step.CHAPTER_EDITING:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Can only transcribe snippets during editing. Current step: {pipeline.step.value}",
-            )
-
-        duration_limit = pipeline.book.duration if pipeline.book else request.timestamp + 1e9
-        next_timestamps = [
-            c.timestamp
-            for c in pipeline.chapters
-            if not c.deleted and c.timestamp > request.timestamp + MIN_SEGMENT_GAP
-        ]
-        if next_timestamps:
-            duration_limit = min(duration_limit, min(next_timestamps) - MIN_SEGMENT_GAP)
-        duration = min(get_app_config().asr_options.segment_length, duration_limit - request.timestamp)
-        if duration <= 0:
-            raise HTTPException(status_code=400, detail="No audio available at this timestamp")
+        duration = snippet_duration(pipeline, request.timestamp)
 
         transcript = await app_state.transcribe_snippet(max(0.0, request.timestamp), duration)
         if transcript is None:
