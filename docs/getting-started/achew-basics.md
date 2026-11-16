@@ -42,7 +42,7 @@ After the book is scanned, a **Cue Selection Slider** shows a histogram of candi
 
 ## 5. Transcription (Smart Detect / Regenerate only)
 
-You can optionally use a [service](../reference/transcription.md#services) to transcribe your chapter titles. These are built into Achew and run entirely locally on your machine.
+You can optionally use a [service](../reference/transcription.md#services) to transcribe your chapter titles. These are built into Achew and run entirely locally on your machine. You can also send the audio to a transcription server of your own, or a cloud service, with the [OpenAI-Compatible API](../reference/transcription.md#openai-compatible-api) service.
 
 ![Transcribe titles](../img/transcribe-titles-light.webp#only-light)
 ![Transcribe titles](../img/transcribe-titles-dark.webp#only-dark)

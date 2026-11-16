@@ -22,7 +22,7 @@ Contains user config/settings data:
 - Chapter Search rules and cached library data
 
 !!! warning "API keys are stored in plain text"
-    `app_config.json` contains your Audiobookshelf and LLM API keys. Treat backups of it accordingly: encrypt off-site copies and do not commit to public repositories.
+    `app_config.json` contains your Audiobookshelf, LLM, and transcription server API keys. Treat backups of it accordingly: encrypt off-site copies and do not commit to public repositories.
 
 ### Transcription Model Cache
 

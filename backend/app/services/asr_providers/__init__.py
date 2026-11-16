@@ -6,9 +6,16 @@ themselves with the ASR service registry.
 """
 
 # Import all provider modules to trigger auto-registration
-from . import parakeet_mlx_service, parakeet_service, whisper_cpp_service, whisper_mlx_service
+from . import (
+    openai_compatible_service,
+    parakeet_mlx_service,
+    parakeet_service,
+    whisper_cpp_service,
+    whisper_mlx_service,
+)
 
 __all__ = [
+    "openai_compatible_service",
     "parakeet_service",
     "whisper_cpp_service",
     "parakeet_mlx_service",

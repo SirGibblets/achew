@@ -23,6 +23,10 @@ Whisper supports 99+ languages to varying degrees. See the full list [here](http
 
 Each Whisper size (`tiny` / `base` / `small` / `medium`) also has an **English-only** variant (e.g. `tiny.en`, `base.en`, etc.). These are trained exclusively on English audio and are usually *more accurate on English* than the equivalent multilingual size. The `large` and `turbo` variants are multilingual only.
 
+### OpenAI-Compatible API
+
+Language support depends on the model your server runs. Achew offers Whisper's language list; pick `Auto` for models that detect the language themselves.
+
 ### Picking a Whisper language
 
 On the **Transcribe Titles** screen, Achew tries to preselect the language based on the book's language set in Audiobookshelf. If that metadata is missing or wrong, you'll want to specify manually.

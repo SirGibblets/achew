@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import Callable, List, Optional
 
 from app.core.constants import MAX_JITTER_CROP, MIN_SEGMENT_GAP
+from app.services.asr_service import ASRFatalError
 from app.services.asr_service_options import get_asr_buffer
 
 from .core.config import get_configuration_status
@@ -205,14 +206,18 @@ class AppState:
 
         # If error message is provided, broadcast it separately
         if error_message:
-            error_msg = WSMessage(
-                type=WSMessageType.ERROR,
-                data={
-                    "message": error_message,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                },
-            )
-            await self.broadcast_message(error_msg)
+            await self.broadcast_error(error_message)
+
+    async def broadcast_error(self, message: str):
+        """Show an error banner on all connected clients"""
+        error_msg = WSMessage(
+            type=WSMessageType.ERROR,
+            data={
+                "message": message,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+        await self.broadcast_message(error_msg)
 
     async def broadcast_references_update(self):
         """Broadcast updated chapter and title references to all WebSocket connections."""
@@ -486,6 +491,13 @@ class AppState:
                             await self.broadcast_chapter_update()
                             await self.broadcast_history_update()
 
+                    except ASRFatalError as e:
+                        # Every remaining chapter would fail the same way, so stop and say why
+                        logger.error(f"Chapter transcription stopped: {e}")
+                        self._transcription_cancel_event.set()
+                        while not self._transcription_queue.empty():
+                            self._transcription_queue.get_nowait()
+                        await self.broadcast_error(f"Transcription failed: {e}")
                     except Exception as e:
                         logger.error(f"Failed to transcribe chapter {chapter_id}: {e}", exc_info=True)
                     finally:

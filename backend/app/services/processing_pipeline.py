@@ -36,6 +36,7 @@ from ..models.references import (
     TitleRefType,
 )
 from .abs_service import ABSService
+from .asr_service import ASRFatalError
 from .asr_service_options import get_asr_buffer
 from .audio_service import (
     AudioProcessingService,
@@ -1261,13 +1262,24 @@ class ProcessingPipeline:
             ]
             transcripts: Optional[Dict[float, str]] = None
             if transcribe:
-                outcome = await self._verify_realignment(ref, aligned_chapters, padding, scanned_regions, dramatized)
-                if outcome is None:
-                    # Cancelled; the cancel has already moved the pipeline on
-                    return False
-                placements = outcome.chapters
-                transcripts = outcome.transcripts
-                self.detected_cues = outcome.cues
+                try:
+                    outcome = await self._verify_realignment(
+                        ref, aligned_chapters, padding, scanned_regions, dramatized
+                    )
+                except ASRFatalError as e:
+                    # The transcription service can't be used (e.g. its server is unreachable):
+                    # keep the cue-based alignment rather than discarding the detection work
+                    logger.error(f"Realignment verification failed: {e}")
+                    await get_app_state().broadcast_error(
+                        f"Transcription failed, so chapters were realigned without it: {e}"
+                    )
+                else:
+                    if outcome is None:
+                        # Cancelled; the cancel has already moved the pipeline on
+                        return False
+                    placements = outcome.chapters
+                    transcripts = outcome.transcripts
+                    self.detected_cues = outcome.cues
 
             new_chapters = []
             for i, placed in enumerate(placements):

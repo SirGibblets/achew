@@ -5,6 +5,7 @@ Achew talks to:
 - Your Audiobookshelf server for finding books and saving chapters.
 - LLM providers for AI Cleanup (optional).
 - Hugging Face to download transcription models.
+- Your transcription server, if you use the OpenAI-Compatible API transcription service (optional).
 - GitHub to check for new versions of Achew, and to download them when you update.
 - GitHub, nodejs.org, PyPI, and the npm registry to download Achew's tools and dependencies when a native install launches.
 
@@ -27,7 +28,9 @@ No audio is sent. If you use a locally hosted provider (Ollama, LM Studio, or a 
 
 ## Transcription
 
-Achew reaches out to Hugging Face to download any requested transcription models. **All transcription runs locally on the Achew host;** nothing is uploaded to a third party.
+Achew reaches out to Hugging Face to download any requested transcription models. **With the built-in services (Whisper and Parakeet), all transcription runs locally on the Achew host;** nothing is uploaded to a third party.
+
+The [OpenAI-Compatible API](transcription.md#openai-compatible-api) service sends a short audio segment from the start of each chapter (a few seconds, set by **Transcription Length**), along with the selected language and any Bias Words, to the server you configure. If that server is self-hosted, the audio stays on your own hardware; if it is a cloud service, the audio is handled under that provider's terms.
 
 ## Upgrade checks
 
@@ -41,13 +44,13 @@ Native installs download their own copies of uv and Python from GitHub and Node.
 
 ## Local storage
 
-- API keys (ABS, LLM) are stored in plain text in `app_config.json` in the Settings directory. See [Storage and Backup](../installation/storage-and-backup.md) for more information.
+- API keys (ABS, LLM, transcription server) are stored in plain text in `app_config.json` in the Settings directory. See [Storage and Backup](../installation/storage-and-backup.md) for more information.
 - Browser `localStorage` holds your theme preference, last-used Audnexus search region, last-selected library, and notification chime settings. Nothing sensitive.
 
 ## Notes on privacy
 
 - Achew does not phone home. Telemetry is not collected.
-- Achew does not upload audio anywhere. Any temporary audio files are stored locally and are immediately deleted when a session is completed or canceled.
+- Achew does not upload audio anywhere, except to a transcription server you configure for the OpenAI-Compatible API service. Any temporary audio files are stored locally and are immediately deleted when a session is completed or canceled.
 
 ## Related
 

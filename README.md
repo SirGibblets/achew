@@ -35,7 +35,7 @@
 - **Smart Chapter Detection** to find chapter cues from the audio itself.
 - **Use existing chapters** from Audiobookshelf, Audnexus, embedded chapters, and more.
 - **Realign chapters** when timestamps don't quite line up.
-- **Title Transcription** with on-device models.
+- **Title Transcription** with on-device models, or via any OpenAI-compatible transcription service.
 - **AI Cleanup** for consistent title formatting via OpenAI, Claude, Gemini, OpenRouter, Copilot, Ollama, LM Studio, or any OpenAI-compatible endpoint.
 - **Interactive Chapter Editor** with undo/redo, batch operations, and audio previews.
 - **Chapter Search** to audit your library using customizable rules.

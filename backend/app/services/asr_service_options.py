@@ -51,6 +51,7 @@ class ASRServiceOption:
         variants: Optional[List[ASRModelVariant]] = None,
         priority: int = 0,
         asr_buffer: float = 0.1,
+        hosted: bool = False,
     ):
         self.service_id = service_id
         self.name = name
@@ -60,9 +61,11 @@ class ASRServiceOption:
         self.variants = variants or []
         self.priority = priority
         self.asr_buffer = asr_buffer
+        # Sends audio to a server the user configures instead of running a local model
+        self.hosted = hosted
 
     def __repr__(self):
-        return f"ASRServiceOption(id={self.service_id}, name={self.name}, desc={self.desc}, uses_gpu={self.uses_gpu}, supports_bias_words={self.supports_bias_words}, priority={self.priority})"
+        return f"ASRServiceOption(id={self.service_id}, name={self.name}, desc={self.desc}, uses_gpu={self.uses_gpu}, supports_bias_words={self.supports_bias_words}, priority={self.priority}, hosted={self.hosted})"
 
 
 class ASRServiceRegistry:
@@ -254,15 +257,17 @@ def register_asr_service(
     variants: Optional[List[ASRModelVariant]] = None,
     priority: int = 0,
     asr_buffer: float = 0.1,
+    hosted: bool = False,
 ):
     """
     Decorator to register an ASR service class
 
-    Priority levels:
-    - 100: Parakeet MLX (highest priority)
-    - 90: Whisper MLX
-    - 80: Whisper GPU
-    - 70: Whisper CPU (lowest priority)
+    Priority levels (the highest available is the default):
+    - 100: Whisper MLX
+    - 90: Parakeet MLX
+    - 80: Whisper
+    - 70: Parakeet
+    - 10: OpenAI-compatible API (never the default: it needs a server configured first)
 
     Usage:
         @register_asr_service("my_service", "My Service", "Description", priority=50, variants=[...])
@@ -272,7 +277,7 @@ def register_asr_service(
 
     def decorator(service_class):
         option = ASRServiceOption(
-            service_id, name, desc, uses_gpu, supports_bias_words, variants or [], priority, asr_buffer
+            service_id, name, desc, uses_gpu, supports_bias_words, variants or [], priority, asr_buffer, hosted
         )
         _registry.register(service_id, service_class, option)
         return service_class
@@ -308,8 +313,12 @@ def get_asr_buffer() -> float:
 
 
 def get_asr_config_key() -> tuple:
-    """Get the current ASR config key (service_id, variant_id, language) for cache invalidation"""
+    """Get the current ASR config key (service_id, variant_id, language, plus whatever else the
+    service's results depend on) for cache invalidation"""
     from app.core.config import get_user_preferences
 
     prefs = get_user_preferences()
-    return (prefs.preferred_asr_service, prefs.preferred_asr_variant, prefs.preferred_asr_language)
+    service = _registry.get_preferred_service()
+    service_class = _registry.get_service_class(service.service_id) if service else None
+    extra = service_class.config_key() if service_class else ()
+    return (prefs.preferred_asr_service, prefs.preferred_asr_variant, prefs.preferred_asr_language, *extra)
