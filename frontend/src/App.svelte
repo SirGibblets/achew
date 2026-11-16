@@ -5,6 +5,7 @@
   import { isConnected, websocket } from './stores/websocket';
 
   import ABSSetup from './components/ABSSetup.svelte';
+  import AgentAccessDialog from './components/AgentAccessDialog.svelte';
   import ASRSetup from './components/ASRSetup.svelte';
   import BookInfoDialog from './components/BookInfoDialog.svelte';
   import MigrationFailed from './components/MigrationFailed.svelte';
@@ -24,6 +25,7 @@
   import Welcome from './components/Welcome.svelte';
 
   import BookOpen from '@lucide/svelte/icons/book-open';
+  import Bot from '@lucide/svelte/icons/bot';
   import Bug from '@lucide/svelte/icons/bug';
   import ChevronLeft from '@lucide/svelte/icons/chevron-left';
   import CircleQuestionMark from '@lucide/svelte/icons/circle-question-mark';
@@ -51,6 +53,7 @@
   let showBookInfo = $state(false);
   let showUpdate = $state(false);
   let showSettingsMenu = $state(false);
+  let showAgentAccess = $state(false);
   let checkingConfig = $state(true);
   let previousStep = $state<string | null>(null);
 
@@ -498,6 +501,16 @@
                     <Icon name="ai" size="16" color="var(--primary)" />
                     LLM Setup
                   </button>
+                  <button
+                    class="settings-option"
+                    onclick={() => {
+                      closeSettingsMenu();
+                      showAgentAccess = true;
+                    }}
+                  >
+                    <Bot size="16" color="var(--primary)" />
+                    Agent Access
+                  </button>
                   <div class="settings-divider"></div>
                 {/if}
                 <a
@@ -623,6 +636,7 @@
     </div>
     <UpdateDialog bind:isOpen={showUpdate} currentVersion={$session.version} {latestVersion} releaseUrl={updateUrl} />
   {/if}
+  <AgentAccessDialog bind:isOpen={showAgentAccess} />
 </main>
 
 <style>

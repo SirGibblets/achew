@@ -118,6 +118,16 @@ class UserPreferences(BaseModel):
     editor_settings: EditorSettings = EditorSettings()
 
 
+class MCPConfig(BaseModel):
+    """Agent access through the built-in MCP server (served at /mcp)"""
+
+    enabled: bool = False
+    # Bearer token every MCP request must carry; generated when the server is first enabled
+    token: str = ""
+    # Lets agents write chapters to Audiobookshelf (submit_to_audiobookshelf); off = edit-only
+    allow_submit: bool = True
+
+
 class AppConfig(BaseModel):
     """Complete application configuration"""
 
@@ -127,6 +137,7 @@ class AppConfig(BaseModel):
     asr_options: ASROptions = ASROptions()
     hosted_asr: HostedASRConfig = HostedASRConfig()
     custom_instructions: CustomInstructionsConfig = CustomInstructionsConfig()
+    mcp: MCPConfig = MCPConfig()
 
 
 class Settings(BaseSettings):
@@ -190,6 +201,7 @@ def load_config() -> AppConfig:
                 custom_instructions=CustomInstructionsConfig(**data["custom_instructions"])
                 if data.get("custom_instructions")
                 else CustomInstructionsConfig(),
+                mcp=MCPConfig(**data["mcp"]) if data.get("mcp") else MCPConfig(),
             )
         return AppConfig()
     except Exception as e:
@@ -210,6 +222,7 @@ def save_config(config: AppConfig) -> bool:
             "asr_options": config.asr_options.model_dump(mode="json"),
             "hosted_asr": config.hosted_asr.model_dump(mode="json"),
             "custom_instructions": config.custom_instructions.model_dump(mode="json"),
+            "mcp": config.mcp.model_dump(mode="json"),
         }
 
         tmp_path = config_path.with_suffix(".tmp")

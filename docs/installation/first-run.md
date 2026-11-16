@@ -46,7 +46,7 @@ Clicking the sun/moon icon near the top right corner of the page will toggle bet
 
 ## Returning to setup
 
-From any screen, click the gear icon in top right corner to show the **Settings** dropdown, which includes quick links to Audiobookshelf Setup, LLM Setup, and Transcription Settings:
+From any screen, click the gear icon in top right corner to show the **Settings** dropdown, which includes quick links to Audiobookshelf Setup, Transcription Settings, LLM Setup, and [Agent Access](../getting-started/agent-access.md):
 
 ![Settings dropdown](../img/settings-dropdown-light.webp#only-light){ width="240"; .center }
 ![Settings dropdown](../img/settings-dropdown-dark.webp#only-dark){ width="240"; .center }

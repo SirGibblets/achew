@@ -11,14 +11,11 @@ from pydantic import BaseModel
 
 from ...app import get_app_state
 from ...models.references import (
-    BasicChapter,
     ChapterReference,
     ChapterRefType,
     TitleReference,
     TitleRefType,
 )
-from ...services.abs_service import ABSService
-from ...services.audible_providers import region_for_provider
 from ...services.reference_parsers import (
     csv_parser,
     cue_parser,
@@ -27,6 +24,7 @@ from ...services.reference_parsers import (
     mobi_parser,
     text_parser,
 )
+from ...services.session_actions import fetch_audnexus_reference
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +86,7 @@ def _sweep_stale_parts() -> None:
             pass
 
 
-def _parse_upload(pipeline, path: str, filename: str, ext: str):
+def parse_reference_file(pipeline, path: str, filename: str, ext: str):
     """Parse a fully assembled upload and attach it to the pipeline."""
     duration = pipeline.book.duration if pipeline.book else 0.0
 
@@ -223,7 +221,7 @@ async def upload_reference(
         return {"upload_id": uid, "received": index + 1, "total": total}
 
     try:
-        new_ref = _parse_upload(pipeline, path, filename, ext)
+        new_ref = parse_reference_file(pipeline, path, filename, ext)
     except ValueError as e:
         logger.warning(f"Failed to parse uploaded file {filename}: {e}")
         raise HTTPException(status_code=400, detail=str(e))
@@ -243,31 +241,7 @@ async def add_audnexus_reference(request: AddAudnexusRequest):
     pipeline = _get_pipeline()
     app_state = get_app_state()
 
-    region = region_for_provider(request.provider) or "US"
-
-    async with ABSService() as abs_service:
-        chapter_data = await abs_service.get_audnexus_chapters(request.asin, region=region)
-
-    if not chapter_data or not chapter_data.chapters:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No Audnexus chapter data found for ASIN {request.asin}",
-        )
-
-    chapters = [BasicChapter(timestamp=ch.startOffsetMs / 1000, title=ch.title) for ch in chapter_data.chapters]
-    duration_sec = float(chapter_data.runtimeLengthMs) / 1000
-    new_ref = ChapterReference(
-        type=ChapterRefType.AUDNEXUS,
-        name="Audnexus Chapters",
-        short_name="Audnexus",
-        description=f"Audnexus chapter data for ASIN {request.asin}",
-        metadata={
-            "ASIN": request.asin,
-            "Duration": f"{int(duration_sec // 60)}m",
-        },
-        chapters=chapters,
-        duration=duration_sec,
-    )
+    new_ref = await fetch_audnexus_reference(request.asin, request.provider)
     pipeline.chapter_refs.append(new_ref)
 
     await app_state.broadcast_references_update()

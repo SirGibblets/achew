@@ -13,6 +13,14 @@ from ...app import get_app_state
 from ...core.config import get_settings, is_abs_configured
 from ...models.abs import AudioInfo, Book
 from ...models.enums import DetectionMode, RestartStep, Step
+from ...services.session_actions import (
+    cancel_current_step,
+    fetch_and_announce,
+    require_pipeline,
+    submit_to_abs,
+    validate_initial_selection,
+    validate_preassigned_titles,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -92,22 +100,7 @@ async def create_pipeline(request: CreatePipelineRequest, background_tasks: Back
         # Start processing in background
         async def start_processing():
             try:
-                result = await pipeline.fetch_item(request.item_id)
-                logger.info(f"Fetched item: {result}")
-
-                await app_state._broadcast_book_update()
-
-                await app_state.broadcast_step_change(
-                    Step.SELECT_WORKFLOW,
-                    extras={
-                        "chapter_refs": pipeline.chapter_refs,
-                        "title_refs": pipeline.title_refs,
-                        "audio_xhe_aac": pipeline.audio_xhe_aac,
-                        "audio_unsupported_codec": pipeline.audio_unsupported_codec,
-                        "audio_info": pipeline.audio_info,
-                    },
-                )
-
+                await fetch_and_announce(app_state, pipeline, request.item_id)
             except Exception as e:
                 logger.error(f"Fetching item failed: {e}", exc_info=True)
 
@@ -193,28 +186,8 @@ async def submit_chapters():
     """Submit chapters to Audiobookshelf"""
     try:
         app_state = get_app_state()
-        pipeline = app_state.pipeline
-
-        if not pipeline:
-            raise HTTPException(status_code=404, detail="Pipeline not found")
-
-        # Allow submission from chapter_editing or reviewing step
-        if pipeline.step not in [Step.CHAPTER_EDITING, Step.REVIEWING]:
-            raise HTTPException(
-                status_code=400,
-                detail="Pipeline must be in chapter_editing or reviewing step to submit",
-            )
-
-        success = await pipeline.submit_chapters(pipeline.chapters)
-
-        if success:
-            pipeline.step = Step.COMPLETED
-            await app_state.broadcast_step_change(Step.COMPLETED)
-            return {"message": "Chapters submitted successfully"}
-        else:
-            pipeline.step = Step.REVIEWING
-            await app_state.broadcast_step_change(Step.REVIEWING)
-            raise HTTPException(status_code=500, detail="Failed to submit chapters")
+        await submit_to_abs(app_state, require_pipeline(app_state))
+        return {"message": "Chapters submitted successfully"}
 
     except HTTPException:
         raise
@@ -387,34 +360,17 @@ async def get_detected_cues():
 async def select_initial_chapters(request: dict, background_tasks: BackgroundTasks):
     """Select initial chapters by providing a list of cue timestamps"""
     try:
-        app_state = get_app_state()
-
-        if not app_state.pipeline:
-            raise HTTPException(status_code=404, detail="Pipeline not found")
-
-        if app_state.step != Step.INITIAL_CHAPTER_SELECTION:
-            raise HTTPException(status_code=400, detail="Pipeline not in initial chapter selection step")
+        pipeline = require_pipeline(get_app_state())
 
         timestamps = request.get("timestamps")
         if timestamps is None or not isinstance(timestamps, list):
             raise HTTPException(status_code=400, detail="timestamps must be a list of floats")
-        if len(timestamps) == 0:
-            raise HTTPException(status_code=400, detail="At least one timestamp is required")
 
         include_unaligned = request.get("include_unaligned", [])
         if not isinstance(include_unaligned, list):
             raise HTTPException(status_code=400, detail="include_unaligned must be a list")
 
-        # Validate each option against available chapter references
-        available_ref_ids = [ref.id for ref in app_state.pipeline.chapter_refs]
-        for option in include_unaligned:
-            if option not in available_ref_ids:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Invalid include_unaligned option: {option}. Available options: {available_ref_ids}",
-                )
-
-        pipeline = app_state.pipeline
+        validate_initial_selection(pipeline, timestamps, include_unaligned)
 
         async def do_select_initial_chapters():
             try:
@@ -473,21 +429,9 @@ async def configure_asr(request: ConfigureASRRequest, background_tasks: Backgrou
             background_tasks.add_task(resume_realign)
             return {"message": f"Realignment started (transcription {request.action})", "action": request.action}
 
-        # Validate preassigned titles and build the cue_index -> title map
-        cue_count = len(pipeline.cues)
-        preassigned: Dict[int, str] = {}
-        for item in request.preassigned_titles:
-            if item.cue_index < 0 or item.cue_index >= cue_count:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"preassigned_titles cue_index {item.cue_index} out of range [0, {cue_count})",
-                )
-            if item.cue_index in preassigned:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"preassigned_titles contains duplicate cue_index {item.cue_index}",
-                )
-            preassigned[item.cue_index] = item.title
+        preassigned = validate_preassigned_titles(
+            pipeline, [(item.cue_index, item.title) for item in request.preassigned_titles]
+        )
 
         async def process_asr_action():
             try:
@@ -577,60 +521,7 @@ async def finish_verification():
 async def cancel_step():
     """Cancel the current processing pipeline step and return to the appropriate previous step"""
     try:
-        app_state = get_app_state()
-        pipeline = app_state.pipeline
-
-        if not pipeline:
-            raise HTTPException(status_code=404, detail="Pipeline not found")
-
-        step = pipeline.step
-
-        if step in [Step.VALIDATING, Step.DOWNLOADING]:
-            success = await app_state.delete_pipeline()
-            if not success:
-                raise HTTPException(status_code=404, detail="Pipeline not found")
-            return {"message": "Pipeline cancelled and deleted", "action": "deleted"}
-
-        elif step in [Step.AUDIO_ANALYSIS, Step.VAD_PREP, Step.VAD_ANALYSIS, Step.REALIGN_VERIFICATION]:
-            await pipeline.restart_at_step(RestartStep.SELECT_WORKFLOW)
-            return {
-                "message": "Processing cancelled, returned to workflow selection",
-                "action": "restarted",
-                "restart_step": RestartStep.SELECT_WORKFLOW.value,
-            }
-
-        elif step == Step.AUDIO_EXTRACTION:
-            restart_step = RestartStep.SELECT_WORKFLOW if pipeline.is_realignment else RestartStep.CONFIGURE_ASR
-            await pipeline.restart_at_step(restart_step)
-            return {
-                "message": f"Audio extraction cancelled, returned to {restart_step.value}",
-                "action": "restarted",
-                "restart_step": restart_step.value,
-            }
-
-        elif step in [Step.TRIMMING, Step.ASR_PROCESSING]:
-            await pipeline.restart_at_step(RestartStep.CONFIGURE_ASR)
-            return {
-                "message": "Transcription process cancelled, returned to ASR configuration",
-                "action": "restarted",
-                "restart_step": RestartStep.CONFIGURE_ASR.value,
-            }
-
-        elif step in [Step.AI_CLEANUP, Step.PARTIAL_SCAN_PREP, Step.PARTIAL_AUDIO_ANALYSIS, Step.PARTIAL_VAD_ANALYSIS]:
-            await pipeline.restart_at_step(RestartStep.CHAPTER_EDITING)
-            return {
-                "message": "Processing cancelled, returned to chapter editing",
-                "action": "restarted",
-                "restart_step": RestartStep.CHAPTER_EDITING.value,
-            }
-
-        else:
-            await pipeline.restart_at_step(RestartStep.SELECT_WORKFLOW)
-            return {
-                "message": "Processing cancelled, returned to workflow selection",
-                "action": "restarted",
-                "restart_step": RestartStep.SELECT_WORKFLOW.value,
-            }
+        return await cancel_current_step(get_app_state())
 
     except HTTPException:
         raise

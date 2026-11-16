@@ -117,6 +117,8 @@ function createSessionStore() {
           ...(data.chapter_refs && { chapterRefs: data.chapter_refs }),
           ...(data.title_refs && { titleRefs: data.title_refs }),
           ...(data.restart_options && { restartOptions: data.restart_options }),
+          ...(data.can_undo !== undefined && { canUndo: data.can_undo }),
+          ...(data.can_redo !== undefined && { canRedo: data.can_redo }),
           realignPending: data.realign_pending ?? false,
           ...(data.audio_xhe_aac !== undefined && {
             audioXheAac: data.audio_xhe_aac,

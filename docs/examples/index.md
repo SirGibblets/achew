@@ -9,3 +9,4 @@ Task-focused walkthroughs for common scenarios. For feature-by-feature reference
 - [Improve titles with AI Cleanup](improve-titles-with-ai-cleanup.md): Tidy up your titles and create reusable formatting rules.
 - [Working with snapshots](working-with-snapshots.md): A few examples of different ways to use snapshots.
 - [Audit your library with Chapter Search](audit-library-with-chapter-search.md): Find every book that needs chapter work.
+- [Fix chapters with an AI agent](fix-chapters-with-an-ai-agent.md): Let Claude Code or another agent do the work while you watch and approve.

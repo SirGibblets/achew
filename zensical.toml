@@ -107,6 +107,7 @@ default = "latest"
   { "Finding a Book" = "getting-started/finding-a-book.md" },
   { "Choosing a Workflow" = "getting-started/workflows-overview.md" },
   { "Set up LLM Providers" = "getting-started/setup-llm-providers.md" },
+  { "Agent Access (MCP)" = "getting-started/agent-access.md" },
 ]
 
 [[project.nav]]
@@ -143,6 +144,7 @@ default = "latest"
   { "Improve titles with AI Cleanup" = "examples/improve-titles-with-ai-cleanup.md" },
   { "Working with snapshots" = "examples/working-with-snapshots.md" },
   { "Audit your library with Chapter Search" = "examples/audit-library-with-chapter-search.md" },
+  { "Fix chapters with an AI agent" = "examples/fix-chapters-with-an-ai-agent.md" },
 ]
 
 [[project.nav]]

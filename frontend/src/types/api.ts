@@ -37,6 +37,17 @@ export interface StatusResponse {
 }
 
 /** GET /update: whether this install can update itself from the app (see routes/update.py). */
+/** Settings → Agent Access: the built-in MCP server (backend/app/api/routes/mcp.py) */
+export interface MCPSettingsResponse {
+  enabled: boolean;
+  /** Whether agents may write chapters to Audiobookshelf, or only edit them */
+  allow_submit: boolean;
+  /** Bearer token agents must send; empty until access is first turned on */
+  token: string;
+  /** Where the server is mounted, e.g. "/mcp" */
+  path: string;
+}
+
 export interface UpdateStatusResponse {
   install: 'git' | 'archive' | 'docker';
   version: string;

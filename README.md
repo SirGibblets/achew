@@ -39,6 +39,7 @@
 - **AI Cleanup** for consistent title formatting via OpenAI, Claude, Gemini, OpenRouter, Copilot, Ollama, LM Studio, or any OpenAI-compatible endpoint.
 - **Interactive Chapter Editor** with undo/redo, batch operations, and audio previews.
 - **Chapter Search** to audit your library using customizable rules.
+- **Agent Access** lets AI agents like Claude Code fix chapters for you through Achew's built-in MCP server.
 - **Export** to CSV, JSON, or CUE, or save back to Audiobookshelf.
 - **Cross-platform**: Windows, Linux, macOS, and Docker.
 

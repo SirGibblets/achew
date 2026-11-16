@@ -24,11 +24,13 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.routing import Route
 
-from .api.routes import audio, audiobookshelf, chapters, config, core, pipeline, references, update
+from .api.routes import audio, audiobookshelf, chapters, config, core, mcp, pipeline, references, update
 from .api.routes.chapter_search import routes as chapter_search_routes
 from .app import get_app_state
 from .core.config import get_settings
+from .mcp_server import MCP_PATH, MCPEndpoint, create_mcp_server
 from .models.websocket import WSMessage, WSMessageType
 from .services.chapter_search.state import get_chapter_search_state
 
@@ -36,6 +38,9 @@ logger = logging.getLogger(__name__)
 
 # Get settings
 settings = get_settings()
+
+# Agent access (Settings → Agent Access); serves 404 until the user turns it on
+mcp_endpoint = MCPEndpoint(create_mcp_server())
 
 
 # noinspection PyUnusedLocal
@@ -98,7 +103,8 @@ async def lifespan(achew_app: FastAPI):
     await init_db()
     logger.info("Chapter search database initialized")
 
-    yield
+    async with mcp_endpoint.lifespan():
+        yield
 
     # Shutdown
     logger.info("Shutting down Achew")
@@ -194,6 +200,10 @@ app.include_router(audiobookshelf.router, prefix="/api/audiobookshelf", tags=["a
 app.include_router(chapter_search_routes.router, prefix="/api", tags=["chapter-search"])
 app.include_router(references.router, prefix="/api", tags=["references"])
 app.include_router(update.router, prefix="/api", tags=["update"])
+app.include_router(mcp.router, prefix="/api", tags=["mcp"])
+
+# The MCP server itself, ahead of the SPA catch-all (which would answer its GET requests)
+app.router.routes.append(Route(MCP_PATH, endpoint=mcp_endpoint, methods=["GET", "POST", "DELETE"]))
 
 # Setup static file serving
 static_dir = get_static_directory()

@@ -13,6 +13,7 @@ Already installed? This section explains Achew's core concepts and walks you thr
 ## Connect your services
 
 1. **[Set up LLM Providers](setup-llm-providers.md):** Required if you want to use [AI Cleanup](../editor/ai-cleanup.md).
+2. **[Agent Access (MCP)](agent-access.md):** Optional. Let an AI agent such as Claude Code run workflows and fix chapters for you.
 
 ## What's next?
 
