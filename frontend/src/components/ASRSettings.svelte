@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { tooltip } from '../actions/tooltip';
   import { api } from '../utils/api';
+  import HostedASRSettings from './HostedASRSettings.svelte';
 
   import ChevronDown from '@lucide/svelte/icons/chevron-down';
   import CircleQuestionMark from '@lucide/svelte/icons/circle-question-mark';
@@ -11,9 +12,11 @@
   interface Props {
     showAdvanced?: boolean;
     showOptions?: boolean;
+    /** Out: the selected service sends audio to a server instead of running locally */
+    hosted?: boolean;
   }
 
-  let { showAdvanced = false, showOptions = true }: Props = $props();
+  let { showAdvanced = false, showOptions = true, hosted = $bindable(false) }: Props = $props();
 
   type ASRLanguage = [string, string, string?];
 
@@ -30,6 +33,8 @@
     desc: string;
     uses_gpu?: boolean;
     supports_bias_words?: boolean;
+    /** Sends audio to a configured server: its panel replaces the variant picker */
+    hosted?: boolean;
     variants: ASRVariant[];
   }
 
@@ -272,6 +277,10 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
   let availableLanguages = $derived(currentVariantInfo?.languages || []);
   let currentServiceSupportsBiasWords = $derived(currentService?.supports_bias_words || false);
 
+  $effect(() => {
+    hosted = currentService?.hosted ?? false;
+  });
+
   onMount(async () => {
     await loadASRPreferences();
     if (showOptions) {
@@ -339,7 +348,7 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
           </div>
 
           <!-- Variant Selection -->
-          {#if currentService?.variants?.length && currentService.variants.length > 0}
+          {#if currentService?.variants?.length && currentService.variants.length > 0 && !currentService.hosted}
             <div class="asr-control-group">
               <label for="asr-variant">Model Variant</label>
               <select
@@ -386,6 +395,10 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
           {/if}
         </div>
 
+        {#if currentService?.hosted}
+          <HostedASRSettings />
+        {/if}
+
         <div class="asr-descriptions">
           {#if currentService}
             <div class="description-item">
@@ -393,7 +406,7 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
               {currentService.desc}
             </div>
           {/if}
-          {#if currentVariantInfo}
+          {#if currentVariantInfo?.desc}
             <div class="description-item">
               <strong>{currentVariantInfo.name}:</strong>
               {currentVariantInfo.desc}

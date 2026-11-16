@@ -15,6 +15,7 @@ from ...core.config import (
     refresh_app_config,
     save_abs_config,
     save_llm_provider_config,
+    update_app_config,
     update_user_preferences,
 )
 from ...models.enums import Step
@@ -57,6 +58,7 @@ class ASRServiceOption(BaseModel):
     supports_bias_words: bool
     priority: int
     variants: list
+    hosted: bool = False
 
 
 class ASRPreferenceRequest(BaseModel):
@@ -71,6 +73,34 @@ class ASRPreferencesResponse(BaseModel):
     current_variant: str
     current_language: str
     book_language: Optional[str] = None
+
+
+class HostedASRConfigResponse(BaseModel):
+    base_url: str
+    api_key: str  # "***" when one is saved
+    model: str
+    skip_ssl_verify: bool
+    parallel_requests: int
+
+
+class HostedASRConfigUpdate(BaseModel):
+    """Fields left out keep their saved value (the client only ever sees a masked key)"""
+
+    base_url: Optional[str] = None
+    api_key: Optional[str] = None
+    model: Optional[str] = None
+    skip_ssl_verify: Optional[bool] = None
+    parallel_requests: Optional[int] = None
+
+
+class HostedASRModelsResponse(BaseModel):
+    models: List[str]
+    error: Optional[str] = None
+
+
+class HostedASRTestResponse(BaseModel):
+    success: bool
+    message: str
 
 
 async def validate_abs_connection(abs_url: str, abs_api_key: str) -> Dict[str, Any]:
@@ -424,6 +454,7 @@ async def get_asr_preferences():
                     supports_bias_words=service.supports_bias_words,
                     priority=service.priority,
                     variants=variants,
+                    hosted=service.hosted,
                 )
             )
 
@@ -460,6 +491,80 @@ async def set_asr_preferences(request: ASRPreferenceRequest):
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to save ASR preferences: {str(e)}")
+
+
+def _hosted_asr_response() -> HostedASRConfigResponse:
+    from ...services.asr_providers.openai_compatible_service import MAX_PARALLEL_REQUESTS
+
+    hosted = get_app_config().hosted_asr
+    return HostedASRConfigResponse(
+        base_url=hosted.base_url,
+        api_key="***" if hosted.api_key else "",
+        model=hosted.model,
+        skip_ssl_verify=hosted.skip_ssl_verify,
+        parallel_requests=min(max(hosted.parallel_requests, 1), MAX_PARALLEL_REQUESTS),
+    )
+
+
+@router.get("/asr/hosted", response_model=HostedASRConfigResponse)
+async def get_hosted_asr_config():
+    """Get the OpenAI-compatible transcription server settings (API key masked)"""
+    return _hosted_asr_response()
+
+
+@router.put("/asr/hosted", response_model=HostedASRConfigResponse)
+async def update_hosted_asr_config(request: HostedASRConfigUpdate):
+    """Update the OpenAI-compatible transcription server settings"""
+    from ...services.asr_providers.openai_compatible_service import MAX_PARALLEL_REQUESTS
+
+    config = get_app_config()
+    hosted = config.hosted_asr
+    if request.base_url is not None:
+        hosted.base_url = request.base_url.strip()
+    if request.api_key is not None:
+        hosted.api_key = request.api_key.strip()
+    if request.model is not None:
+        hosted.model = request.model.strip()
+    if request.skip_ssl_verify is not None:
+        hosted.skip_ssl_verify = request.skip_ssl_verify
+    if request.parallel_requests is not None:
+        hosted.parallel_requests = min(max(request.parallel_requests, 1), MAX_PARALLEL_REQUESTS)
+
+    if not update_app_config(config):
+        raise HTTPException(status_code=500, detail="Failed to save transcription server settings")
+    return _hosted_asr_response()
+
+
+@router.get("/asr/hosted/models", response_model=HostedASRModelsResponse)
+async def get_hosted_asr_models():
+    """List the transcription models the configured server offers (empty when it has no
+    /models endpoint)"""
+    from ...services.asr_providers.openai_compatible_service import HostedASRError, list_models, load_settings
+
+    try:
+        return HostedASRModelsResponse(models=await list_models(load_settings()))
+    except HostedASRError as e:
+        return HostedASRModelsResponse(models=[], error=str(e))
+
+
+@router.post("/asr/hosted/test", response_model=HostedASRTestResponse)
+async def test_hosted_asr():
+    """Transcribe a short test clip with the saved server settings, language and bias words"""
+    from ...services.asr_providers.openai_compatible_service import (
+        HostedASRError,
+        load_settings,
+        test_transcription,
+    )
+
+    config = get_app_config()
+    prompt = config.asr_options.bias_words if config.asr_options.use_bias_words else ""
+    try:
+        elapsed = await test_transcription(load_settings(), config.user_preferences.preferred_asr_language, prompt)
+    except HostedASRError as e:
+        return HostedASRTestResponse(success=False, message=str(e))
+    return HostedASRTestResponse(
+        success=True, message=f"Connected: the server transcribed a test clip in {elapsed:.1f} s"
+    )
 
 
 # New LLM Provider endpoints

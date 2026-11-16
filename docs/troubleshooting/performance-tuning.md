@@ -6,6 +6,7 @@ Achew is designed around minimizing the amount of audio that needs to be transcr
 
 - On Apple Silicon, switch to the **Parakeet MLX** or **Whisper MLX** service. These use hardware acceleration and are dramatically faster.
 - Use a smaller Whisper variant (`tiny` or `small` instead of `medium` / `large`).
+- If you have a machine with a GPU, run a transcription server on it and use the [OpenAI-Compatible API](../reference/transcription.md#openai-compatible-api) service. Raising **Parallel requests** can speed this up further.
 - Enable the **Trim Segments** option to cut out unwanted audio.
 - Reduce the **Transcription length** under advanced settings.
 

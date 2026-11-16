@@ -43,8 +43,23 @@ def _deduplicate_words(text: str) -> str:
     return " ".join(result)
 
 
+class ASRFatalError(RuntimeError):
+    """The service can't transcribe anything right now (unreachable, credentials rejected,
+    misconfigured). Stops a batch with this message instead of failing every chapter in turn."""
+
+
 class ASRService(ABC):
     """Abstract base class for ASR services"""
+
+    # How many files transcribe() works on at once. Local models handle one at a time;
+    # a hosted service can keep several requests in flight.
+    parallel_requests: int = 1
+
+    @classmethod
+    def config_key(cls) -> tuple:
+        """Settings beyond service/variant/language that change this service's results;
+        a change replaces the warm instance and invalidates cached snippet transcripts."""
+        return ()
 
     def __init__(self, progress_callback: ProgressCallback, model_path: str, language: str):
         self.progress_callback: ProgressCallback = progress_callback
@@ -119,8 +134,11 @@ class ASRService(ABC):
 
     async def transcribe(self, audio_files: List[str]) -> List[str]:
         """Common transcription logic for all ASR services"""
-        transcripts: List[str] = []
         total_files = len(audio_files)
+        transcripts: List[str] = [""] * total_files
+        completed = 0
+        limit = asyncio.Semaphore(max(1, self.parallel_requests))
+        loop = asyncio.get_event_loop()
 
         self._notify_progress(
             Step.ASR_PROCESSING,
@@ -128,33 +146,39 @@ class ASRService(ABC):
             f"Starting {self.service_name} transcription of {total_files} chapters",
         )
 
-        for i, audio_file in enumerate(audio_files):
-            try:
-                # Run transcription in thread pool
-                result = await asyncio.get_event_loop().run_in_executor(
-                    None,
-                    self.transcribe_file,
-                    audio_file,
-                )
+        async def transcribe_one(index: int, audio_file: str) -> None:
+            nonlocal completed
+            result: Optional[str]
+            async with limit:
+                try:
+                    # Run transcription in thread pool
+                    result = await loop.run_in_executor(None, self.transcribe_file, audio_file)
+                except ASRFatalError:
+                    raise
+                except Exception as e:
+                    logger.error(f"Failed to transcribe {audio_file}: {e}")
+                    result = None
 
-                transcripts.append(result)
+            transcripts[index] = "[Transcription Error]" if result is None else result
+            completed += 1
+            details: Dict[str, Any] = {"completed_segments": completed, "total_segments": total_files}
+            if result is not None:
+                details["feed_text"] = f"\u201c{result}\u201d"
+            self._notify_progress(
+                Step.ASR_PROCESSING,
+                completed / total_files * 100,
+                f"Transcribed chapter {completed} of {total_files}…",
+                details,
+            )
 
-                # Update progress
-                progress = (i + 1) / total_files * 100
-                self._notify_progress(
-                    Step.ASR_PROCESSING,
-                    progress,
-                    f"Transcribed chapter {i + 1} of {total_files}…",
-                    {
-                        "completed_segments": i + 1,
-                        "total_segments": total_files,
-                        "feed_text": f"\u201c{result}\u201d",
-                    },
-                )
-
-            except Exception as e:
-                logger.error(f"Failed to transcribe {audio_file}: {e}")
-                transcripts.append("[Transcription Error]")
+        # Waiters acquire the semaphore in creation order, so one at a time keeps file order
+        tasks = [asyncio.ensure_future(transcribe_one(i, f)) for i, f in enumerate(audio_files)]
+        try:
+            await asyncio.gather(*tasks)
+        except BaseException:
+            for task in tasks:
+                task.cancel()
+            raise
 
         self._notify_progress(Step.ASR_PROCESSING, 100, "Transcription completed")
         return transcripts

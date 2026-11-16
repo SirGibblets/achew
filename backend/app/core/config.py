@@ -65,6 +65,20 @@ class ASROptions(BaseModel):
     segment_length: float = 8.0
 
 
+class HostedASRConfig(BaseModel):
+    """Server settings for the OpenAI-compatible transcription service"""
+
+    # API root serving /audio/transcriptions, usually ending in /v1
+    base_url: str = ""
+    api_key: str = ""
+    # Sent as the request's model field; empty omits it (servers with one fixed model)
+    model: str = ""
+    skip_ssl_verify: bool = False
+    # Requests in flight at once when transcribing a batch of chapters. Clamped where
+    # it's used rather than validated here: a failed load discards the whole config.
+    parallel_requests: int = 4
+
+
 class EditorSettings(BaseModel):
     """Chapter editor settings"""
 
@@ -111,6 +125,7 @@ class AppConfig(BaseModel):
     llm: LLMConfig = LLMConfig()
     user_preferences: UserPreferences = UserPreferences()
     asr_options: ASROptions = ASROptions()
+    hosted_asr: HostedASRConfig = HostedASRConfig()
     custom_instructions: CustomInstructionsConfig = CustomInstructionsConfig()
 
 
@@ -171,6 +186,7 @@ def load_config() -> AppConfig:
                 if data.get("user_preferences")
                 else UserPreferences(),
                 asr_options=ASROptions(**data["asr_options"]) if data.get("asr_options") else ASROptions(),
+                hosted_asr=HostedASRConfig(**data["hosted_asr"]) if data.get("hosted_asr") else HostedASRConfig(),
                 custom_instructions=CustomInstructionsConfig(**data["custom_instructions"])
                 if data.get("custom_instructions")
                 else CustomInstructionsConfig(),
@@ -192,6 +208,7 @@ def save_config(config: AppConfig) -> bool:
             "llm": config.llm.model_dump(mode="json"),
             "user_preferences": config.user_preferences.model_dump(mode="json"),
             "asr_options": config.asr_options.model_dump(mode="json"),
+            "hosted_asr": config.hosted_asr.model_dump(mode="json"),
             "custom_instructions": config.custom_instructions.model_dump(mode="json"),
         }
 

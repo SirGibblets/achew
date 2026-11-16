@@ -1,10 +1,10 @@
 # Transcription
 
-Achew performs all transcription locally using on-device models; nothing is uploaded to a third party. When you run a workflow that involves transcription ([Smart Detect](../workflows/smart-detect.md), [Regenerate Titles](../workflows/regenerate-titles.md)) or transcribe individual chapters in the editor, Achew cuts a short segment from the start of each chapter and sends it to a transcription service. 
+By default, Achew performs all transcription locally using on-device models; nothing is uploaded to a third party. You can also use a transcription server of your own, or a cloud service, through the [OpenAI-Compatible API](#openai-compatible-api) option. When you run a workflow that involves transcription ([Smart Detect](../workflows/smart-detect.md), [Regenerate Titles](../workflows/regenerate-titles.md)) or transcribe individual chapters in the editor, Achew cuts a short segment from the start of each chapter and sends it to a transcription service. 
 
 ## Services
 
-Achew ships with two transcription services: **Whisper**, and **Parakeet**. Each has a hardware-accelerated MLX variant available on Apple Silicon devices.
+Achew ships with two transcription services: **Whisper**, and **Parakeet**. Each has a hardware-accelerated MLX variant available on Apple Silicon devices. Achew can also send the audio to a transcription server instead, with the **OpenAI-Compatible API** service.
 
 | Service | Languages | Hardware |
 |---|---|---|
@@ -12,6 +12,7 @@ Achew ships with two transcription services: **Whisper**, and **Parakeet**. Each
 | **Parakeet** | `v2`: English only[^1] <br> `v3`: 25 languages[^2] | CPU[^3] |
 | **Whisper MLX** | Same as standard Whisper | Apple Silicon[^4] |
 | **Parakeet MLX** | Same as standard Parakeet | Apple Silicon[^4] |
+| **OpenAI-Compatible API** | Depends | Depends |
 
 [^1]: English-only models are recommended for English audio.
 
@@ -44,7 +45,33 @@ All model sizes have multilingual[^2] variants. All model sizes except `large` a
 
 - **English audiobooks** → **Parakeet `0.6B v2`** for accuracy, **Whisper `tiny.en`** for speed.
 - **Non-English audiobooks** → **Parakeet `0.6B v3`** if the language is supported, otherwise **Whisper `small`/`turbo`** for accuracy or **Whisper `tiny`** for speed.
-- **Limited RAM / CPU** → **Whisper `tiny`/`tiny.en`**.
+- **Limited RAM / CPU** → **Whisper `tiny`/`tiny.en`**, or offload transcription to a more powerful machine with the [OpenAI-Compatible API](#openai-compatible-api).
+
+### OpenAI-Compatible API
+
+This service sends each chapter's audio segment to a server that implements OpenAI's `/audio/transcriptions` API, and uses whatever model that server runs: Whisper, Parakeet, or something else entirely. Use it to run transcription on a machine with a GPU, to share one transcription server between several apps, or to use a cloud service.
+
+Some servers it works with:
+
+- **[Speaches](https://speaches.ai/){:target="_blank"}** (self-hosted): serves Whisper (`Systran/faster-whisper-small.en`, ...) and Parakeet (`istupakov/parakeet-tdt-0.6b-v2-onnx`, ...) models. Download a model on the server before using it.
+- **[whisper.cpp server](https://github.com/ggml-org/whisper.cpp/tree/master/examples/server){:target="_blank"}** (self-hosted): start it with `--inference-path /v1/audio/transcriptions`. It runs a single model, so leave **Model** blank.
+- **LocalAI**, **vLLM**, and other self-hosted servers with an OpenAI-compatible transcription endpoint.
+- **OpenAI** (`https://api.openai.com/v1`, models `whisper-1`, `gpt-4o-transcribe`, `gpt-4o-mini-transcribe`), **Groq** (`https://api.groq.com/openai/v1`, models `whisper-large-v3-turbo`, `whisper-large-v3`), and other cloud services. Cloud services typically charge for transcription; check your provider's pricing.
+
+Selecting **OpenAI-Compatible API** shows these settings in place of the model variant:
+
+- **Server URL:** The API root that serves `/audio/transcriptions`, usually ending in `/v1`. If Achew runs in Docker, `localhost` refers to the Achew container itself; use the server's IP address (or `host.docker.internal` for a server on the Docker host).
+- **API Key:** Required by cloud services, and by self-hosted servers that have one set. Leave it blank otherwise.
+- **Model:** The model the server should use. Achew suggests the transcription models the server lists, but you can type any model name. Leave it blank for servers that only run one model.
+- **Skip SSL certificate verification:** Allows HTTPS servers with self-signed certificates. Only enable this for servers you trust.
+- **Parallel requests:** How many chapters are sent to the server at once (default 4). Raise it for servers and cloud services that handle requests in parallel; lower it if the server is overloaded or you hit rate limits.
+
+Click **Test Connection** to send a short test clip with your current settings. Any error the server returns (an unknown model, a rejected API key, ...) is shown next to the button.
+
+The language list is Whisper's. Pick `Auto` for models that detect the language themselves, such as Parakeet `v3`; servers whose model only supports one language usually ignore this setting.
+
+!!! note
+    With this service, the first few seconds of each chapter's audio leave the Achew host and are sent to the server you configure. See [Privacy and Data](privacy-and-data.md#transcription).
 
 ## Configuring transcription
 
@@ -58,7 +85,7 @@ Start by picking the **transcription service**, **model variant**, and **languag
 Then, configure the other options:
 
 - **Trim segments:** Attempts to increase transcription speed by trimming unnecessary part from the audio. It's typically fine to keep this enabled, but you'll want to disable it if it's giving you blank/nonsensical transcripts or if important parts of the title are being missed.
-- **Use Bias Words:** (Whisper only) Enables a word list that can help guide the transcription model toward more consistent results. This list is editable so you can tune it for your specific book or language (you'll want to use words in the target language). Use the :lucide-rotate-ccw:{ .icon-token } Reset button in the top right of the edit area to reset to the default word list.
+- **Use Bias Words:** (Whisper and OpenAI-Compatible API) Enables a word list that can help guide the transcription model toward more consistent results. This list is editable so you can tune it for your specific book or language (you'll want to use words in the target language). Use the :lucide-rotate-ccw:{ .icon-token } Reset button in the top right of the edit area to reset to the default word list.
 - **Transcription Length:** Length of the audio segment extracted for transcription, before trimming. The default of 8 seconds generally works well, but you may need to increase this for books that have unusually long chapter titles.
 
 ## Using aligned titles
@@ -90,7 +117,7 @@ In the chapter editor, transcription instead runs in the background. The editor 
 
 ## Model downloads
 
-Transcription models are downloaded on first use and are cached for subsequent runs. First runs can take several minutes for large models. See [Storage and Backup](../installation/storage-and-backup.md#transcription-model-cache).
+Transcription models are downloaded on first use and are cached for subsequent runs. First runs can take several minutes for large models. See [Storage and Backup](../installation/storage-and-backup.md#transcription-model-cache). With the OpenAI-Compatible API, the server manages its own models.
 
 ## `legacy-cpu` Docker image
 

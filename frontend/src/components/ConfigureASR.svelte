@@ -10,6 +10,7 @@
   let loading = $state(false);
   let cues = $state<number[]>([]);
   let preassignedTitles = $state<PreassignedTitle[]>([]);
+  let hostedService = $state(false);
 
   let chapterRefs = $derived($session.chapterRefs ?? []);
   let toTranscribeCount = $derived(cues.length - preassignedTitles.length);
@@ -79,14 +80,15 @@
       </h2>
       <p>
         Titles will be generated for <strong>{toTranscribeCount}</strong>
-        chapter{toTranscribeCount !== 1 ? 's' : ''} using a local transcription model.<br />
+        chapter{toTranscribeCount !== 1 ? 's' : ''} using
+        {hostedService ? 'your transcription server' : 'a local transcription model'}.<br />
         Configure the transcription settings below.
       </p>
     {/if}
   </div>
 
   <div class="asr-configuration">
-    <ASRSettings showAdvanced={true} showOptions={true} />
+    <ASRSettings showAdvanced={true} showOptions={true} bind:hosted={hostedService} />
   </div>
 
   <div class="actions">

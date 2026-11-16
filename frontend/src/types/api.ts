@@ -117,6 +117,8 @@ export interface ASRServiceOption {
   supports_bias_words: boolean;
   priority: number;
   variants: ASRServiceVariant[];
+  /** Sends audio to a server configured in HostedASRConfig instead of a local model */
+  hosted?: boolean;
 }
 
 export interface ASRPreferencesResponse {
@@ -136,6 +138,26 @@ export interface ASROptions {
 
 export interface ASROptionsResponse {
   options: ASROptions;
+}
+
+/** Server settings for the OpenAI-compatible transcription service (GET/PUT /asr/hosted) */
+export interface HostedASRConfig {
+  base_url: string;
+  /** "***" when a key is saved; the key itself never leaves the server */
+  api_key: string;
+  model: string;
+  skip_ssl_verify: boolean;
+  parallel_requests: number;
+}
+
+export interface HostedASRModelsResponse {
+  models: string[];
+  error: string | null;
+}
+
+export interface HostedASRTestResponse {
+  success: boolean;
+  message: string;
 }
 
 export interface EditorSettings {

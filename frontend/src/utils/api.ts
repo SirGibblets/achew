@@ -21,6 +21,9 @@ import type {
   EditorSettings,
   EditorSettingsUpdateResponse,
   ChapterReference,
+  HostedASRConfig,
+  HostedASRModelsResponse,
+  HostedASRTestResponse,
   LibrarySearchResponse,
   LLMModelsResponse,
   LLMProviderResponse,
@@ -548,6 +551,23 @@ export const config = {
       method: 'POST',
       body: { service_id: serviceId, variant_id: variantId, language },
     });
+  },
+
+  getHostedASR() {
+    return apiRequest<HostedASRConfig>('/asr/hosted');
+  },
+
+  /** Fields left out keep their saved value */
+  updateHostedASR(update: Partial<HostedASRConfig>) {
+    return apiRequest<HostedASRConfig>('/asr/hosted', { method: 'PUT', body: update });
+  },
+
+  getHostedASRModels() {
+    return apiRequest<HostedASRModelsResponse>('/asr/hosted/models');
+  },
+
+  testHostedASR() {
+    return apiRequest<HostedASRTestResponse>('/asr/hosted/test', { method: 'POST' });
   },
 
   getEditorSettings() {
