@@ -106,6 +106,13 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
     return matchedLanguage || variant.languages[0][0] || '';
   }
 
+  // A variant that auto-detects the language counts as supporting any book language
+  function variantSupportsLanguage(variant: ASRVariant, bookLang: string | null): boolean {
+    if (!bookLang) return true;
+    const langs = variant.languages || [];
+    return findMatchingLanguage(langs, bookLang) !== null || langs.some(([code]) => code === 'auto');
+  }
+
   function selectVariantForLanguage(
     variants: ASRVariant[] | undefined,
     bookLang: string | null,
@@ -141,15 +148,15 @@ Audible Librivox Recording Summary Previously Preview Epigraph Recap Appendix
 
       if (currentASRService) {
         const service = asrServices.find((s) => s.service_id === currentASRService);
-        const { variant, matched } = selectVariantForLanguage(service?.variants, bookLanguage);
-        // Prefer a variant that supports the book's language.
-        // Otherwise fall back to last-selected variant.
-        if (matched && variant && variant.model_id !== currentASRVariant) {
-          currentASRVariant = variant.model_id;
-          await updateASRPreference(currentASRService, variant.model_id, currentASRLanguage);
-        } else if (!currentASRVariant && variant) {
-          currentASRVariant = variant.model_id;
-          await updateASRPreference(currentASRService, variant.model_id, currentASRLanguage);
+        const saved = service?.variants?.find((v) => v.model_id === currentASRVariant);
+        // Keep the user's saved variant whenever it can transcribe the book's language;
+        // only switch (and save the switch) when it can't, or when none is saved.
+        if (!saved || !variantSupportsLanguage(saved, bookLanguage)) {
+          const { variant, matched } = selectVariantForLanguage(service?.variants, bookLanguage);
+          if (variant && (matched || !saved) && variant.model_id !== currentASRVariant) {
+            currentASRVariant = variant.model_id;
+            await updateASRPreference(currentASRService, variant.model_id, currentASRLanguage);
+          }
         }
       }
 
