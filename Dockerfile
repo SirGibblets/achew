@@ -74,9 +74,12 @@ RUN if [ "$LEGACY_CPU" = "1" ]; then \
 # Copy in built frontend
 COPY --from=frontend-builder /app/frontend/dist ../frontend/dist
 
-# Create license notices for backend dependencies, combine with frontend notices
+# Create license notices for backend dependencies, combine with frontend notices.
+# Every `uv run` here is --frozen, like run.sh: `uv sync --locked` above already checked
+# the lock, and re-checking it sends a request to GitHub for every platform's achew-ffmpeg
+# wheel, so a GitHub hiccup fails the build and no network stops the container starting.
 COPY --from=frontend-builder /app/frontend/frontend-notices.txt ./frontend-notices.txt
-RUN uv run python scripts/generate_notices.py \
+RUN uv run --frozen python scripts/generate_notices.py \
     --title "Achew — Python dependencies" \
     --prepend frontend-notices.txt \
     --output THIRD_PARTY_NOTICES.txt \
@@ -86,4 +89,4 @@ RUN uv run python scripts/generate_notices.py \
 EXPOSE 8000
 
 # Run the application
-CMD ["uv", "run", "python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0"]
+CMD ["uv", "run", "--frozen", "python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0"]
