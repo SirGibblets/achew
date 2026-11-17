@@ -27,6 +27,7 @@ from ...core.config import get_app_config, get_settings
 from ...core.constants import CHAPTER_START_PADDING
 from ...services.asr_service_options import get_asr_config_key
 from ...services.session_actions import build_add_chapter_operation, nearby_cues, require_pipeline, snippet_duration
+from ...services.title_similarity import ChapterText, match_by_similarity
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +93,26 @@ class TitleMapping(BaseModel):
 
 class ApplyTitlesRequest(BaseModel):
     mappings: List[TitleMapping]
+
+
+class TitleSimilarityRequest(BaseModel):
+    ref_id: str
+
+
+class TitleSimilarityMatch(BaseModel):
+    chapter_id: str
+    # Index of the matched title in the Reference (its chapters or titles)
+    ref_index: int
+    title: str
+    score: float
+    # Strong enough to apply as it is; weaker matches are offered unchecked
+    confident: bool
+    # Which of the chapter's texts matched the title
+    source: Literal["transcript", "title"]
+
+
+class TitleSimilarityResponse(BaseModel):
+    matches: List[TitleSimilarityMatch]
 
 
 class BatchOperationResponse(BaseModel):
@@ -525,6 +546,38 @@ async def apply_titles(request: ApplyTitlesRequest):
     except Exception as e:
         logger.error(f"Failed to apply titles: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/chapters/title-similarity", response_model=TitleSimilarityResponse)
+async def match_titles_by_similarity(request: TitleSimilarityRequest):
+    """Pair the chapters with a Reference's titles by how well each chapter's transcript or
+    current title matches them (Apply Titles → By Similarity). Changes nothing."""
+    pipeline = require_pipeline(get_app_state())
+    chapter_ref = next((r for r in pipeline.chapter_refs if r.id == request.ref_id), None)
+    title_ref = next((r for r in pipeline.title_refs if r.id == request.ref_id), None)
+    if chapter_ref is not None:
+        titles = [c.title for c in chapter_ref.chapters]
+    elif title_ref is not None:
+        titles = list(title_ref.titles)
+    else:
+        raise HTTPException(status_code=404, detail="Reference not found")
+
+    active = sorted((c for c in pipeline.chapters if not c.deleted), key=lambda c: c.timestamp)
+    texts = [ChapterText(title=c.title, transcript=c.transcript) for c in active]
+    matches = await asyncio.to_thread(match_by_similarity, texts, titles)
+    return TitleSimilarityResponse(
+        matches=[
+            TitleSimilarityMatch(
+                chapter_id=active[m.chapter_index].id,
+                ref_index=m.ref_index,
+                title=titles[m.ref_index],
+                score=m.score,
+                confident=m.confident,
+                source=m.source,
+            )
+            for m in matches
+        ]
+    )
 
 
 @router.post("/chapters/ai-cleanup", response_model=BatchOperationResponse)

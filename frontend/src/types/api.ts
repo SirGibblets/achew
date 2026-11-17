@@ -358,3 +358,21 @@ export interface ApplyTitleMapping {
   chapter_id: string;
   new_title: string;
 }
+
+/** A chapter paired with a Reference title by Apply Titles → By Similarity */
+export interface TitleSimilarityMatch {
+  chapter_id: string;
+  /** Index of the title in the Reference's chapters or titles */
+  ref_index: number;
+  title: string;
+  /** 0..1 */
+  score: number;
+  /** Strong enough to apply as it is; weaker matches start unchecked */
+  confident: boolean;
+  /** Which of the chapter's texts matched the title */
+  source: 'transcript' | 'title';
+}
+
+export interface TitleSimilarityResponse {
+  matches: TitleSimilarityMatch[];
+}

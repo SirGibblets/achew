@@ -16,7 +16,7 @@ Two buttons sit next to the dropdown:
 
 ## Modes
 
-When a Chapter Reference is selected, a mode toggle appears with two choices: **By Alignment** and **By Selection**. Title References have no timestamps and thus cannot be used with the By Alignment mode.
+A mode toggle below the dropdown offers three choices: **By Alignment**, **By Selection** and **By Similarity**. Title References have no timestamps and thus cannot be used with the By Alignment mode.
 
 ### By Alignment
 
@@ -35,6 +35,16 @@ This mode pairs chapters to Reference titles based on **position**. The first se
 ![By Selection](../img/apply-titles-selection-light.webp#only-light){ width="640"; .center }
 
 The two columns scroll in sync, and curved connectors visually link the pairs as you scroll. Uncheck chapters on the left or titles on the right to skip them and shift the remaining pairs. Use the :lucide-play:{ .icon-token .primary } play button to preview audio and confirm accuracy.
+
+### By Similarity
+
+Automatically matches chapters to Reference titles based on what each chapter says. Each chapter's transcript (what is heard at its start) and its current title are compared with the Reference's titles, the same way [Enhance with transcription](../workflows/realign-chapters.md#enhancing-with-transcription) checks titles during realignment. Numbers are compared regardless of how they're written, so "Chapter XII", "Chapter Twelve" and "Chapter 12" all match, small transcription inaccuracies are tolerated, and a chapter that announces a different number never matches.
+
+Titles are matched in order: each title goes to at most one chapter, and a chapter can't receive a title that comes before the previous chapter's. This tells repeated titles apart (such as the "Chapter 1" of each part) and keeps a chapter that only mentions a title in passing from taking it.
+
+Each match shows a score. Strong matches start checked. Weaker ones, such as a one-word title that opens a longer sentence, start unchecked and show the title they would receive below the chapter's current title. Hover over a score to see whether the chapter's transcript or current title matched. Chapters with no match are greyed out and cannot be selected. Use the :lucide-play:{ .icon-token .primary } play button to preview audio and confirm accuracy.
+
+This mode is useful when a Reference's timestamps don't line up with your chapters (for example, a different edition of the recording), or when extra or missing chapters would throw off the pairing in By Selection. It works best on chapters that have been transcribed, or whose current titles are short forms of the Reference's titles, such as "Chapter 4" for "Chapter 4: The Leaky Cauldron".
 
 ## Related
 

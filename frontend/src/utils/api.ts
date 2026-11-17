@@ -39,6 +39,7 @@ import type {
   StatusResponse,
   TranscribeSnippetResponse,
   TitleReference,
+  TitleSimilarityResponse,
   UpdateResponse,
   MCPSettingsResponse,
   UpdateStatusResponse,
@@ -422,6 +423,13 @@ export const chapters = {
     return apiRequest<BatchOperationResponse>('/chapters/apply-titles', {
       method: 'POST',
       body: { mappings },
+    });
+  },
+
+  matchTitlesBySimilarity(refId: string) {
+    return apiRequest<TitleSimilarityResponse>('/chapters/title-similarity', {
+      method: 'POST',
+      body: { ref_id: refId },
     });
   },
 
