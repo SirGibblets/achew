@@ -18,7 +18,8 @@ import re
 import unicodedata
 from dataclasses import dataclass
 from difflib import SequenceMatcher
-from typing import List, Optional, Sequence, Set, Tuple
+from functools import lru_cache
+from typing import List, Optional, Sequence, Set, Tuple, Union
 
 # Structural words that commonly precede a chapter number (mirrors the frontend's
 # NUMBER_KEYWORD_LIST in utils/titleTools.ts). A Roman numeral directly after one of these is
@@ -226,8 +227,9 @@ class TitleMatch:
     # heard: either misheard ("Fall Parliament of Owls" for "Chapter Four: A Parliament of Owls"),
     # never spoken, or said just before the snippet started (see the verifier's words-only rule)
     words_complete: bool = False
-    # How many descriptive words the title has
+    # How many descriptive words the title has, and how many of them were heard
     content_words: int = 0
+    words_heard: int = 0
     # The title has a number, and whether it was among the tokens heard
     numbered: bool = False
     number_heard: bool = False
@@ -302,6 +304,12 @@ FUZZY_NUMBER_RATIO = 0.9
 MIN_FUZZY_NUMBER_LEN = 6
 
 
+# Word comparisons below are pure and repeat constantly (every transcript word against every number
+# word, every title word against every heard word), so their results are cached.
+WORD_CACHE_SIZE = 1 << 16
+
+
+@lru_cache(maxsize=WORD_CACHE_SIZE)
 def _number_word(word: str) -> str:
     """``word`` itself when it's a number word, the number word it's a near-miss spelling of, or
     ``word`` unchanged."""
@@ -371,10 +379,17 @@ def _parse_number_words(words: Sequence[str], start: int) -> "tuple[int, int]":
 _LEADING_ROMAN_RE = re.compile(r"^\s*([IVXLCDM]+)\s*[.:)\-\u2013\u2014]\s+")
 
 
-def title_profile(title: str) -> TitleProfile:
+def expand_leading_roman(title: str) -> str:
+    """``title`` with a leading punctuated Roman numeral written as digits ("IV: The Storm" ->
+    "4 The Storm"), which ``normalize`` alone would leave as the word "i" for "I. Volunteers"."""
     leading = _LEADING_ROMAN_RE.match(title)
     if leading and _roman_value(leading.group(1).lower()):
-        title = f"{_roman_value(leading.group(1).lower())} {title[leading.end() :]}"
+        return f"{_roman_value(leading.group(1).lower())} {title[leading.end() :]}"
+    return title
+
+
+def title_profile(title: str) -> TitleProfile:
+    title = expand_leading_roman(title)
     tokens = normalize(title)
     weights = []
     numbers: Set[str] = set()
@@ -400,6 +415,7 @@ def title_profile(title: str) -> TitleProfile:
     )
 
 
+@lru_cache(maxsize=WORD_CACHE_SIZE)
 def _same(a: str, b: str) -> bool:
     if a == b:
         return True
@@ -421,10 +437,21 @@ def _head_numbers(tokens: Sequence[str], roman: Sequence[bool], include_roman: b
     return found
 
 
-def match_title(transcript: str, profile: TitleProfile) -> TitleMatch:
-    """Score how well ``transcript`` announces the title described by ``profile``."""
-    # Normalise sentence by sentence (ASR punctuation marks the announcement's end), remembering
-    # how long the sentence each token belongs to is
+@dataclass(frozen=True)
+class HeardText:
+    """A transcript normalised for ``match_title``, so one transcript can be matched against many
+    titles without normalising it again each time."""
+
+    tokens: List[str]
+    # Whether each token came from a Roman numeral
+    roman: List[bool]
+    # Length of the sentence each token belongs to
+    sentence_len: List[int]
+
+
+def hear(transcript: str) -> HeardText:
+    """Normalise ``transcript`` sentence by sentence (ASR punctuation marks the announcement's
+    end), remembering how long the sentence each token belongs to is."""
     heard: List[str] = []
     heard_roman: List[bool] = []
     sentence_len: List[int] = []
@@ -433,6 +460,13 @@ def match_title(transcript: str, profile: TitleProfile) -> TitleMatch:
         heard.extend(t for t, _ in tokens)
         heard_roman.extend(r for _, r in tokens)
         sentence_len.extend([len(tokens)] * len(tokens))
+    return HeardText(tokens=heard, roman=heard_roman, sentence_len=sentence_len)
+
+
+def match_title(transcript: Union[str, HeardText], profile: TitleProfile) -> TitleMatch:
+    """Score how well ``transcript`` announces the title described by ``profile``."""
+    text = transcript if isinstance(transcript, HeardText) else hear(transcript)
+    heard, heard_roman, sentence_len = text.tokens, text.roman, text.sentence_len
     if not profile.tokens or not heard:
         return TitleMatch(score=0.0, lead_words=0, number_conflict=False)
 
@@ -489,6 +523,7 @@ def match_title(transcript: str, profile: TitleProfile) -> TitleMatch:
         single_word=not profile.numbers and len(words) == 1,
         words_complete=complete,
         content_words=len(words),
+        words_heard=sum(1 for k in words if k in matched),
         numbered=bool(profile.numbers),
         number_heard=any(k in matched for k, t in enumerate(profile.tokens) if t.isdigit()),
         standalone=standalone,

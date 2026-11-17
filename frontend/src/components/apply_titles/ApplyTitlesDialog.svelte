@@ -6,6 +6,7 @@
   import AlignmentTab from './AlignmentTab.svelte';
   import DocLink from '../DocLink.svelte';
   import SelectionTab from './SelectionTab.svelte';
+  import SimilarityTab from './SimilarityTab.svelte';
 
   import X from '@lucide/svelte/icons/x';
   import Eye from '@lucide/svelte/icons/eye';
@@ -32,13 +33,16 @@
     title: string;
   }
 
-  let activeTab = $state<'alignment' | 'selection'>('alignment');
+  type Mode = 'alignment' | 'selection' | 'similarity';
+
+  let activeTab = $state<Mode>('alignment');
   let selectedRefId = $state<string | null>(null);
   let loading = $state(false);
   let error = $state<string | null>(null);
 
   let alignmentMappings = $state<TitleMapping[]>([]);
   let selectionMappings = $state<TitleMapping[]>([]);
+  let similarityMappings = $state<TitleMapping[]>([]);
 
   let showChapterTitlesModal = $state(false);
   let chapterTitlesModalTitle = $state('');
@@ -66,8 +70,11 @@
   let showAddReference = $state(false);
   let showCustomTitles = $state(false);
 
+  /* Title References have no timestamps to align by */
+  let mode = $derived<Mode>(!selectedRefIsChapter && activeTab === 'alignment' ? 'selection' : activeTab);
+
   let currentMappings = $derived<TitleMapping[]>(
-    selectedRefIsChapter && activeTab === 'alignment' ? alignmentMappings : selectionMappings,
+    mode === 'alignment' ? alignmentMappings : mode === 'similarity' ? similarityMappings : selectionMappings,
   );
 
   let canApply = $derived.by(() => {
@@ -88,6 +95,7 @@
       activeTab = 'alignment';
       alignmentMappings = [];
       selectionMappings = [];
+      similarityMappings = [];
       error = null;
     }
   });
@@ -138,7 +146,7 @@
     }
   }
 
-  function switchTab(tab: 'alignment' | 'selection'): void {
+  function switchTab(tab: Mode): void {
     audio.stop();
     activeTab = tab;
   }
@@ -247,19 +255,26 @@
             </button>
           </div>
 
-          {#if selectedRefIsChapter}
+          {#if selectedRef}
             <div class="mode-selector">
-              <button class="mode-btn" class:active={activeTab === 'alignment'} onclick={() => switchTab('alignment')}>
-                By Alignment
-              </button>
-              <button class="mode-btn" class:active={activeTab === 'selection'} onclick={() => switchTab('selection')}>
+              {#if selectedRefIsChapter}
+                <button class="mode-btn" class:active={mode === 'alignment'} onclick={() => switchTab('alignment')}>
+                  By Alignment
+                </button>
+              {/if}
+              <button class="mode-btn" class:active={mode === 'selection'} onclick={() => switchTab('selection')}>
                 By Selection
+              </button>
+              <button class="mode-btn" class:active={mode === 'similarity'} onclick={() => switchTab('similarity')}>
+                By Similarity
               </button>
             </div>
           {/if}
 
-          {#if selectedRefIsChapter && activeTab === 'alignment'}
+          {#if mode === 'alignment'}
             <AlignmentTab ref={selectedRef as ChapterReference} bind:mappings={alignmentMappings} />
+          {:else if mode === 'similarity'}
+            <SimilarityTab ref={selectedRef} bind:mappings={similarityMappings} />
           {:else}
             <SelectionTab ref={selectedRef} bind:mappings={selectionMappings} />
           {/if}
