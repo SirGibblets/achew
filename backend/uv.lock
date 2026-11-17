@@ -37,7 +37,7 @@ requires-dist = ["mlx>=0.11", "numba", "numpy", "tqdm", "more-itertools", "tikto
 
 [[package]]
 name = "achew"
-version = "1.13.0"
+version = "1.14.0"
 source = { editable = "." }
 dependencies = [
     { name = "achew-ffmpeg", version = "9.0.2.post1", source = { url = "https://github.com/SirGibblets/achew-ffmpeg/releases/download/v9.0.2.post1/achew_ffmpeg-9.0.2.post1-py3-none-macosx_11_0_arm64.whl" }, marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
